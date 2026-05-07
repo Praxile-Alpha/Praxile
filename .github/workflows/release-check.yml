@@ -1,0 +1,27 @@
+name: release-check
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install -e ".[dev]"
+      - name: Full test suite
+        run: make test-release
+      - name: Remove generated local artifacts
+        run: python scripts/clean_release.py
+      - name: Check release artifacts
+        run: python scripts/clean_release.py --check
+      - name: Build package
+        run: python -m build
+      - name: Check package metadata
+        run: twine check dist/*

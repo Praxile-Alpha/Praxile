@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "praxile"
+version = "0.1.0"
+description = "Standalone local self-evolving agent harness for code projects"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Praxile Contributors" }]
+license = "MIT"
+keywords = ["agent", "self-evolution", "coding-agent", "local-first", "agent-harness"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-timeout>=2.3", "pytest-forked>=1.6", "build>=1", "twine>=5"]
+http = ["httpx>=0.27"]
+vector = ["sentence-transformers>=3"]
+browser = ["playwright>=1.45"]
+
+[project.scripts]
+praxile = "praxile.cli:main"
+
+[tool.setuptools.package-data]
+praxile = ["py.typed", "README.md", "docs/*.md", "templates/**/*.md", "examples/**/*.json"]
+
+[tool.setuptools.packages.find]
+include = ["praxile", "praxile.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+  "slow: slow runtime or release-style tests",
+  "integration: tests that exercise runtime, gateway, browser, git, or packaging flows",
+  "resource: tests that touch subprocess, gateway, browser, terminal, async, HTTP transport, or SQLite-heavy paths",
+  "shell_resource: tests that execute or supervise shell/subprocess behavior",
+  "gateway_resource: tests that exercise gateway app/server behavior",
+  "browser_resource: tests that exercise browser context lifecycle behavior",
+  "terminal_resource: tests that exercise terminal session behavior",
+  "runtime_resource: tests that exercise runtime loops, checkpoints, or async batch behavior",
+  "http_resource: tests that exercise HTTP transport/client lifecycle behavior",
+  "sqlite_resource: tests that exercise SQLite-backed store/index behavior",
+  "timeout(seconds): per-test timeout used by pytest-timeout or Praxile's local watchdog fallback",
+]

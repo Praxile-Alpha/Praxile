@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "project": {
+    "name": "my-code-project",
+    "root": "."
+  },
+  "runtime": {
+    "mode": "safe",
+    "max_steps": 10,
+    "model_timeout_seconds": 30,
+    "online_check_timeout_seconds": 8,
+    "shell_timeout_seconds": 120,
+    "test_timeout_seconds": 180,
+    "action_parse_retries": 2,
+    "invalid_action_fail_fast_count": 3,
+    "require_diff_review": true,
+    "default_test_commands": [
+      "python -m pytest"
+    ]
+  },
+  "checkpoint": {
+    "enabled": true,
+    "every_steps": 1
+  },
+  "context": {
+    "compression_enabled": true,
+    "max_prompt_chars": 120000,
+    "compression_threshold": 0.8,
+    "observation_keep_chars": 1600,
+    "recent_messages_to_keep": 6
+  },
+  "trace": {
+    "enabled": true,
+    "sync": false,
+    "retention_days": 30
+  },
+  "task_analysis": {
+    "llm_assisted": false,
+    "llm_model_role": "review_recommendation",
+    "llm_timeout_seconds": 12,
+    "llm_max_tokens": 800
+  },
+  "semantic_judges": {
+    "enabled": false,
+    "local_first": true,
+    "max_calls_per_run": 5,
+    "max_calls_per_mine_patterns": 20,
+    "feedback_classifier": {
+      "enabled": true,
+      "role": "feedback_classifier",
+      "use_for_complex_feedback_only": true,
+      "timeout_seconds": 12,
+      "max_tokens": 800
+    },
+    "attribution_judge": {
+      "enabled": true,
+      "role": "attribution_judge",
+      "only_for_loaded_assets_with_score_above": 0.5,
+      "max_assets_per_run": 4,
+      "timeout_seconds": 12,
+      "max_tokens": 900
+    },
+    "pattern_mining": {
+      "enabled": true,
+      "role": "pattern_mining",
+      "only_after_heuristic_score": 0.45,
+      "timeout_seconds": 12,
+      "max_tokens": 900
+    },
+    "counterexample_checker": {
+      "enabled": true,
+      "role": "counterexample_checker",
+      "timeout_seconds": 12,
+      "max_tokens": 900
+    }
+  },
+  "search": {
+    "backend": "auto",
+    "timeout_seconds": 30,
+    "default_limit": 80
+  },
+  "project_map": {
+    "cache_enabled": true,
+    "cache_ttl_seconds": 30
+  },
+  "index": {
+    "fts_enabled": true
+  },
+  "retrieval": {
+    "hybrid_enabled": false,
+    "vector_enabled": false,
+    "vector_provider": "local_hash",
+    "embedding_provider": "local_hash",
+    "embedding_model": null,
+    "vector_dims": 256,
+    "vector_min_score": 0.05,
+    "keyword_priority_weight": 0.05,
+    "vector_priority_weight": 0.03,
+    "hybrid_rank_boost": 1.0,
+    "usage_log_weight": 0.02,
+    "positive_outcome_weight": 0.1,
+    "negative_outcome_weight": 0.2,
+    "stale_usage_days": 90,
+    "stale_usage_penalty": 0.1
+  },
+  "evolution": {
+    "llm_assisted_proposals": false,
+    "llm_model_role": "proposal_composer",
+    "llm_timeout_seconds": 20,
+    "llm_max_tokens": 1800,
+    "consolidation_min_duplicates": 2,
+    "consolidation_stale_days": 90,
+    "consolidation_low_value_max_confidence": 0.4
+  },
+  "memory": {
+    "shard_enabled": true,
+    "project_memory_soft_limit_bytes": 200000,
+    "shard_by": "month"
+  },
+  "browser": {
+    "enabled": false,
+    "adapter": "playwright",
+    "dev_server_url": null,
+    "artifact_dir": ".praxile/experience/artifacts",
+    "allowed_hosts": [
+      "localhost",
+      "127.0.0.1",
+      "::1"
+    ],
+    "timeout_ms": 15000,
+    "viewport_width": 1280,
+    "viewport_height": 900,
+    "current_mvp": "playwright_optional_with_human_acceptance"
+  },
+  "architecture_gate": {
+    "shadow_mode": false
+  },
+  "interop_guardrails": {
+    "refuse_writes_when_external_agent_detected": true,
+    "lock_files": [
+      ".hermes/agent.lock",
+      ".openclaw/agent.lock",
+      ".codex/agent.lock",
+      ".agent.lock"
+    ],
+    "environment_flags": [
+      "HERMES_AGENT_ACTIVE",
+      "OPENCLAW_AGENT_ACTIVE",
+      "PRAXILE_EXTERNAL_AGENT_ACTIVE"
+    ]
+  },
+  "model": {
+    "transport": "auto",
+    "timeout_seconds": 30,
+    "max_retries": 1,
+    "retry_backoff_seconds": 0.25,
+    "streaming": false
+  },
+  "safety": {
+    "sensitive_globs": [
+      ".env",
+      ".env.*",
+      "**/.env",
+      "**/.env.*",
+      "**/*id_rsa*",
+      "**/*id_dsa*",
+      "**/*.pem",
+      "**/*.key",
+      "**/*.p12",
+      "**/*.pfx",
+      "*id_rsa*",
+      "*id_ed25519*",
+      "**/.aws/**",
+      ".aws/**",
+      "**/.ssh/**",
+      ".ssh/**",
+      "**/secrets.*",
+      "**/*secret*",
+      "**/*credential*"
+    ],
+    "dangerous_command_patterns": [
+      "rm -rf",
+      "rm -fr",
+      "sudo ",
+      "su ",
+      "dd if=",
+      "mkfs",
+      "diskutil erase",
+      "chmod -R",
+      "chown -R",
+      "git reset",
+      "git clean",
+      "shutdown",
+      "reboot",
+      "curl | sh",
+      "curl|sh",
+      "wget | sh",
+      "wget|sh",
+      ":(){"
+    ],
+    "allowed_command_prefixes": [
+      "python -m pytest",
+      "pytest",
+      "python -m unittest",
+      "npm test",
+      "npm run test",
+      "npm run lint",
+      "npm run build",
+      "pnpm test",
+      "pnpm run test",
+      "pnpm run lint",
+      "pnpm run build",
+      "yarn test",
+      "yarn lint",
+      "yarn build",
+      "bun test",
+      "bun run test",
+      "bun run lint",
+      "bun run build",
+      "cargo test",
+      "go test",
+      "git status",
+      "git diff"
+    ],
+    "protected_paths": [
+      ".praxile"
+    ],
+    "backup_max_files": 500,
+    "backup_max_bytes": 200000000
+  },
+  "shell": {
+    "allow_shell_features": false
+  },
+  "model_providers": {},
+  "model_roles": {
+    "embedding": {
+      "provider": "local",
+      "model": "local_hash"
+    }
+  },
+  "cost_control": {
+    "local_first": true,
+    "prefer_ollama_for": [
+      "evidence_extraction",
+      "experience_reflection",
+      "reward_judge",
+      "proposal_composer",
+      "review_recommendation",
+      "cheap_reasoner",
+      "feedback_classifier",
+      "attribution_judge",
+      "counterexample_checker",
+      "pattern_mining",
+      "project_pattern_composer"
+    ],
+    "use_cloud_for": [
+      "coding_agent",
+      "deep_project_pattern_mining"
+    ],
+    "max_cloud_calls_per_run": 3,
+    "max_cost_per_run_usd": 0.05
+  },
+  "routing": {
+    "fallback_backoff_seconds": 0.25,
+    "fallbacks": {},
+    "strategy": {
+      "privacy_sensitive": "configure a local/private model role before running privacy-sensitive tasks",
+      "complex_planning": "configure coding_agent or planning_model with a stronger model when needed",
+      "coding": "configure model_roles.coding_agent before autonomous code edits",
+      "experience_extraction": "configure local model roles for low-cost project learning",
+      "high_risk": "configure a strong model role and require human approval"
+    }
+  },
+  "reward": {
+    "mode": "hybrid",
+    "llm_judge_enabled": false,
+    "manual_acceptance_required": true,
+    "min_experience_value_for_proposals": 0.5,
+    "weights": {
+      "objective": 0.6,
+      "user_feedback": 0.3,
+      "llm_judge": 0.1,
+      "task_success": 0.3,
+      "process_safety": 0.2,
+      "regression": 0.25,
+      "cost": 0.1,
+      "experience_value": 0.15
+    },
+    "user_feedback": {
+      "enabled": true,
+      "collect_from_chat": true,
+      "default_target": "latest_run",
+      "require_confirmation_for_asset_negative_feedback": true,
+      "positive_reward_delta": 0.25,
+      "negative_reward_delta": -0.35
+    },
+    "llm_judge": {
+      "enabled": false,
+      "role": "reward_judge",
+      "max_cost_per_run": 0.01,
+      "timeout_seconds": 12,
+      "max_tokens": 800
+    },
+    "scores": {
+      "default_task_success": 0.6,
+      "completed_with_edits": 0.8,
+      "completed_without_edits": 0.55,
+      "needs_human": 0.45,
+      "failed": 0.2,
+      "safe_process": 1.0,
+      "blocked_process": 0.55,
+      "high_risk_blocked_process": 0.35,
+      "tests_passed": 1.0,
+      "tests_failed": 0.15,
+      "tests_detected_not_run": 0.45,
+      "no_tests_available": 0.7,
+      "default_regression": 0.5,
+      "low_cost": 1.0,
+      "medium_cost": 0.75,
+      "high_cost": 0.55,
+      "experience_with_signal": 0.75,
+      "experience_without_signal": 0.45,
+      "scope_control_default": 0.75,
+      "scope_control_no_edits": 0.7,
+      "scope_control_broad_edits": 0.45,
+      "scope_control_failed_or_blocked": 0.55
+    },
+    "cost_thresholds": {
+      "medium_tool_calls": 12,
+      "high_tool_calls": 20,
+      "medium_model_calls": 8,
+      "high_model_calls": 12
+    },
+    "scope": {
+      "broad_edit_top_level_threshold": 4
+    }
+  },
+  "gateway": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 8765,
+    "max_threads": 16,
+    "token_env": "PRAXILE_GATEWAY_TOKEN",
+    "channels_enabled": false
+  },
+  "channels": {
+    "version": 1,
+    "default": null,
+    "bindings": {},
+    "platforms": {
+      "telegram": {
+        "enabled": false,
+        "token_env": "TELEGRAM_BOT_TOKEN",
+        "home_channel": null,
+        "require_mention": true,
+        "mention_patterns": [
+          "@praxile"
+        ],
+        "free_response_chats": [],
+        "ignored_threads": [],
+        "group_allowed_chats": [],
+        "reactions": true,
+        "disable_link_previews": true,
+        "proxy_url_env": "TELEGRAM_PROXY"
+      },
+      "discord": {
+        "enabled": false,
+        "token_env": "DISCORD_BOT_TOKEN",
+        "home_channel": null,
+        "require_mention": true,
+        "free_response_channels": [],
+        "allowed_channels": [],
+        "ignored_channels": [],
+        "no_thread_channels": [],
+        "auto_thread": true,
+        "reactions": true,
+        "allow_mentions": {
+          "users": true,
+          "roles": false,
+          "everyone": false
+        },
+        "channel_skill_bindings": {},
+        "channel_prompts": {}
+      }
+    }
+  }
+}

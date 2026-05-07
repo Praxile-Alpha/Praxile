@@ -1,0 +1,34 @@
+include praxile.config.example.json
+include scripts/clean_release.py
+recursive-include docs *.md
+recursive-include praxile/docs *.md
+recursive-include praxile/templates *.md
+recursive-include praxile/examples *.json
+recursive-include examples *.md *.json *.html *.jsx *.mjs *.go *.toml *.rs
+prune .git
+prune .praxile
+prune __MACOSX
+prune .pytest_cache
+prune .mypy_cache
+prune .ruff_cache
+prune .tox
+prune .nox
+prune .venv
+prune venv
+prune dist
+prune build
+global-exclude .DS_Store
+global-exclude ._*
+global-exclude Thumbs.db
+global-exclude desktop.ini
+global-exclude __MACOSX
+global-exclude __pycache__
+global-exclude __pycache__/*
+global-exclude *.py[cod]
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude *.json.lock
+global-exclude *.jsonl.lock
+global-exclude *.md.lock
+global-exclude .coverage
+global-exclude coverage.xml

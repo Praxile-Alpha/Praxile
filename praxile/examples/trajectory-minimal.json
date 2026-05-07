@@ -1,0 +1,27 @@
+{
+  "schema": "praxile_trajectory_v1",
+  "task_id": "task_example",
+  "user_task": "Fix the failing parser test",
+  "retrieved_experience": [],
+  "plan": [
+    "Inspect failing test and parser implementation.",
+    "Apply the smallest scoped fix.",
+    "Run the configured test command.",
+    "Generate reward and experience proposals."
+  ],
+  "actions": [],
+  "reward_report": {
+    "schema_version": 1,
+    "task_success": 0.8,
+    "process_safety": 1.0,
+    "regression_passed": true,
+    "cost_score": 0.7,
+    "experience_value": 0.6,
+    "requires_human_review": true
+  },
+  "experience_candidates": [],
+  "result": {
+    "status": "completed",
+    "summary": "Example only."
+  }
+}
