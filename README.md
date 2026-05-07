@@ -1,100 +1,215 @@
 # Praxile
 
-Most coding agents forget what they learned after every run. Praxile gives each repository a governed local experience layer.
+<div align="center">
 
-Praxile is a local-first, proposal-driven agent harness for code projects. It turns coding-agent runs into auditable project memory, skills, evals, failure patterns, model-routing notes, harness rules, and architecture boundaries, but only after user approval.
+**Governed local experience for coding agents**
 
-It is built around one loop:
+Turn coding-agent runs into reviewable repository experience: evidence, patterns, proposals, feedback-aware rewards, and reusable local assets.
 
-```text
-User Task -> Environment -> Trajectory -> Reward -> Experience -> Proposal -> Approval -> Better Next Run
+<br />
+
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](#installation)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Status](https://img.shields.io/badge/status-alpha-orange)](#project-status)
+[![Local First](https://img.shields.io/badge/local--first-yes-6f42c1)](#why-praxile)
+[![Model Roles](https://img.shields.io/badge/model--roles-supported-0a7)](#model-roles)
+
+</div>
+
+---
+
+## What is Praxile?
+
+Most coding agents forget what they learned after every run.
+
+Praxile gives each repository a **governed local experience layer**. It records how an agent run unfolded, extracts evidence and project patterns, generates reviewable proposals, incorporates user feedback as reward, and stores only the experience that you approve.
+
+Praxile is not a model trainer. It is not a hidden memory system. It is not a fully autonomous coding agent.
+
+It is an agent harness layer for making project experience:
+
+- **local** — stored in the repository under `.praxile/`;
+- **auditable** — backed by trajectories, reward reports, evidence, and proposals;
+- **reviewable** — durable changes require user approval;
+- **reusable** — accepted experience can be retrieved in future tasks;
+- **governed** — stale, duplicate, harmful, or over-broad experience can be rewritten, merged, archived, or deprecated.
+
+> Praxile is a governed, model-role-aware, feedback-aware, semantic-judge-assisted repository-local experience layer for coding agents.
+
+---
+
+## Why Praxile?
+
+Coding agents are powerful, but real projects need more than one-off task execution.
+
+Praxile is designed for teams and developers who want their agent workflows to accumulate repository-specific experience without giving up control.
+
+| Problem | Typical coding-agent workflow | Praxile |
+|---|---|---|
+| Project experience | Often lost after each run | Stored as local, reviewable repository assets |
+| Failure reuse | Depends on manual prompting | Failure patterns become retrievable experience |
+| Architecture rules | Soft prompt instructions | Explicit boundaries, rules, and review gates |
+| Feedback | Informal and discarded | Recorded as reward and governance signal |
+| Memory safety | Opaque or automatic | Proposal-driven and user-approved |
+| Model cost | One model often handles everything | Role-based routing, local cheap models supported |
+| Explainability | Varies | `praxile explain latest` shows why experience was used |
+
+---
+
+## Feature highlights
+
+- Repository-local `.praxile/` state
+- Proposal-driven self-evolution
+- Evidence → Episode → Pattern → Proposal pipeline
+- Hybrid reward: objective signals + user feedback + optional LLM judge
+- Model roles for coding, evidence extraction, feedback classification, attribution, pattern mining, reward judging, and more
+- Ollama/local-model friendly semantic judges
+- Asset lifecycle governance: active, deprecated, superseded, archived, reactivated
+- Explicit feedback CLI for runs, proposals, assets, and patterns
+- Explainable learning reports
+- Optional HTTP gateway
+- Optional browser evidence capture
+- SQLite + FTS-backed local experience index
+
+---
+
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+    subgraph User["User / Team"]
+        U1["Task request"]
+        U2["Review decision"]
+        U3["Feedback"]
+    end
+
+    subgraph Runtime["Praxile Runtime"]
+        R1["Task analysis"]
+        R2["Context retrieval"]
+        R3["Tool loop"]
+        R4["Trajectory recorder"]
+        R5["Reward engine"]
+        R6["Evolution engine"]
+    end
+
+    subgraph Experience["Repository-local experience"]
+        E1["Memory"]
+        E2["Skills"]
+        E3["Rules / boundaries"]
+        E4["Failure & project patterns"]
+        E5["Evidence / episodes"]
+        E6["Pending proposals"]
+    end
+
+    subgraph Models["Model roles"]
+        M1["coding_agent"]
+        M2["evidence_extraction"]
+        M3["pattern_mining"]
+        M4["feedback_classifier"]
+        M5["attribution_judge"]
+        M6["reward_judge"]
+    end
+
+    U1 --> R1 --> R2 --> R3 --> R4 --> R5 --> R6
+    U2 --> E6
+    U3 --> R5
+    R2 <--> Experience
+    R6 --> E5
+    R6 --> E6
+    E6 -->|accepted| E1
+    E6 -->|accepted| E2
+    E6 -->|accepted| E3
+    E6 -->|accepted| E4
+
+    R1 -.-> M1
+    R3 -.-> M1
+    R5 -.-> M6
+    R6 -.-> M2
+    R6 -.-> M3
+    R6 -.-> M4
+    R6 -.-> M5
 ```
+
+---
+
+## Core loop
 
 ```mermaid
 flowchart LR
     A["Run task"] --> B["Record trajectory"]
-    B --> C["Reward report"]
-    C --> D["Generate proposals"]
-    D --> E["Human review"]
-    E --> F["Accepted local assets"]
-    F --> G["Future retrieval"]
-    G --> H["Usage feedback"]
-    H --> I["Consolidation governance"]
-    I --> F
+    B --> C["Compute reward"]
+    C --> D["Extract evidence"]
+    D --> E["Build episodes"]
+    E --> F["Mine patterns"]
+    F --> G["Generate proposals"]
+    G --> H["Review"]
+    H -->|accept| I["Local experience asset"]
+    H -->|reject| J["Rejected history"]
+    I --> K["Future retrieval"]
+    K --> L["Usage + feedback"]
+    L --> M["Governance"]
+    M --> I
 ```
 
-Praxile does not train or fine-tune models, does not silently rewrite long-term memory, and does not export project facts into global memory. It evolves repository-local experience assets under user governance.
+---
 
-Praxile is not a Hermes or OpenClaw plugin. It owns its own core:
+## Installation
 
-- Model Provider Layer: OpenAI-compatible endpoints, Anthropic, local endpoints, routing policy, routing stats.
-- Agent Runtime: task analysis, context retrieval, tool action loop, architecture gate, safety policy.
-- Tools: file system, git, shell, test runner, and a registry for agent actions.
-- Skills: project-local `.praxile/skills/*/SKILL.md` loading and proposal-driven updates.
-- Memory: project/user/decision/failure memory scoped to the current repository.
-- Gateway: optional local HTTP gateway for programmatic task submission and review.
-- Self-Evolution: trajectory logging, reward reports, experience extraction, proposal approval, rollback.
+> Praxile is currently in alpha. For the first public release, source installation is the safest path.
 
-## Capability Status
-
-| Capability | Current status | Boundary |
-|---|---|---|
-| Local project state | MVP | `.praxile/` owns project-local memory, skills, rules, trajectories, proposals, and rollback data. |
-| Proposal workflow | MVP | Durable evolution updates require user approval and remain auditable. |
-| Reward reports | MVP | Hybrid reward combines objective signals, explicit user feedback, and optional LLM judge notes; human review remains required. |
-| Semantic judges | Experimental | Optional local cheap-model judges refine feedback, attribution, pattern mining, and counterexamples; they only affect confidence/review guidance, not silent writes. |
-| Hybrid retrieval | Experimental | Default `local_hash` is lightweight lexical-vector matching, not strong semantic embedding. |
-| Gateway | Experimental | Localhost-first HTTP gateway with token required for non-local binds. |
-| Browser adapter | Optional | Playwright evidence capture; UX judgement still needs human acceptance. |
-| Channel bindings | Config-only | Telegram/Discord bindings store metadata and token env names; production listeners are not included. |
-| External framework interop | Boundary only | Praxile does not auto-load Hermes/OpenClaw memory or skills. |
-| Production safety | Not production safe | Alpha software; run in trusted local repositories and review proposals before accepting. |
-
-## Why It Is Different
-
-| Capability | Ordinary coding agent | Praxile |
-|---|---|---|
-| Task execution | Supported | Supported through guarded environment adapters |
-| Project experience | Often forgotten after the run | Proposed as local memory, skill, eval, failure, rule, or boundary assets |
-| Failure reuse | Mostly prompt-dependent | Accepted failure patterns become retrievable project experience |
-| Architecture boundaries | Usually prompt-only | Architecture Gate and frozen-boundary assets hard-stop risky work |
-| Long-term memory safety | Often opaque | Local-first, proposal-only, user-approved |
-| Audit and rollback | Varies | Trajectories, reward reports, proposal diffs, and rollback records |
-
-## Install
-
-Prerequisite: Python 3.11 or newer.
-
-For a published release:
+### Install from GitHub
 
 ```bash
-pipx install praxile
-# or
-uv tool install praxile
-```
-
-For local development:
-
-```bash
-git clone <praxile-repo-url>
-cd praxile
+git clone https://github.com/Praxile-Alpha/Praxile.git
+cd Praxile
 python -m pip install -e .
-# optional httpx transport:
+```
+
+For development:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Optional extras:
+
+```bash
+# HTTP transport
 python -m pip install -e ".[http]"
-# optional semantic/vector retrieval:
+
+# semantic vector retrieval
 python -m pip install -e ".[vector]"
-# optional browser screenshots:
+
+# browser evidence capture
 python -m pip install -e ".[browser]"
 python -m playwright install chromium
 ```
 
-Want to see the loop without configuring a model first?
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Praxile-Alpha/Praxile/main/install.sh | bash
+```
+
+A safe installer should only install Praxile and print next steps. It should not modify project state until the user runs `praxile init`.
+
+### Verify installation
+
+```bash
+praxile --help
+```
+
+---
+
+## Quick start
+
+### 1. Run the demo
+
+The fastest way to understand Praxile is to run the local demo. It does not require model configuration.
 
 ```bash
 praxile demo --fast --accept-first
 ```
-
-The demo creates a disposable local Python project, records a failing test, applies a scoped fix, generates reward/proposals, optionally accepts one low-risk memory proposal inside the demo project, and shows retrieval evidence for the next similar task.
 
 Expected shape:
 
@@ -105,56 +220,311 @@ Expected shape:
 [4/6] Recording synthetic verification
 [5/6] Generating reward and proposals
 [6/6] Showing next-run retrieval evidence
+
 Accepted demo memory proposal: prop_...
-Retrieval after accept: 1 memory match(es)
+Retrieval after accept: 2 memory match(es)
 ```
 
-Review shape:
-
-```text
-Proposal 1/3: prop_... [memory_update] Record project experience: tests/parser/test_fixture_reset.py
-This means: Praxile wants to remember a project-local lesson from this run for similar future tasks.
-Recommended action: accept
-Why: Low-risk project-local proposal with enough confidence and auditable rollback.
-Will affect: Future retrieval for tasks matching the recorded files, commands, or failure signature.
-Rollback: praxile rollback prop_...
-Actions: [a]ccept, [r]eject, [e]dit, [s]kip, [q]uit
-```
-
-Explain shape:
-
-```text
-Self-Evolution Report
-1. Why these experiences were loaded
-- .praxile/memory/project.md final_score=1.25 usage=3 positive=2 negative=0
-  why: matched task term(s) parser, pytest in title, content
-  score impact from usage feedback: 0.22
-
-2. What this run learned
-- prop_... [failure_pattern] risk=medium confidence=medium status=pending
-  evidence: Action `run_command` failed with AssertionError
-
-3. What will change next time after approval
-- .praxile/experience/failures/parser-fixture-reset.md (failure_pattern)
-```
-
-Drop `--fast` when you want the demo to run the local unittest subprocess instead of simulated verification evidence.
-
-## Quick Start
-
-Inside any code repository:
+### 2. Initialize Praxile in a repository
 
 ```bash
+cd /path/to/your/project
 praxile init
 praxile setup
 praxile doctor --online
-praxile run "Fix the failing parser test" --test-command "python -m pytest"
-praxile review --interactive
 ```
 
-After a run, Praxile prints an evolution summary: which accepted project experience was loaded, which proposals were produced, and which command reviews the run-specific proposal inbox. Use `praxile explain latest` to see why memories, skills, rules, or failure patterns were loaded and what this run can teach future tasks.
+### 3. Run a task
 
-Praxile writes local state into the target project:
+```bash
+praxile run "Fix the failing parser test" --test-command "python -m pytest"
+```
+
+### 4. Review what Praxile learned
+
+```bash
+praxile review --interactive
+praxile explain latest
+```
+
+### 5. Provide feedback
+
+```bash
+praxile feedback latest --positive "Good fix. The scope was correct."
+praxile feedback prop_123 --negative "This proposal is too generic."
+praxile feedback asset .praxile/skills/test-repair/SKILL.md --helpful
+```
+
+---
+
+## What happens during a run?
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as Praxile CLI
+    participant RT as Runtime
+    participant Store as Experience Store
+    participant Models as Model Roles
+
+    User->>CLI: praxile run "Fix failing tests"
+    CLI->>RT: create task
+    RT->>Store: retrieve local experience
+    RT->>Models: coding_agent
+    RT->>RT: execute tools / edits / tests
+    RT->>Store: record trajectory
+    RT->>Models: reward_judge (optional)
+    RT->>Store: write reward report
+    RT->>Models: evidence_extraction / pattern_mining
+    RT->>Store: write evidence / episodes / proposals
+    CLI-->>User: run summary + review command
+```
+
+---
+
+## Experience evolution pipeline
+
+Praxile does not jump directly from a task to long-term memory. It builds an auditable chain.
+
+```mermaid
+flowchart TB
+    T["Trajectory"] --> R["Reward report"]
+    R --> E["Evidence"]
+    E --> EP["Episode"]
+    EP --> P["Pattern"]
+    P --> H["Hypothesis"]
+    H --> C["Counterexample check"]
+    C --> PR["Proposal"]
+    PR --> RV["Human review"]
+    RV -->|accepted| A["Local asset"]
+    RV -->|rejected| X["Rejected signal"]
+    A --> RET["Future retrieval"]
+```
+
+### Key objects
+
+| Object | Purpose |
+|---|---|
+| Trajectory | What happened during the run |
+| Reward report | How the run scored across objective, user, and optional judge signals |
+| Evidence | Structured facts from the run |
+| Episode | A learnable slice of a run |
+| Pattern | Cross-run recurring behavior |
+| Hypothesis | Candidate project-level learning |
+| Proposal | Reviewable durable change |
+| Asset | Accepted local experience |
+
+---
+
+## Hybrid reward
+
+Praxile separates execution success from experience quality.
+
+```mermaid
+flowchart LR
+    O["Objective reward"] --> F["Final reward"]
+    U["User feedback reward"] --> F
+    J["LLM judge reward (optional)"] --> F
+    F --> C["Proposal confidence"]
+    F --> G["Experience generation"]
+    F --> H["Asset / pattern outcome"]
+```
+
+### Reward components
+
+| Component | Examples |
+|---|---|
+| Objective reward | tests passed, command success, failed actions, blocked actions, safety, regression risk |
+| User feedback reward | “good fix”, “too generic”, “this rule misled you” |
+| LLM judge reward | optional structured quality assessment from `reward_judge` role |
+
+Praxile can run in objective-only, objective-plus-user, or hybrid mode.
+
+---
+
+## Model roles
+
+Different parts of Praxile can use different models.
+
+This lets you reserve stronger models for coding and use local cheap models for high-frequency semantic judgment.
+
+```mermaid
+flowchart TB
+    subgraph Strong["Stronger coding / reasoning models"]
+        A["coding_agent"]
+        B["proposal_composer"]
+    end
+
+    subgraph Local["Local / cheap semantic judges"]
+        C["feedback_classifier"]
+        D["attribution_judge"]
+        E["pattern_mining"]
+        F["counterexample_checker"]
+        G["reward_judge"]
+    end
+
+    subgraph Utility["Utility roles"]
+        H["evidence_extraction"]
+        I["experience_reflection"]
+        J["embedding"]
+    end
+```
+
+### Common roles
+
+| Role | Purpose |
+|---|---|
+| `coding_agent` | tool loop, code edits, repair logic |
+| `evidence_extraction` | convert trajectory into structured evidence |
+| `experience_reflection` | summarize local lessons |
+| `feedback_classifier` | parse user feedback |
+| `attribution_judge` | decide whether an asset helped a run |
+| `pattern_mining` | judge semantic similarity between episodes |
+| `counterexample_checker` | detect semantic counterexamples |
+| `reward_judge` | optional quality scoring |
+| `proposal_composer` | write proposal content |
+| `review_recommendation` | classify review guidance |
+| `embedding` | retrieval vectorization |
+
+---
+
+## Semantic judges
+
+Praxile uses semantic judges as bounded assistants.
+
+They refine confidence, attribution, and recommendations. They do not write long-term assets directly.
+
+```mermaid
+flowchart LR
+    H["Heuristic candidate retrieval"] --> S["Semantic judge"]
+    S --> J["Structured JSON"]
+    J --> C["Confidence / attribution / recommendation"]
+    C --> R["Review / explain / governance"]
+```
+
+### Available semantic judges
+
+| Judge | Purpose |
+|---|---|
+| FeedbackSemanticClassifier | Parse complex user feedback into structured events |
+| AttributionJudge | Decide whether a loaded asset likely helped the run |
+| PatternSemanticJudge | Decide whether episodes share an underlying project pattern |
+| CounterexampleSemanticChecker | Decide whether historical evidence weakens a hypothesis |
+
+### Why keep heuristics?
+
+Praxile uses heuristics first because they are fast, deterministic, and easy to audit. Local models are used for semantic refinement after the candidate set is narrowed.
+
+---
+
+## Proposal review
+
+Praxile’s governance boundary is proposal review.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending
+    Pending --> Accepted: accept
+    Pending --> Rejected: reject
+    Pending --> Edited: edit
+    Edited --> Accepted: accept edited
+    Edited --> Rejected: reject edited
+    Accepted --> ActiveAsset
+    ActiveAsset --> Archived: archive / deprecate / supersede
+```
+
+### Review commands
+
+```bash
+praxile review --summary
+praxile review --interactive
+praxile review --risk high
+praxile review --type failure_pattern
+praxile review --confidence high
+praxile review --recommended accept
+```
+
+### Batch actions
+
+```bash
+praxile accept --all-low-risk
+praxile accept --all-low-risk --yes
+praxile reject --low-confidence --reason "too generic"
+```
+
+`praxile accept --all-low-risk` is a dry run by default. Add `--yes` to apply.
+
+High-risk proposal types are never batch-accepted.
+
+---
+
+## Explainability
+
+Use:
+
+```bash
+praxile explain latest
+```
+
+Praxile explains:
+
+- why experience was loaded;
+- what the run learned;
+- which proposals were produced;
+- how reward was computed;
+- whether user feedback affected confidence;
+- whether loaded assets were merely retrieved or likely useful.
+
+Example structure:
+
+```text
+Self-Evolution Report
+
+1. Why these experiences were loaded
+- .praxile/experience/failures/parser-json.md
+  why: matched parser + JSONDecodeError
+  attribution_level: strong_positive
+
+2. What this run learned
+- prop_... [project_pattern]
+  evidence_count: 3
+  confidence: high
+
+3. What will change next time after approval
+- Future parser JSON failures can retrieve this pattern.
+```
+
+---
+
+## Feedback
+
+Explicit feedback becomes part of the governed loop.
+
+```bash
+praxile feedback latest --positive "Good fix"
+praxile feedback latest --negative "Wrong direction"
+praxile feedback prop_123 --negative "Too broad"
+praxile feedback asset .praxile/skills/test-repair/SKILL.md --helpful
+praxile feedback asset .praxile/rules/auth-boundary.md --harmful "This rule misled the run"
+praxile feedback auto "The fix is good, but do not keep the second proposal as a rule."
+```
+
+Feedback can affect:
+
+- run reward;
+- proposal confidence;
+- recommendation labels;
+- asset outcome;
+- pattern confidence;
+- future proposal generation.
+
+Negative feedback that could alter long-term assets remains governed through proposals.
+
+---
+
+## Local state layout
+
+Praxile writes repository-local state under `.praxile/`.
 
 ```text
 .praxile/
@@ -165,260 +535,271 @@ Praxile writes local state into the target project:
       SKILL.md
       metadata.json
       versions/
-  evals/
   rules/
+  evals/
   experience/
-  backups/
+    evidence/
+    episodes/
+    patterns/
+    feedback/
+    proposals/
   db/
   logs/
+  backups/
+  checkpoints/
 ```
 
-All durable updates are proposals until accepted by the user. `.praxile/config.json` is read as JSONC for hand editing, so comments and trailing commas are accepted even though Praxile writes strict JSON. Fresh installs start with no model provider configured; `praxile setup` walks the user through choosing Ollama, an OpenAI-compatible endpoint, Anthropic, or no model.
-
-`praxile doctor` performs local static checks only, including state layout, configured verification commands, SQLite/FTS index health, and project-map coverage. Use `praxile doctor --online` after editing model settings to run fast endpoint checks for required routes. Model calls default to a 30 second timeout, with `runtime.model_timeout_seconds`, `runtime.online_check_timeout_seconds`, provider-level `timeout_seconds`, and `model.max_retries` available in `.praxile/config.json`.
-
-`praxile init` detects common Python, Node/React, Go, and Rust markers and seeds `runtime.default_test_commands` for new projects. Pass `--test-command` to override detection or `--no-detect` to create only the state layout. Use `praxile init --wizard` to initialize and run setup in one pass.
-
-Model routing is role-based. `praxile setup` writes `model_roles.coding_agent` for stronger coding/tool-action calls, `model_roles.evidence_extraction` and `model_roles.experience_reflection` for cheaper local experience work, `model_roles.reward_judge` for optional quality judging, `model_roles.proposal_composer` for proposal wording, and `model_roles.review_recommendation` for low-cost review classification. Advanced experience-quality roles include `cheap_reasoner`, `feedback_classifier`, `attribution_judge`, `counterexample_checker`, `pattern_mining`, and `project_pattern_composer`; by default these prefer local/Ollama-style routes so review, attribution, mining, and proposal wording do not burn strong coding-model budget. Each role can declare fallback targets. Legacy `routing.*_model` keys are still supported for existing configs and CLI overrides.
-
-For frequent proposal review, use `praxile review --pending` for a queue summary or `praxile review --interactive` to accept, reject, edit in `$EDITOR`, skip, or inspect each proposal in one pass.
-
-Proposal queues are sorted by priority, risk, confidence, type, and evidence. Useful filters:
-
-```bash
-praxile review --summary
-praxile review --risk high
-praxile review --type failure_pattern
-praxile review --confidence high
-praxile review --source-run <RUN_ID>
-praxile review --high-risk
-praxile review --recommended accept
-praxile review --recommended reject_or_edit
-praxile accept --all-low-risk
-praxile accept --all-low-risk --yes
-praxile accept --all-low-risk --yes --limit 5
-praxile reject --low-confidence --reason "too generic"
+```mermaid
+flowchart LR
+    A["Run"] --> B["Trajectory"]
+    B --> C["Reward"]
+    C --> D["Evidence"]
+    D --> E["Episodes"]
+    E --> F["Patterns"]
+    F --> G["Proposals"]
+    G -->|accept| H["Memory / skills / rules / failures"]
 ```
 
-Interactive review shows each proposal in plain language: what accepting it means, the recommended action, why that recommendation was chosen, affected future retrieval/runtime behavior, duplicate warnings, and the exact rollback command. Recommendation labels are:
+---
 
-| Recommendation | Meaning |
-| --- | --- |
-| `accept` | Low-risk, high-confidence project-local learning with concrete evidence. |
-| `inspect` | Architecture, routing, frozen-boundary, harness-rule, or other medium/high-risk proposal. |
-| `reject_or_edit` | Useful idea may exist, but the evidence or wording is too weak to accept unchanged. |
-| `inspect_duplicate` | A similar active asset already exists and retrieval pollution is possible. |
+## Configuration
 
-`praxile accept --all-low-risk` is a dry run by default. Add `--yes` to apply. High-risk proposal types such as architecture gates, frozen boundaries, harness rules, and routing policy are never batch-accepted by `--all-low-risk`.
+Praxile can be configured with local-only or hybrid model routing.
 
-For safe exploration, `praxile run "task" --dry-run` allows analysis, retrieval, planning, and proposal generation while blocking file edits and shell commands. `praxile run` also supports temporary routing overrides such as `--model-coding gpt-4o --max-steps 15`, without rewriting config. Interrupted runs write checkpoints under `.praxile/checkpoints/` and can continue with `praxile run --resume <TASK_ID>`. If the experience index ever looks stale, run `praxile index status --scan`, queue changed assets with `praxile index watch --once`, or process explicit paths with `praxile index update --path .praxile/memory/project.md`. `praxile index rebuild` remains an explicit deep repair path.
+### Local-first Ollama example
 
-Reward scoring is configurable under `.praxile/config.json`. Project teams can tune score weights, cost thresholds, and the treatment of projects with no detected tests versus detected tests that were not run.
+```yaml
+models:
+  providers:
+    ollama:
+      type: ollama
+      base_url: http://localhost:11434
+      models:
+        - qwen2.5-coder:7b
+        - llama3.1:8b
 
-Reward reports distinguish execution success from experience value. They include objective reward, user feedback reward, optional LLM judge reward, final reward, execution, safety, regression, scope control, cost, experience value, proposal quality, and `should_generate_experience` so low-evidence runs do not have to create durable learning proposals.
+model_roles:
+  coding_agent:
+    provider: ollama
+    model: qwen2.5-coder:7b
 
-Explicit feedback becomes part of the governed loop:
+  evidence_extraction:
+    provider: ollama
+    model: qwen2.5-coder:7b
 
-```bash
-praxile feedback latest --positive "干得好，这次修得很准确"
-praxile feedback latest --negative "这次方向错了"
-praxile feedback prop_123 --negative "这个 proposal 太泛了"
-praxile feedback asset .praxile/skills/test-repair/SKILL.md --helpful
-praxile feedback asset .praxile/rules/harness-rules/ui.md --harmful "这条规则误导了你"
-praxile feedback auto "这次修得很好，但第二条 proposal 太泛，那个 parser skill 先别再用了"
+  feedback_classifier:
+    provider: ollama
+    model: llama3.1:8b
+
+  attribution_judge:
+    provider: ollama
+    model: qwen2.5-coder:7b
+
+  pattern_mining:
+    provider: ollama
+    model: qwen2.5-coder:7b
+
+  counterexample_checker:
+    provider: ollama
+    model: qwen2.5-coder:7b
+
+  reward_judge:
+    provider: ollama
+    model: llama3.1:8b
+
+reward:
+  mode: hybrid
 ```
 
-Run feedback updates the run's `user_feedback_reward` and `final_reward`. Proposal feedback can lower confidence and shift review guidance toward `reject_or_edit`. Negative asset feedback records a harmful outcome and generates a proposal-only lifecycle review instead of silently rewriting durable memory, skills, or rules. `feedback auto` is rule-first and conservative: it can split one natural-language note into run, proposal, asset, or pattern feedback, and durable negative asset feedback still requires governed proposal review.
+### Hybrid cloud + local example
 
-## Engineering Notes
+```yaml
+models:
+  providers:
+    openai:
+      type: openai
+      model: gpt-4.1
+      api_key_env: OPENAI_API_KEY
 
-Praxile uses a short-lived cached project map instead of dumping a fixed flat file list into the model. The runtime can expand context with `project_map`, `list_dir`, `find_files`, range-aware `read_file`, and ripgrep-backed `search`; sensitive paths are still filtered a second time by the safety layer. Use `{"type":"project_map","refresh":true}` when a fresh scan matters.
+    ollama:
+      type: ollama
+      base_url: http://localhost:11434
+      models:
+        - qwen2.5-coder:7b
+        - llama3.1:8b
 
-During long tasks, Praxile refreshes the project snapshot after mutating actions, compresses old observations before the prompt grows too large, and writes structured trace events to daily `.praxile/logs/trace_YYYYMMDD.jsonl` files with retention cleanup. Model routing can fall back through configured backup routes when the primary provider is unavailable.
+model_roles:
+  coding_agent:
+    provider: openai
+    model: gpt-4.1
 
-Experience retrieval is indexed in SQLite with FTS5 when available. Proposal accept/rollback and trajectory recording update only the affected index rows. The asset table records `mtime_ns`, `size`, and `content_hash`; routine indexing compares mtime/size before reading files for hashes. `praxile index watch --once` performs an explicit scan/queue/update pass, and `praxile index rebuild` remains an intentional deep repair path.
+  feedback_classifier:
+    provider: ollama
+    model: llama3.1:8b
 
-Hybrid retrieval is available behind config flags. Praxile stores local vector rows in SQLite and can combine FTS plus vector scores when `retrieval.vector_enabled=true` and `retrieval.hybrid_enabled=true`. The default `retrieval.vector_provider="local_hash"` is a zero-dependency lexical-vector fallback; installing `praxile[vector]` allows `retrieval.vector_provider="sentence_transformers"` for semantic embeddings.
+  attribution_judge:
+    provider: ollama
+    model: qwen2.5-coder:7b
 
-Retrieval results include explainable fields such as `matched_terms`, `matched_fields`, `fts_rank`, `vector_score`, `priority_boost`, `usage_count`, positive/negative outcome counts, `score_impact`, `final_score`, and `why_loaded`. `praxile explain latest` also distinguishes loaded-only context from assets referenced in observations or explicitly used by the run, so a passing task does not automatically credit every retrieved memory or skill.
+  pattern_mining:
+    provider: ollama
+    model: qwen2.5-coder:7b
 
-Praxile refuses normal project writes when configured external-agent lock signals are present, such as `.hermes/agent.lock` or `.openclaw/agent.lock`. This keeps optional interop from becoming unsafe concurrent editing.
-
-Task analysis is deterministic by default. Set `task_analysis.llm_assisted=true` to let the configured `llm_model_role` route, such as `cheap_model`, `review_recommendation`, or `planning_model`, add lightweight intent/risk signals. LLM analysis can raise risk but cannot bypass accepted frozen boundaries.
-
-Semantic judges are also off by default. Set `semantic_judges.enabled=true` to let local cheap-model roles refine four judgement points after heuristic candidate recall: `feedback_classifier`, `attribution_judge`, `pattern_mining`, and `counterexample_checker`. Their outputs are structured JSON and can adjust attribution level, pattern score, counterexamples, confidence, and recommended review action. They cannot silently write memory, skills, rules, or lifecycle changes; durable changes still require proposals.
-
-Experience extraction is also deterministic by default. Set `evolution.llm_assisted_proposals=true` to let `model_roles.proposal_composer` or the legacy `evolution_model` route propose extra experience assets. LLM-assisted proposals must include evidence, confidence, applicability scope, anti-scope, and safe `.praxile/` target paths; they remain pending diffs until explicitly accepted and cannot create architecture gates, frozen boundaries, config mutations, or safety bypasses.
-
-Optional LLM reward judging is disabled by default. Set `reward.llm_judge.enabled=true` to call `model_roles.reward_judge`; judge output is recorded as `llm_judge_reward` and mixed into `final_reward` only as an active component. Judge output includes specificity, scope fit, evidence fit, intent alignment, overgeneralization risk, and a recommended action. High overgeneralization risk cannot auto-approve a proposal; it is demoted into inspect or reject/edit guidance. Objective test/safety signals are never replaced by judge notes.
-
-Accepted experience assets use a lifecycle shape. `active` assets participate in retrieval by default; `deprecated`, `superseded`, and `archived` assets remain auditable on disk and in the SQLite index but are excluded from normal runtime loading. Skills additionally keep `SKILL.md` as the active runtime view, `metadata.json` for status/version, and `versions/<version>.md` for accepted snapshots. Useful lifecycle commands:
-
-```bash
-praxile memory list
-praxile memory list --include-inactive
-praxile asset status .praxile/memory/project.md
-praxile asset deprecate .praxile/memory/old-note.md --reason "replaced by parser skill"
-praxile asset supersede .praxile/memory/old-note.md --replaced-by .praxile/skills/parser-repair/SKILL.md
-praxile asset archive .praxile/experience/failures/old-failure.md --reason "obsolete"
-praxile asset reactivate .praxile/memory/old-note.md --reason "useful again"
-praxile asset diff .praxile/memory/old-note.md --with .praxile/skills/parser-repair/SKILL.md
-praxile skill history <SKILL_NAME>
+  counterexample_checker:
+    provider: ollama
+    model: qwen2.5-coder:7b
 ```
 
-Lifecycle changes can also arrive as governance proposals. `asset_deprecate` writes sidecar lifecycle metadata so the original asset remains intact, while `asset_merge` marks duplicate assets as `superseded` and points them at a canonical replacement. `asset_rewrite`, `asset_archive`, and `asset_reactivate` keep the same proposal-and-rollback model for content cleanup and lifecycle restoration. Proposal accept and rollback both reindex only the affected assets.
+---
 
-`praxile consolidate` scans indexed experience assets for duplicate, stale, conflicting, or low-value local experience and creates proposal-only governance outputs such as `asset_merge`, `asset_deprecate`, and cleanup review notes. It does not delete or rewrite memory, skills, evals, or failure patterns automatically. See the [experience governance guide](docs/experience-governance.md) for the full consolidate -> review -> merge/archive loop.
-
-Consolidation output shape:
+## CLI reference
 
 ```text
-Created 2 consolidation proposal(s):
-- prop_... [asset_merge] Supersede duplicate experience assets for `parser-fixture-reset`
-- prop_... [asset_rewrite] Rewrite weak experience asset `memory/weak-but-useful.md`
-
-Review next:
-praxile review --type asset_merge
-praxile review --type asset_rewrite
+init           Initialize .praxile in the project
+setup          Configure model providers and channels
+demo           Run a local self-evolution demo
+run            Execute an agent task
+review         Review pending proposals
+accept         Accept proposals
+reject         Reject proposals
+history        Show run history
+explain        Explain loaded experience and generated proposals
+feedback       Record user feedback
+index          Maintain the local experience index
+consolidate    Suggest experience consolidation proposals
+models         Show model providers and routes
+tools          Show tool actions
+mine-patterns  Mine cross-run project patterns
+terminal       Start the interactive terminal
+channel        Channel binding commands
+rollback       Roll back edits or accepted proposals
+memory         Memory commands
+skill          Skill commands
+asset          Asset lifecycle commands
+gateway        Gateway commands
+doctor         Validate configuration and local state
+interop        Explain adapter and framework boundaries
 ```
 
-For larger repositories, consolidation can focus on specific governance issues:
+---
+
+## Safety boundaries
+
+Praxile is designed around governed evolution.
+
+### Praxile does
+
+- record run trajectories;
+- compute reward reports;
+- extract evidence and episodes;
+- generate reviewable proposals;
+- store accepted repository-local assets;
+- retrieve and explain local experience;
+- incorporate explicit user feedback;
+- support local semantic judges;
+- consolidate stale, duplicate, or harmful experience.
+
+### Praxile does not
+
+- fine-tune models;
+- silently rewrite long-term memory;
+- auto-approve project rules;
+- replace human architecture judgment;
+- guarantee correctness without review;
+- export project knowledge to hidden global memory.
+
+---
+
+## Project status
+
+Praxile is currently **alpha**.
+
+The main architecture is implemented and usable, but configuration schema, proposal formats, and semantic-judge behavior may evolve.
+
+| Capability | Status |
+|---|---|
+| Repository-local experience | available |
+| Proposal-driven evolution | available |
+| Hybrid reward | available |
+| User feedback loop | available |
+| Model roles | available |
+| Local semantic judges | available |
+| Project pattern mining | available |
+| Asset lifecycle governance | available |
+| Gateway | experimental |
+| Browser adapter | optional |
+| Production hardening | not the current focus |
+
+---
+
+## Development
+
+Install development dependencies:
 
 ```bash
-praxile consolidate --summary --all
-praxile consolidate --duplicates
-praxile consolidate --stale --stale-days 90
-praxile consolidate --conflicts
-praxile consolidate --low-value
+python -m pip install -e ".[dev]"
 ```
 
-All consolidation outputs remain pending proposals.
-
-Project memory uses a soft-limit sharding guard. Routine memory updates go to `memory/project.md` until it grows too large; after that, proposals target `memory/shards/YYYY-MM.md` so hot memory stays searchable and future consolidation can merge similar notes.
-
-Model calls go through an HTTP transport abstraction. The default path remains dependency-free `urllib`; installing `praxile[http]` enables optional `httpx` transport when `model.transport` is `auto` or `httpx`. The httpx transport keeps a reusable client for connection pooling and exposes `close()` for explicit cleanup. Both transports include an SSE `stream_json` path for future streaming CLI output.
-
-The action protocol supports read-only concurrency through `batch`, which can run up to 8 safe read-only actions such as `read_file`, `read_files`, `search`, `list_dir`, and `find_files` with `asyncio`. Write actions and shell commands are rejected inside batch.
-
-The optional browser environment uses Playwright when `browser.enabled=true`. It supports `browser_open` and `browser_screenshot`, stores screenshot artifacts under `.praxile/experience/artifacts/browser/`, and records artifact paths in trajectories. It is still paired with human UX acceptance; screenshots are evidence, not an automatic judgement of visual quality.
-
-Shell features such as pipes, redirects, variable expansion, and command chaining stay disabled by default. Set `shell.allow_shell_features=true` only together with reviewed `safety.allowed_command_prefixes`; each executable segment is checked, redirection targets must stay inside the project, and dangerous patterns are still blocked before execution. Edit backups are capped by `safety.backup_max_files` and `safety.backup_max_bytes` so long-running projects do not grow `.praxile/backups/` without bound.
-
-State writes use cross-platform file locks where the operating system supports them, and proposal application keeps a recovery journal for multi-file updates so an interrupted accept can be restored on the next store initialization.
-
-## Terminal
-
-Start Praxile's interactive terminal:
+Run tests:
 
 ```bash
-praxile terminal
+make test-fast-repeat
+make test-resource-repeat
+make test-integration-repeat
 ```
 
-Useful commands inside the terminal:
+Or directly:
 
-```text
-status
-run Fix the failing parser test --test-command "python -m pytest"
-review
-proposals
-accept <PROPOSAL_ID>
-reject <PROPOSAL_ID>
-history
-memory parser
-channels
-exit
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PRAXILE_TEST_TIMEOUT_SECONDS=60 \
+python -B -m pytest -q tests/unit tests/resource tests/integration
 ```
 
-This is not a raw unrestricted shell. It is an agent terminal that sends work through Praxile's safety, trajectory, reward, proposal, and rollback layers.
+---
 
-See `examples/react`, `examples/go`, and `examples/rust` for minimal cross-stack repositories that demonstrate project detection and the same self-evolution loop.
+## Documentation
+
+Recommended documents:
+
+- `docs/GETTING_STARTED.md`
+- `docs/ARCHITECTURE.md`
+- `docs/CONFIGURATION.md`
+- `docs/STATE_LAYOUT.md`
+- `docs/experience-governance.md`
+- `docs/proposal-decision-guide.md`
+
+---
 
 ## Contributing
 
-Before opening a PR, run:
+Contributions are welcome.
 
-```bash
-python -m compileall praxile tests scripts
-make test-fast
-make test-fast-repeat
-make test-resource
-make test-integration
-```
+Good first areas:
 
-The default contributor loop excludes slow, integration, and resource-sensitive tests so routine runs stay short. Shell, gateway, browser, terminal, runtime, HTTP transport, and SQLite-heavy checks live under `tests/resource/` with explicit markers, so leaks can be isolated instead of hiding inside one monolithic suite. Release checks run the full suite in isolated subprocesses.
+- provider and model-role ergonomics;
+- semantic-judge evaluation;
+- retrieval quality;
+- proposal review UX;
+- explainability;
+- experience governance.
 
-See `CONTRIBUTING.md`, `docs/contributing-testing.md`, and `SECURITY.md` for project-local evolution rules, testing boundaries, safety boundaries, and disclosure guidance.
+Please read:
 
-## Gateway
+- `CONTRIBUTING.md`
+- `SECURITY.md`
 
-Run the optional local gateway:
+---
 
-```bash
-praxile gateway serve --host 127.0.0.1 --port 8765
-```
+## License
 
-Open the local console:
+MIT License. See [LICENSE](LICENSE).
 
-```text
-http://127.0.0.1:8765/
-```
+---
 
-The browser console is intended for trusted localhost use. Praxile refuses non-localhost gateway binds such as `0.0.0.0` unless `--token` is provided. `--token` is best for API clients that can send `Authorization` or `X-Praxile-Token` headers. The built-in gateway uses a bounded worker pool; tune `gateway.max_threads` in config for local capacity.
+## Closing note
 
-Then submit a task:
+Praxile is built around a simple principle:
 
-```bash
-curl -X POST http://127.0.0.1:8765/run \
-  -H 'Content-Type: application/json' \
-  -d '{"task":"Record project context","max_steps":1}'
-```
+> Coding agents should not have to relearn the same repository over and over again.
 
-For token protection:
-
-```bash
-praxile gateway serve --token "$PRAXILE_GATEWAY_TOKEN"
-praxile gateway serve --host 0.0.0.0 --token "$PRAXILE_GATEWAY_TOKEN"
-```
-
-## Config And Channels
-
-Praxile config is JSON:
-
-```text
-.praxile/config.json
-```
-
-The repository includes [praxile.config.example.json](praxile.config.example.json) with clean defaults, safety policy, gateway settings, model-role shape, and channel-binding structure. Telegram and Discord bindings store channel IDs and token environment variable names, not raw bot tokens.
-
-Useful commands:
-
-```bash
-praxile channel list
-praxile channel show <BINDING_ID>
-praxile channel env
-praxile channel unbind <BINDING_ID>
-```
-
-First release boundary: Praxile manages auditable local channel configuration and gateway route metadata. Production Telegram/Discord bot listeners are the next layer on top of this config.
-
-## Optional Adapters
-
-Hermes/OpenClaw are optional adapter targets or endpoint sources. Praxile can detect compatible framework modules with:
-
-```bash
-praxile interop
-```
-
-Adapters do not own `.praxile/` state. Project memory and skills are not automatically exported into external frameworks.
-
-## Docs
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Configuration](docs/CONFIGURATION.md)
-- [Experience Governance](docs/experience-governance.md)
-- [Getting Started](docs/GETTING_STARTED.md)
-- [Install and Interop](docs/INSTALL_AND_INTEROP.md)
-- [Product Vision](docs/PRODUCT_VISION.md)
-- [Proposal Decision Guide](docs/proposal-decision-guide.md)
-- [State Layout](docs/STATE_LAYOUT.md)
-- [Core Layers](docs/CORE_LAYERS.md)
+The hard part is not storing more text. The hard part is turning experience into something useful, local, reviewable, and safe to keep.

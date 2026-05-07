@@ -21,8 +21,8 @@ uv tool install praxile
 For local development:
 
 ```bash
-git clone <praxile-repo-url>
-cd praxile
+git clone https://github.com/Praxile-Alpha/Praxile.git
+cd Praxile
 python -m pip install -e .
 python -m pip install -e ".[http]"  # optional httpx transport
 python -m pip install -e ".[vector]"  # optional sentence-transformers retrieval

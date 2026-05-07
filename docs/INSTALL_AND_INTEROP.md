@@ -66,8 +66,8 @@ The user's target project does not need to be a Hermes or OpenClaw project. Prax
 For contributors:
 
 ```bash
-git clone <praxile-repo-url>
-cd praxile
+git clone https://github.com/Praxile-Alpha/Praxile.git
+cd Praxile
 python -m pip install -e .
 praxile --help
 ```

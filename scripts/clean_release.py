@@ -15,6 +15,7 @@ DIR_NAMES = {
     "__pycache__",
     "dist",
     "build",
+    "praxile.egg-info",
 }
 FILE_NAMES = {".DS_Store"}
 FILE_SUFFIXES = {".pyc", ".pyo"}
@@ -25,7 +26,7 @@ def dirty_paths(root: Path) -> list[Path]:
     for path in root.rglob("*"):
         if any(part in {".git", ".venv", "venv"} for part in path.parts):
             continue
-        if path.is_dir() and path.name in DIR_NAMES:
+        if path.is_dir() and (path.name in DIR_NAMES or path.name.endswith(".egg-info")):
             found.append(path)
         elif path.is_file() and (path.name in FILE_NAMES or path.suffix in FILE_SUFFIXES):
             found.append(path)
