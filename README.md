@@ -29,6 +29,7 @@ Turn coding-agent runs into <b>reviewable</b>, <b>reusable</b>, repository-local
 ---
 
 ## Why Praxile?
+<img width="1621" height="970" alt="d20b5d3d-0950-44ba-be6b-a86406aef4a0" src="https://github.com/user-attachments/assets/7fd04ed8-b374-4e1a-8257-323f85072fcf" />
 
 Coding agents can fix code, run tools, and complete tasks.  
 But most of what they learn during a run disappears when the run ends.
