@@ -64,7 +64,7 @@ Praxile 不是模型训练框架，也不是隐藏式记忆系统，更不是完
 ### 1. 从源码安装
 
 ```bash
-git clone https://github.com/<your-org>/praxile.git
+git clone https://github.com/Praxile-Alpha/Praxile.git
 cd praxile
 python -m pip install -e .
 ```
