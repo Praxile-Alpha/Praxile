@@ -32,9 +32,7 @@
 </div>
 
 ***
-<img width="1254" height="1254" alt="praxile" src="https://github.com/user-attachments/assets/472cdb90-4071-4bfd-9527-fb9fc6eede9e" />
-
-
+<img width="1621" height="970" alt="d20b5d3d-0950-44ba-be6b-a86406aef4a0" src="https://github.com/user-attachments/assets/23a48268-27ec-4649-a00f-c88be3507959" />
 ## Praxile 是什么？
 
 **Praxile** 是一个面向 AI 编程的可治理经验 Harness。
