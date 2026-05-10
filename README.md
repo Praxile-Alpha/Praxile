@@ -7,6 +7,8 @@ Praxile captures what an AI coding agent actually did, turns that run into evide
 It is not a general-purpose coding agent, not a hidden global memory, and not a Spec Kit replacement. Praxile is the governance layer around coding work: environment interaction, trajectory logging, reward, experience extraction, proposal review, audit, rollback, and future retrieval.
 
 [中文 README](README.zh-CN.md)
+<img width="1254" height="1254" alt="praxile" src="https://github.com/user-attachments/assets/63f4566c-3ce1-4eed-82fe-f87fd93141ba" />
+
 
 Project: [https://github.com/Praxile-Alpha/Praxile](https://github.com/Praxile-Alpha/Praxile)
 
