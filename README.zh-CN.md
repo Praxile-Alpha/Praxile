@@ -5,6 +5,8 @@
 Praxile 会采集 AI Coding Agent 实际做过什么，将一次运行转化为有证据支撑的 proposal，并且只把人工批准过的仓库本地经验写入 `.praxile/`。
 
 它不是通用 Coding Agent，不是隐藏的全局记忆系统，也不是 Spec Kit 替代品。Praxile 是围绕代码任务的治理层：环境交互、轨迹记录、reward、经验抽取、proposal 审核、审计、回滚和下一次检索复用。
+<img width="1254" height="1254" alt="praxile" src="https://github.com/user-attachments/assets/c46f07ab-413d-4fef-9344-0126ec338cf7" />
+
 
 [English README](README.md)
 
