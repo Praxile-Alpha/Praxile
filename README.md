@@ -65,7 +65,7 @@ It is an **agent harness** for making repository-specific experience safe to kee
 ### 1. Install from source
 
 ```bash
-git clone https://github.com/<your-org>/praxile.git
+git clone https://github.com/Praxile-Alpha/Praxile.git
 cd praxile
 python -m pip install -e .
 ```
