@@ -119,4 +119,4 @@ def test_loaded_assets_do_not_receive_positive_outcome_without_reference() -> No
         assert asset["positive_outcome_count"] == 1
         usage = store.usage_for_task("task_attr_2")
         assert usage[0]["referenced"] is True
-        assert usage[0]["attribution_level"] == "medium_positive"
+        assert usage[0]["attribution_level"] == "weak_positive"

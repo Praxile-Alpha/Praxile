@@ -16,11 +16,14 @@ Praxile is a full local agent harness, not just a self-evolution plugin.
 `praxile.runtime.AgentRuntime` owns the task loop:
 
 - analyzes privacy and architecture risk;
+- attaches optional spec/plan/tasks/constitution context;
 - retrieves project memory, skills, evals, and rules;
 - routes the model call;
 - executes JSON actions through the tool registry;
 - records every action in a trajectory;
 - builds reward and experience proposals.
+
+Spec context is input evidence, not an execution contract by itself. Praxile uses it to improve task intent, acceptance criteria, silent-failure detection, and proposal gating.
 
 ## Project Inspector
 
@@ -78,6 +81,10 @@ They are loaded by Praxile, not by external frameworks. Runtime loads only activ
 - `failures.md`.
 
 Memory remains repository scoped. External/global export requires a future explicit proposal.
+
+## Experience Constitution
+
+`.praxile/constitution.md` defines the repo-local governance rules for experience assets. The proposal gate checks durable updates for source evidence, scope, anti-scope, confidence, and rollback information before a proposal can be accepted as project experience.
 
 ## Gateway
 

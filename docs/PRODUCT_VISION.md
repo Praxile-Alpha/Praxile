@@ -13,6 +13,8 @@ A normal agent run completes a task and leaves a transcript. Praxile turns the r
 
 The long-term direction is a local project intelligence layer: each repository accumulates its own rules, memories, skills, evals, failure patterns, frozen boundaries, and model-routing lessons. Updates are auditable diffs, not silent self-modification.
 
+Spec files can help Praxile understand intent, acceptance criteria, and non-goals, but Praxile is not trying to become another spec generator. Its durable product surface is governed experience: evidence-backed memories, skills, rules, evals, failure patterns, and boundaries that make the next run safer and more project-aware.
+
 P2 deepens that loop by treating experience quality as a product surface. Proposals carry source evidence, confidence, applicability scope, and anti-scope. Skills have explicit lifecycle metadata and version snapshots. Failure patterns are structured enough to become searchable guardrails. Model routing performance can be summarized from trajectories, and consolidation creates proposal-only cleanup suggestions before accumulated experience becomes noisy.
 
 The first version deliberately avoids automatic model training, multi-agent orchestration, marketplace behavior, and global memory writes. Trust, reviewability, and rollback come first.

@@ -1,6 +1,6 @@
 # Praxile
 
-Praxile is a standalone local self-evolving agent harness for code projects. It is built around its own Environment -> Reward -> Experience loop, with optional adapters for existing tools or agent frameworks:
+Praxile is a governed experience harness for AI coding. It is built around its own Environment -> Reward -> Experience governance loop, with optional adapters for existing tools or agent frameworks:
 
 ```text
 User Task
@@ -15,13 +15,15 @@ User Task
 
 Unlike a normal coding agent that only tries to complete the current task, Praxile turns every task into an auditable experience asset. It can propose memories, skills, eval checklists, failure patterns, frozen boundaries, architecture gates, model-routing notes, and harness rules. None of those durable updates are applied until the user accepts a proposal.
 
+Spec files can be attached to a run as optional intent and acceptance context. Praxile does not replace Spec Kit or become a spec workflow tool; it uses specs to improve evidence, reward, proposal gating, and future experience governance.
+
 The name comes from praxis: useful knowledge formed through practice. The long-term vision is a local project intelligence layer where each bug fix, refactor, UI change, failure, review, and rollback can become a governed asset for future work instead of a forgotten chat transcript.
 
 The product boundary is intentional:
 
 ```text
-Praxile Agent = provider routing / runtime / environment / reward / experience / evolution / safety
-Adapters      = optional bridges to Hermes, OpenClaw, local endpoints, cloud endpoints, or future tool systems
+Praxile Core = provider routing / minimal runtime / environment / reward / experience / evolution / safety
+Adapters     = optional bridges to Hermes, OpenClaw, local endpoints, cloud endpoints, or future tool systems
 ```
 
 Praxile is not a Hermes or OpenClaw plugin. It owns the agent runtime, environment adapters, model routing, reward, trajectory, project memory, project skills, approval, rollback, architecture gates, and harness rules. Hermes/OpenClaw can be detected or adapted later, but they are not required parents.
@@ -69,7 +71,7 @@ Praxile writes a local `.praxile/` directory in the target project:
 praxile CLI
   |
   v
-Praxile Agent Runtime
+Praxile Minimal Runtime
   |-- Model Router
   |-- Context Retrieval
   |-- Skill System
@@ -112,7 +114,7 @@ This is intentionally a separate `praxile` package and CLI, not a broad rewrite 
 
 - Praxile owns local code-project `.praxile/` state.
 - Praxile owns the Environment -> Reward -> Experience -> Evolution loop.
-- Durable self-evolution assets are written only after proposal approval.
+- Durable experience assets are written only after proposal approval.
 - Architecture-sensitive changes stop at an architecture gate before edits.
 - external framework integration is optional and mediated through `OptionalAdapterBridge`, a read-only detection boundary in the MVP.
 
@@ -150,7 +152,7 @@ For the public install story and optional Hermes/OpenClaw adapter modes, see `do
 | tools / terminal | External terminal/tool systems may become future adapters | Conservative FileSystemEnv, GitEnv, ShellEnv, TestEnv | Execution remains behind Praxile safety policy |
 | skills | External native skill stores remain separate | Project-local `.praxile/skills/*/SKILL.md` retrieval and proposals | No automatic install into external framework skills |
 | memory | External global memory/profile systems remain separate | Project-local project/decision/failure/repository user memory | No automatic global memory writes |
-| gateway | Messaging gateways are optional frontends outside the MVP | CLI-first local project execution | Gateway delivery is not required for self-evolution |
+| gateway | Messaging gateways are optional frontends outside the MVP | CLI-first local project execution | Gateway delivery is not required for the experience loop |
 | trajectory | External research/compression tooling may consume exports | Structured audit trajectory plus compatibility sidecar | Sidecar is export; Praxile JSON remains source of truth |
 | setup / doctor | External setup/doctor commands remain separate | `praxile init`, `praxile doctor`, `praxile interop` | Praxile validates the standalone harness and optional adapter detection |
 
@@ -215,6 +217,55 @@ The sidecar uses a ShareGPT-style conversation envelope similar to common trajec
 
 Each trajectory also records `loaded_assets`: the memories, skills, rules, evals, or failure patterns that were loaded into the prompt, including `matched_terms`, `matched_fields`, score, and `why_loaded`. The SQLite store mirrors those events in `asset_usage` so `praxile explain <RUN_ID>` can show how accepted experience affected a run. Attribution is deliberately conservative: loaded-only assets are audit context, referenced assets can receive outcome credit, and explicitly used assets receive the strongest positive or negative usage signal.
 
+### Experience Graph
+
+Praxile also maintains a rebuildable SQLite experience graph over the same local evidence. It indexes runs, specs, proposals, accepted assets, and recorded executors as nodes, then derives edges such as `derived_from_spec`, `generated_from_run`, `approved_by`, `retrieved_in_run`, `helped_run`, `misled_run`, `contradicts_asset`, `participated_in_run`, `violates_spec`, and `supersedes`. The graph is explanatory infrastructure only: Markdown/JSON assets remain the audit source of truth, and graph rows can be regenerated with `praxile graph rebuild`.
+
+Use `praxile graph explain <REF>` to inspect why a memory, skill, rule, proposal, run, or spec is connected to surrounding experience. Use `praxile graph trace <PROPOSAL_ID>` for proposal lineage and `praxile graph impact <SPEC_ID>` for spec-related run/proposal/asset impact.
+
+## Audit Exports
+
+Praxile exposes read-only audit commands for team and enterprise review:
+
+```bash
+praxile audit run latest --json
+praxile audit asset .praxile/memory/project.md --output runbook-audit.json
+praxile audit proposal prop_abc123 --rebuild-graph
+praxile audit bundle --output praxile-governance-bundle.json
+praxile audit check --strict --rebuild-graph
+```
+
+Audit reports are structured JSON exports over the same local source of truth. `audit run` links task analysis, plan, actions, executors, reward, spec compliance, loaded assets, and generated proposals. `audit asset` links source run, lifecycle status, usage outcomes, related proposals, and graph relationships. `audit proposal` links source task, evidence, proposal gate, review status, applied changes, and target assets. The commands do not accept, reject, edit, or sync experience assets.
+
+Audit exports use `--redaction standard` by default. Standard mode masks likely secret values in keys, command outputs, observations, and proposal content excerpts. `--redaction strict` also removes raw content/observation/diff excerpts for shareable governance bundles. `--redaction none` is intended only for local debugging because it can include raw command output.
+
+`audit bundle` is the first P3-style governance surface: it creates a project-level read-only bundle with recent runs, proposal counts, pending high-risk review items, asset lifecycle counts, graph status, and release-review recommendations. It is intended for CI artifacts, release checklists, or team review, not for cross-project memory synchronization.
+
+`audit check` is the CI gate over the same bundle. By default it fails on incomplete experience constitution or high-risk/p0 pending proposals and warns on ordinary pending proposals or missing graph rows. `--strict` also requires zero pending proposals, a built graph, and a clean latest run. This gives teams a release-time control point without granting Praxile any new write authority.
+
+## Workspace Isolation
+
+Praxile can run a task in an isolated per-task workspace instead of editing the selected project root directly:
+
+```bash
+praxile run "Fix the parser issue" --workspace-mode copy
+praxile workspace list
+```
+
+The MVP supports `copy` and `git-worktree` modes. In isolated mode, Praxile copies project files plus project-local `.praxile` config/memory/skills/rules/evals into `.praxile/workspaces/<WORKSPACE_ID>/root`, runs the normal runtime there, then imports the trajectory and generated proposals back into the source project's `.praxile/`. Source project files are not modified automatically. A patch artifact is written under `.praxile/experience/artifacts/workspaces/` for human inspection or later manual application.
+
+This gives Praxile a concrete foundation for future multi-executor attribution: each imported trajectory records `workspace_isolation.workspace_id`, mode, source root, workspace root, patch artifact, and `source_changes_applied=false`.
+
+## Parallel Read-Only Exploration
+
+Praxile's runtime supports a safe concurrent exploration phase:
+
+```bash
+praxile run "Understand parser failures" --parallel-readonly-explore
+```
+
+This phase executes a bounded `batch` of read-only actions such as `project_map`, `list_files`, `find_files`, and `search`. It never edits files or runs shell commands. The trajectory records a `parallel_readonly` coordinator plus one `readonly_worker` executor per subaction, and each sub-observation carries its executor metadata. Reward reports summarize attribution quality, worker counts, and failed or blocked exploration observations. Evolution proposals can cite that attribution so future reviewers can tell whether a lesson came from the primary coding loop, verification, or parallel context gathering.
+
 ## Reward Schema
 
 Reward is structured and multi-signal:
@@ -245,7 +296,21 @@ Reward is structured and multi-signal:
     "tests_run": true,
     "tests_passed": true,
     "blocked_actions": 0,
-    "architecture_gate_triggered": false
+    "architecture_gate_triggered": false,
+    "executor_attribution": {
+      "quality": "complete",
+      "registered_executor_count": 4,
+      "action_executor_counts": {
+        "parallel_readonly": 1,
+        "coding_agent": 3
+      },
+      "parallel_readonly": {
+        "enabled": true,
+        "worker_count": 3,
+        "failed_observation_count": 0,
+        "blocked_observation_count": 0
+      }
+    }
   },
   "llm_assisted_signals": {
     "enabled": false,

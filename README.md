@@ -1,293 +1,332 @@
 # Praxile
 
-<div align="center">
+**Governed experience harness for AI coding**
 
-<!-- Optional: replace this with your project logo after publishing. -->
-<!-- <img src="assets/praxile-logo.png" alt="Praxile" width="64%" /> -->
+Praxile captures what an AI coding agent actually did, turns that run into evidence-backed proposals, and stores only approved repository-local experience under `.praxile/`.
 
-<h3>Governed local experience for coding agents</h3>
+It is not a general-purpose coding agent, not a hidden global memory, and not a Spec Kit replacement. Praxile is the governance layer around coding work: environment interaction, trajectory logging, reward, experience extraction, proposal review, audit, rollback, and future retrieval.
 
-<p>
-Turn coding-agent runs into <b>reviewable</b>, <b>reusable</b>, repository-local experience.
-</p>
+[中文 README](README.zh-CN.md)
 
-<p>
-  <a href="./README.zh-CN.md"><b>简体中文</b></a>
-  ·
-  <b>English</b>
-</p>
-
-<p>
-  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License">
-  <img src="https://img.shields.io/badge/Status-Alpha-orange?style=for-the-badge" alt="Alpha">
-  <img src="https://img.shields.io/badge/Local--First-Yes-6f42c1?style=for-the-badge" alt="Local First">
-</p>
-
-</div>
-
----
+Project: [https://github.com/Praxile-Alpha/Praxile](https://github.com/Praxile-Alpha/Praxile)
 
 ## Why Praxile?
 
-Coding agents can fix code, run tools, and complete tasks.  
-But most of what they learn during a run disappears when the run ends.
+Most coding agents can edit files and run tests. The harder problem is deciding what the project should remember after the run.
 
-**Praxile** adds a governed experience layer to each repository:
+Praxile makes that memory loop explicit:
 
-- record how an agent run unfolded;
-- extract evidence from trajectories, tool results, and user feedback;
-- turn repeated lessons into reviewable proposals;
-- store only approved experience under `.praxile/`;
-- retrieve useful local experience in future runs.
-
-Praxile is not a model trainer, a hidden memory system, or a fully autonomous agent.  
-It is an **agent harness** for making repository-specific experience safe to keep and easy to reuse.
-
----
-
-## What Praxile gives you
-
-| Need | What Praxile adds |
-|---|---|
-| Reuse project knowledge | Local memories, skills, rules, and failure patterns |
-| Keep control | Proposal-driven evolution; durable changes require review |
-| Understand decisions | `praxile explain latest` shows loaded experience and generated proposals |
-| Use feedback | Positive / negative feedback affects reward and future proposal confidence |
-| Reduce model waste | Role-based model routing; local models can act as semantic judges |
-| Keep data local | Repository state lives under `.praxile/` |
-
----
-
-## Quick start
-
-### 1. Install from source
-
-```bash
-git clone https://github.com/<your-org>/praxile.git
-cd praxile
-python -m pip install -e .
+```text
+user task
+  -> environment interaction
+  -> trajectory
+  -> reward report
+  -> evidence and episodes
+  -> experience proposals
+  -> human review
+  -> approved memory / skill / rule / eval / boundary
+  -> better future retrieval
 ```
 
-For development:
+This is the core promise: every durable lesson must be scoped, evidenced, reviewable, auditable, and reversible.
+
+## What Praxile Adds
+
+- **Repository-local experience**: memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.
+- **Proposal-governed evolution**: durable updates start as proposals. They are not silently written into active memory.
+- **Spec-aware context**: optional `spec.md`, `.specify/`, plan, task, and constitution context can shape reward and proposal gating.
+- **Reward reports**: Praxile separates task success, regression safety, process safety, cost, experience value, and human feedback.
+- **Experience graph**: explain why an asset was loaded, where a proposal came from, and which runs or specs it affected.
+- **Workspace isolation**: run tasks in-place or in isolated per-task workspaces, including Git worktree mode.
+- **Audit and CI gates**: export run, proposal, asset, and project-level audit chains with default redaction.
+- **Safety controls**: sensitive path protection, dangerous command blocking, diff review, backups, rollback, architecture gates, and interop guardrails.
+- **Optional terminal and gateway**: use the normal CLI, an interactive Praxile terminal, or a local web console.
+
+## Install
+
+Praxile requires Python 3.11 or newer.
+
+Recommended one-line install from GitHub:
 
 ```bash
-python -m pip install -e ".[dev]"
+pipx install "git+https://github.com/Praxile-Alpha/Praxile.git"
+```
+
+Alternative with `uv`:
+
+```bash
+uv tool install "git+https://github.com/Praxile-Alpha/Praxile.git"
+```
+
+Development install:
+
+```bash
+git clone https://github.com/Praxile-Alpha/Praxile.git
+cd Praxile
+python -m pip install -e ".[http]"
 ```
 
 Optional extras:
 
 ```bash
-python -m pip install -e ".[http]"     # HTTP gateway
-python -m pip install -e ".[vector]"   # vector retrieval
-python -m pip install -e ".[browser]"  # browser evidence capture
+python -m pip install -e ".[vector]"   # sentence-transformers semantic retrieval
+python -m pip install -e ".[browser]"  # Playwright browser evidence
 python -m playwright install chromium
 ```
 
-### 2. Run the local demo
+You can also review and run the installer script from the repository:
 
 ```bash
-praxile demo --fast --accept-first
+curl -fsSLO https://raw.githubusercontent.com/Praxile-Alpha/Praxile/main/install.sh
+sh install.sh
 ```
 
-### 3. Initialize a repository
+## Try It Without A Model
+
+The demo runs locally and does not require a model endpoint:
 
 ```bash
-cd /path/to/your/project
+praxile demo --fast --accept-first --show-files
+```
+
+It creates a tiny project, records a trajectory, builds a reward report, generates proposals, accepts one low-risk memory inside the demo project, and shows how the next run would retrieve it.
+
+## Quick Start In A Code Repository
+
+```bash
+cd /path/to/your/code-project
 praxile init
 praxile setup
+praxile doctor
 praxile doctor --online
 ```
 
-### 4. Run a task
+`praxile setup` configures providers and model roles step by step. Praxile does not ship with preconfigured cloud credentials and does not store raw API keys. It stores environment variable names such as `OPENAI_API_KEY` or `OLLAMA_API_KEY`.
+
+Run a task:
 
 ```bash
 praxile run "Fix the failing parser test" --test-command "python -m pytest"
 ```
 
-### 5. Review what Praxile learned
+Review what Praxile learned:
 
 ```bash
 praxile review --interactive
+praxile accept <PROPOSAL_ID>
 praxile explain latest
 ```
 
-### 6. Add feedback
+## Model Configuration
+
+Praxile starts clean: `model_providers` is empty until the user configures it.
+
+Minimum useful role:
+
+- `coding_agent`: required for autonomous code-editing runs.
+
+Recommended self-evolution roles:
+
+- `evidence_extraction`
+- `experience_reflection`
+- `proposal_composer`
+- `review_recommendation`
+
+Optional semantic judge roles:
+
+- `reward_judge`
+- `feedback_classifier`
+- `attribution_judge`
+- `counterexample_checker`
+- `pattern_mining`
+- `project_pattern_composer`
+- `deep_project_pattern_mining`
+
+Common local setup:
 
 ```bash
-praxile feedback latest --positive "Good fix. The scope was correct."
-praxile feedback prop_123 --negative "This proposal is too generic."
+praxile setup \
+  --provider ollama \
+  --base-url http://localhost:11434/v1 \
+  --model qwen2.5-coder:7b \
+  --api-key-env OLLAMA_API_KEY \
+  --channel none
 ```
 
----
+Common OpenAI-compatible setup:
 
-## Architecture at a glance
-
-```mermaid
-flowchart LR
-    classDef user fill:#EEF4FF,stroke:#5B8DEF,color:#16325C,stroke-width:1.5px;
-    classDef runtime fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.5px;
-    classDef exp fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.5px;
-    classDef review fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.5px;
-    classDef model fill:#F7F0FF,stroke:#8B5CF6,color:#352063,stroke-width:1.5px;
-
-    U["User task<br/>feedback"]:::user --> R["Praxile runtime<br/>run · record · reward"]:::runtime
-    R --> E["Experience pipeline<br/>evidence · episode · pattern"]:::runtime
-    E --> P["Reviewable proposals"]:::review
-    P -->|accept| A["Local assets<br/>memory · skill · rule"]:::exp
-    P -->|reject| X["Rejected history"]:::review
-    A --> Q["Future retrieval"]:::exp
-    Q --> R
-
-    M["Model roles<br/>coding · extraction · judging"]:::model -. assist .-> R
-    M -. assist .-> E
+```bash
+praxile setup \
+  --provider openai-compatible \
+  --base-url https://api.openai.com/v1 \
+  --model <your-model> \
+  --api-key-env OPENAI_API_KEY \
+  --channel none
 ```
 
----
+See [praxile.config.example.json](praxile.config.example.json) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for role routing, fallback models, local-first policies, semantic judges, retrieval, reward weights, gateway, and channel settings.
 
-## Core loop
+## Spec-Aware Workflow
 
-```mermaid
-flowchart LR
-    classDef step fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.3px;
-    classDef review fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
-    classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.3px;
+Attach spec context when a task has explicit intent, non-goals, acceptance criteria, or success metrics:
 
-    A["Run"]:::step --> B["Reward"]:::step --> C["Evidence"]:::step --> D["Pattern"]:::step --> E["Proposal"]:::step --> F["Review"]:::review
-    F -->|accept| G["Local asset"]:::asset
-    F -->|reject| H["No durable change"]:::review
-    G --> I["Retrieve next time"]:::asset --> A
+```bash
+praxile run "Implement search API" \
+  --spec docs/specs/search.md \
+  --test-command "python -m pytest"
+
+praxile spec verify latest
 ```
 
----
+Spec compliance influences reward and proposal quality. A task can pass tests but still produce weak or blocked experience proposals if it violates scope, skips acceptance criteria, or changes architecture without a gate.
 
-## Main concepts
+## Experience Assets
 
-| Concept | Meaning |
-|---|---|
-| Trajectory | What happened during a run |
-| Evidence | Structured facts extracted from a trajectory |
-| Episode | A learnable slice of a run |
-| Pattern | A recurring project-specific lesson |
-| Proposal | A reviewable durable change |
-| Asset | Approved memory, skill, rule, or failure pattern |
+Praxile experience is not only Markdown and not only a graph.
 
----
+- Human-readable durable assets are Markdown or JSON under `.praxile/`.
+- SQLite indexes support retrieval, search, usage tracking, lifecycle status, and graph queries.
+- The experience graph is explanatory infrastructure. It can be rebuilt from trajectories, proposals, specs, and assets.
+- Approved assets are active by default. Deprecated, superseded, and archived assets stay auditable but are excluded from normal retrieval.
 
-## Common commands
+Useful commands:
+
+```bash
+praxile memory list --include-inactive
+praxile skill list
+praxile asset status .praxile/memory/project.md
+praxile graph status --rebuild
+praxile graph explain .praxile/memory/project.md
+praxile graph trace <PROPOSAL_ID>
+```
+
+## Audit And Governance
+
+Audit commands are read-only exports:
+
+```bash
+praxile audit run latest --json
+praxile audit proposal <PROPOSAL_ID> --json
+praxile audit asset .praxile/memory/project.md --json
+praxile audit bundle --redaction strict --output praxile-governance-bundle.json
+praxile audit check --strict --rebuild-graph --redaction strict
+```
+
+Redaction modes:
+
+- `standard`: default, masks likely secret values while preserving lineage.
+- `strict`: also removes raw content, observation, output, and diff excerpts.
+- `none`: local debugging only.
+
+`audit check` is CI-friendly. It fails when required governance conditions are not met, such as incomplete constitution, pending high-risk proposals, missing graph evidence in strict mode, or a failed latest run when configured.
+
+## Terminal, Gateway, And Channels
+
+Interactive terminal:
+
+```bash
+praxile terminal
+```
+
+Local web console:
+
+```bash
+praxile gateway serve --host 127.0.0.1 --port 8765
+```
+
+Channel configuration:
+
+```bash
+praxile channel bind telegram -1001234567890 --name team-alerts --token-env TELEGRAM_BOT_TOKEN
+praxile channel bind discord 123456789012345678 --name dev-room --token-env DISCORD_BOT_TOKEN
+praxile channel list
+```
+
+Current boundary: Praxile manages local channel bindings and gateway route metadata. Production Telegram or Discord bot listeners are a separate listener layer on top of this config.
+
+## Common Commands
 
 ```text
 praxile init                 Initialize .praxile in the current repository
-praxile setup                Configure providers and model roles
-praxile demo --fast          Run a local self-evolution demo
+praxile setup                Configure providers, model roles, and optional channels
+praxile demo --fast          Run a local governed-experience demo
 praxile run "..."            Execute an agent task
+praxile run "..." --dry-run  Analyze and record without editing files
+praxile run "..." --workspace-mode copy
+                             Run in an isolated per-task workspace
 praxile review --interactive Review pending proposals
+praxile accept <PROPOSAL_ID> Accept one pending proposal
+praxile reject <PROPOSAL_ID> Reject one pending proposal
+praxile history              List trajectory history
 praxile explain latest       Explain retrieval, reward, and proposals
-praxile feedback latest ...  Add explicit feedback
-praxile doctor --online      Validate configuration and local state
+praxile spec check           Check optional spec quality signals
+praxile spec verify latest   Verify a completed run against spec context
+praxile constitution check   Check experience-governance principles
+praxile graph status         Show experience graph status
+praxile audit check          Run a CI-friendly governance gate
+praxile consolidate --all    Propose cleanup for stale or overlapping assets
+praxile models --stats       Show provider routes and observed model performance
+praxile tools                List supported tool actions
+praxile rollback             Roll back task edits or accepted proposals
+praxile terminal             Start the interactive Praxile terminal
+praxile gateway serve        Start the local web console/API
+praxile doctor --online      Validate config, routes, and local state
 ```
 
----
+## Local State
 
-## Local state
-
-Praxile writes repository-local state under `.praxile/`.
+Praxile writes repository-local state under `.praxile/`:
 
 ```text
 .praxile/
   config.json
+  constitution.md
   memory/
   skills/
+  evals/
   rules/
   experience/
-    evidence/
-    episodes/
-    patterns/
-    proposals/
-    feedback/
+  backups/
   db/
   logs/
-  backups/
 ```
 
----
+Do not put raw secrets in `.praxile/config.json`. Use environment variables through `api_key_env` and channel `token_env` settings.
 
-## Safety boundaries
+## Interop Boundary
 
-Praxile is designed around governed evolution.
+Praxile can detect optional Hermes/OpenClaw capabilities and can use OpenAI-compatible endpoints, but it is not a Hermes or OpenClaw plugin.
 
-It does:
-
-- record trajectories;
-- compute reward reports;
-- extract evidence and patterns;
-- generate reviewable proposals;
-- retrieve approved local experience;
-- incorporate explicit feedback.
-
-It does not:
-
-- fine-tune models;
-- silently rewrite long-term memory;
-- auto-approve project rules;
-- export project knowledge to hidden global memory;
-- replace human review.
-
----
-
-## Project status
-
-Praxile is currently **alpha**.
-
-Available:
-
-- repository-local experience
-- proposal-driven evolution
-- hybrid reward
-- user feedback loop
-- model roles
-- semantic judges
-- pattern mining
-- asset lifecycle governance
-
-Experimental:
-
-- HTTP gateway
-- browser adapter
-- production hardening
-
----
+- `.praxile/memory` is not written into external global memory.
+- `.praxile/skills` are not installed into external skill stores.
+- Praxile trajectories are the source of truth; external-compatible sidecars are exports.
+- Future external sync should go through explicit adapter commands and auditable proposals.
 
 ## Documentation
 
-Recommended next reads:
+- [Getting Started](docs/GETTING_STARTED.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Experience Model](docs/EXPERIENCE_MODEL.md)
+- [Audit Governance](docs/audit-governance.md)
+- [Why Praxile](docs/WHY_PRAXILE.md)
+- [Install And Interop](docs/INSTALL_AND_INTEROP.md)
+- [Testing Guide](docs/contributing-testing.md)
+- [Security Policy](SECURITY.md)
 
-- `docs/GETTING_STARTED.md`
-- `docs/ARCHITECTURE.md`
-- `docs/CONFIGURATION.md`
-- `docs/STATE_LAYOUT.md`
-- `docs/experience-governance.md`
-- `docs/proposal-decision-guide.md`
+## Current Status
 
----
+Praxile is Alpha software. The core local loop is implemented: init, setup, run, trajectory, reward, proposal generation, review, accept/reject, retrieval, graph, audit, rollback, terminal, gateway, and channel configuration.
 
-## Contributing
+Not included in the first release:
 
-Contributions are welcome.
-
-Good first areas:
-
-- model-role ergonomics
-- retrieval quality
-- semantic-judge evaluation
-- proposal review UX
-- explainability
-- experience governance
-
-Please read `CONTRIBUTING.md` and `SECURITY.md` before submitting changes.
-
----
+- automatic model weight training;
+- marketplace distribution;
+- silent global memory sync;
+- automatic production Telegram/Discord listeners;
+- unrestricted shell execution;
+- autonomous acceptance of durable experience.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT

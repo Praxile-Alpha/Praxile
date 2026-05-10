@@ -43,6 +43,12 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "enabled": True,
             "every_steps": 1,
         },
+        "executors": {
+            "primary_executor_id": "coding_agent",
+            "parallel_readonly_exploration_enabled": False,
+            "max_readonly_concurrency": 8,
+            "readonly_executor_prefix": "readonly_explorer",
+        },
         "context": {
             "compression_enabled": True,
             "max_prompt_chars": 120000,
@@ -133,6 +139,10 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "consolidation_stale_days": 90,
             "consolidation_low_value_max_confidence": 0.4,
         },
+        "proposal_gate": {
+            "enabled": True,
+            "min_confidence": 0.55,
+        },
         "memory": {
             "shard_enabled": True,
             "project_memory_soft_limit_bytes": 200000,
@@ -151,6 +161,21 @@ def default_config(project_root: Path) -> dict[str, Any]:
         },
         "architecture_gate": {
             "shadow_mode": False,
+        },
+        "workspace": {
+            "default_mode": "in-place",
+            "keep_after_run": True,
+            "copy_excludes": [
+                ".git",
+                "node_modules",
+                "__pycache__",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+                "dist",
+                "build",
+                ".next",
+            ],
         },
         "interop_guardrails": {
             "refuse_writes_when_external_agent_detected": True,
@@ -465,6 +490,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "safety.backup_max_files",
         "safety.backup_max_bytes",
         "checkpoint.every_steps",
+        "executors.max_readonly_concurrency",
         "context.max_prompt_chars",
         "context.observation_keep_chars",
         "context.recent_messages_to_keep",
@@ -493,12 +519,14 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         expect(path, int)
     for path in [
         "checkpoint.enabled",
+        "executors.parallel_readonly_exploration_enabled",
         "context.compression_enabled",
         "trace.enabled",
         "trace.sync",
         "retrieval.hybrid_enabled",
         "retrieval.vector_enabled",
         "evolution.llm_assisted_proposals",
+        "proposal_gate.enabled",
         "memory.shard_enabled",
         "shell.allow_shell_features",
         "cost_control.local_first",
@@ -513,6 +541,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.attribution_judge.enabled",
         "semantic_judges.pattern_mining.enabled",
         "semantic_judges.counterexample_checker.enabled",
+        "workspace.keep_after_run",
     ]:
         expect(path, bool)
     for path in [
@@ -558,6 +587,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reward.scores.scope_control_failed_or_blocked",
         "reward.min_experience_value_for_proposals",
         "evolution.consolidation_low_value_max_confidence",
+        "proposal_gate.min_confidence",
         "cost_control.max_cost_per_run_usd",
         "reward.user_feedback.positive_reward_delta",
         "reward.user_feedback.negative_reward_delta",
@@ -581,6 +611,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "safety.allowed_command_prefixes",
         "cost_control.prefer_ollama_for",
         "cost_control.use_cloud_for",
+        "workspace.copy_excludes",
     ]:
         expect(path, list)
     for path in [
@@ -589,6 +620,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "routing",
         "routing.fallbacks",
         "channels",
+        "executors",
+        "proposal_gate",
         "semantic_judges",
         "semantic_judges.feedback_classifier",
         "semantic_judges.attribution_judge",
@@ -598,6 +631,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         expect(path, dict)
     for path in [
         "runtime.mode",
+        "executors.primary_executor_id",
+        "executors.readonly_executor_prefix",
         "search.backend",
         "retrieval.vector_provider",
         "model.transport",
@@ -610,6 +645,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.counterexample_checker.role",
         "gateway.host",
         "gateway.token_env",
+        "workspace.default_mode",
     ]:
         expect(path, str)
     for path in [
@@ -643,6 +679,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "runtime.test_timeout_seconds",
         "runtime.action_parse_retries",
         "runtime.invalid_action_fail_fast_count",
+        "executors.max_readonly_concurrency",
         "trace.retention_days",
         "gateway.max_threads",
         "reward.scope.broad_edit_top_level_threshold",
@@ -660,6 +697,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
     reward_mode = value_at("reward.mode")
     if reward_mode not in {"hybrid", "objective_plus_user", "objective_only"}:
         errors.append("reward.mode: expected hybrid, objective_plus_user, or objective_only")
+    max_readonly = value_at("executors.max_readonly_concurrency")
+    if isinstance(max_readonly, int) and not 1 <= max_readonly <= 16:
+        errors.append("executors.max_readonly_concurrency: must be between 1 and 16")
+    workspace_mode = value_at("workspace.default_mode")
+    if workspace_mode not in {"in-place", "copy", "git-worktree"}:
+        errors.append("workspace.default_mode: expected in-place, copy, or git-worktree")
     low_value_confidence = value_at("evolution.consolidation_low_value_max_confidence")
     if isinstance(low_value_confidence, (int, float)) and not 0 <= float(low_value_confidence) <= 1:
         errors.append("evolution.consolidation_low_value_max_confidence: must be between 0 and 1")

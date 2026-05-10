@@ -101,7 +101,8 @@ class ToolRegistry:
         raw_actions = action.get("actions", [])
         if not isinstance(raw_actions, list) or not raw_actions:
             return {"status": "failure", "output": "batch actions must be a non-empty list", "data": {}, "risk_level": "low"}
-        actions = [item for item in raw_actions[:8] if isinstance(item, dict)]
+        max_concurrency = max(1, min(16, int(self.config.get("executors", "max_readonly_concurrency", default=8) or 8)))
+        actions = [item for item in raw_actions[:max_concurrency] if isinstance(item, dict)]
         rejected = [
             item.get("type")
             for item in actions
@@ -114,9 +115,24 @@ class ToolRegistry:
                 "data": {"rejected_action_types": rejected},
                 "risk_level": "medium",
             }
+        coordinator = _executor_payload(
+            str(action.get("executor_id") or "parallel_readonly"),
+            kind="parallel_readonly_coordinator",
+            role="read_only_batch",
+        )
+        prefix = str(self.config.get("executors", "readonly_executor_prefix", default="readonly_explorer") or "readonly_explorer")
+        executor_events = [
+            _executor_payload(
+                f"{prefix}_{index + 1}",
+                kind="readonly_worker",
+                role=str(item.get("type") or "read_only"),
+                parent_executor_id=coordinator["executor_id"],
+            )
+            for index, item in enumerate(actions)
+        ]
         observations = await asyncio.gather(
             *[
-                asyncio.to_thread(self.execute, item, task_id=task_id, step=step + index)
+                asyncio.to_thread(self._execute_with_executor, item, task_id=task_id, step=step + index, executor=executor_events[index])
                 for index, item in enumerate(actions)
             ]
         )
@@ -135,11 +151,30 @@ class ToolRegistry:
             "data": {
                 "concurrent": True,
                 "count": len(observations),
+                "executor": coordinator,
+                "executor_events": executor_events,
                 "actions": actions,
                 "observations": observations,
+                "max_concurrency": max_concurrency,
             },
             "risk_level": "low",
         }
+
+    def _execute_with_executor(
+        self,
+        action: dict[str, Any],
+        *,
+        task_id: str,
+        step: int,
+        executor: dict[str, Any],
+    ) -> dict[str, Any]:
+        observation = self.execute(action, task_id=task_id, step=step)
+        data = observation.get("data")
+        if not isinstance(data, dict):
+            data = {}
+            observation["data"] = data
+        data["executor"] = executor
+        return observation
 
     def _run_async(self, awaitable: Any) -> dict[str, Any]:
         timeout = max(1, int(self.config.get("runtime", "model_timeout_seconds", default=30) or 30))
@@ -224,3 +259,20 @@ class ToolRegistry:
 def _cancel_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
     for task in asyncio.all_tasks(loop):
         task.cancel()
+
+
+def _executor_payload(
+    executor_id: str,
+    *,
+    kind: str,
+    role: str,
+    parent_executor_id: str | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "executor_id": executor_id,
+        "kind": kind,
+        "role": role,
+    }
+    if parent_executor_id:
+        payload["parent_executor_id"] = parent_executor_id
+    return payload

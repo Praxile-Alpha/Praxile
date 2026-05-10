@@ -16,6 +16,14 @@ See the repository-level example:
 praxile.config.example.json
 ```
 
+Active model routing lives in three top-level keys:
+
+- `model_providers`: provider endpoints, API-key environment variable names, and declared model names.
+- `model_roles`: which provider/model to use for coding, evolution, reward judging, semantic judges, and retrieval.
+- `routing`: legacy/compatibility route aliases and fallback policy.
+
+The example file keeps `model_providers` empty by default so a freshly cloned open-source repo does not ship author-specific model choices. Look for `model_role_reference` and `model_setup_examples` in `praxile.config.example.json` for copyable Ollama and OpenAI-compatible templates, or run `praxile setup` to write the active keys interactively.
+
 ## Init Detection
 
 `praxile init` inspects common project markers and writes detection metadata into config for the current repository:
@@ -62,6 +70,12 @@ Praxile keeps operational knobs in `.praxile/config.json`:
   "checkpoint": {
     "enabled": true,
     "every_steps": 1
+  },
+  "executors": {
+    "primary_executor_id": "coding_agent",
+    "parallel_readonly_exploration_enabled": false,
+    "max_readonly_concurrency": 8,
+    "readonly_executor_prefix": "readonly_explorer"
   },
   "context": {
     "compression_enabled": true,
@@ -145,6 +159,10 @@ Praxile keeps operational knobs in `.praxile/config.json`:
     "consolidation_low_value_max_confidence": 0.4,
     "rejection_suppression_threshold": 2
   },
+  "proposal_gate": {
+    "enabled": true,
+    "min_confidence": 0.55
+  },
   "memory": {
     "shard_enabled": true,
     "project_memory_soft_limit_bytes": 200000,
@@ -164,6 +182,11 @@ Praxile keeps operational knobs in `.praxile/config.json`:
   "architecture_gate": {
     "shadow_mode": false
   },
+  "workspace": {
+    "default_mode": "in-place",
+    "keep_after_run": true,
+    "copy_excludes": [".git", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build", ".next"]
+  },
   "interop_guardrails": {
     "refuse_writes_when_external_agent_detected": true,
     "lock_files": [".hermes/agent.lock", ".openclaw/agent.lock", ".codex/agent.lock", ".agent.lock"],
@@ -172,6 +195,36 @@ Praxile keeps operational knobs in `.praxile/config.json`:
   "safety": {
     "backup_max_files": 500,
     "backup_max_bytes": 200000000
+  },
+  "model_providers": {
+    "openai_compatible": {
+      "type": "openai_compatible",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "timeout_seconds": 30,
+      "models": [
+        {
+          "name": "your-coding-model",
+          "role": "strong_coding",
+          "context_window": 0,
+          "supports_tools": false
+        }
+      ]
+    },
+    "local_ollama": {
+      "type": "ollama",
+      "base_url": "http://localhost:11434/v1",
+      "api_key_env": "OLLAMA_API_KEY",
+      "timeout_seconds": 20,
+      "models": [
+        {
+          "name": "qwen2.5-coder:7b",
+          "role": "local_evolution_and_judging",
+          "context_window": 0,
+          "supports_tools": false
+        }
+      ]
+    }
   },
   "model_roles": {
     "coding_agent": {
@@ -187,6 +240,11 @@ Praxile keeps operational knobs in `.praxile/config.json`:
       "provider": "local_ollama",
       "model": "qwen2.5-coder:7b"
     },
+    "deep_project_pattern_mining": {
+      "provider": "openai_compatible",
+      "model": "your-coding-model",
+      "max_context_runs": 20
+    },
     "reward_judge": {
       "provider": "local_ollama",
       "model": "qwen2.5-coder:7b",
@@ -199,6 +257,36 @@ Praxile keeps operational knobs in `.praxile/config.json`:
     "review_recommendation": {
       "provider": "local_ollama",
       "model": "qwen2.5-coder:7b"
+    },
+    "cheap_reasoner": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
+    },
+    "feedback_classifier": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
+    },
+    "attribution_judge": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
+    },
+    "counterexample_checker": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
+    },
+    "pattern_mining": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
+    },
+    "project_pattern_composer": {
+      "provider": "local_ollama",
+      "model": "qwen2.5-coder:7b",
+      "mode": "optional"
     },
     "embedding": {
       "provider": "local",
@@ -279,6 +367,8 @@ Project map caching stores a short-lived summary in `.praxile/cache/project_map.
 
 `evolution.llm_assisted_proposals=false` keeps experience proposal generation deterministic. Set it to `true` to let `model_roles.proposal_composer` or the legacy `evolution_model` route propose additional memories, skills, evals, failure patterns, harness rules, or routing notes. Those proposals must cite evidence, include confidence plus scope/anti-scope, target only safe `.praxile/` asset paths, and remain pending until accepted.
 
+`proposal_gate.enabled=true` checks every durable experience proposal against the project constitution before it can be accepted. Weak proposals are suppressed when they lack source task evidence, applicability scope, anti-scope, rollback/target information, or the configured minimum confidence. Suppressed items stay visible in run explanations as rejected learning candidates, not hidden edits.
+
 `memory.shard_enabled=true` keeps routine task memories in `memory/project.md` until the soft limit is reached; after that, new task memory proposals target date-based shards under `memory/shards/`. Consolidation can later merge and refine those shards without bloating the hot project memory file.
 
 `retrieval.vector_enabled` and `retrieval.hybrid_enabled` enable the local SQLite vector table and combine vector scores with FTS results. `retrieval.vector_provider="local_hash"` is a lightweight lexical-vector fallback, not a strong semantic embedding model. Install `praxile[vector]` and set `retrieval.vector_provider="sentence_transformers"` for semantic embeddings. The priority, hybrid rank, and usage feedback weights are explicit config knobs so retrieval tuning is reviewable instead of hidden in code.
@@ -286,6 +376,10 @@ Project map caching stores a short-lived summary in `.praxile/cache/project_map.
 `browser.enabled` enables the optional Playwright adapter. Install `praxile[browser]`, run `python -m playwright install chromium`, and keep `allowed_hosts` narrow. Screenshots are stored under `.praxile/experience/artifacts/browser/` and serve as review evidence; human UX acceptance remains required for visual salience and interaction feel.
 
 `architecture_gate.shadow_mode=true` lets Praxile record a dry-run shadow plan after a gate is triggered, but it still does not land file edits or implementation commands. The normal default is a hard stop.
+
+`workspace.default_mode` controls whether `praxile run` edits the selected project directly (`in-place`) or uses a per-task isolated workspace (`copy` or `git-worktree`). Isolated runs import trajectory/proposal records back into the source `.praxile/` and write a patch artifact, but they do not apply source-code changes automatically. `workspace.keep_after_run=false` removes the workspace after import.
+
+`executors.parallel_readonly_exploration_enabled=true` runs a safe concurrent batch of read-only project exploration before model action planning. Each batch worker is recorded as a separate `readonly_worker` executor in the trajectory. Reward reports expose `objective_signals.executor_attribution`, including attribution quality, top-level action ownership, worker counts, and failed or blocked exploration observations, so future audit, graph, and proposal review can distinguish primary agent actions from parallel read-only exploration evidence.
 
 `interop_guardrails` protects repositories used by multiple agent runtimes. If one of the configured lock files or environment flags is present, Praxile refuses normal project writes until the signal is removed or the guard is explicitly disabled.
 
@@ -313,6 +407,8 @@ praxile feedback auto "这次修得很好，但第二条 proposal 太泛，parse
 Run feedback updates `user_feedback_reward` and `final_reward`. Proposal feedback can lower confidence and change recommendation to `reject_or_edit`. Negative asset feedback increments negative outcome counts and creates a proposal-only lifecycle review rather than silently rewriting durable assets.
 
 `reward.weights`, `reward.scores`, `reward.cost_thresholds`, `reward.scope.broad_edit_top_level_threshold`, and `reward.min_experience_value_for_proposals` make reward policy project-tunable. Empty verification is reported as `no_tests_available` when no tests were detected, or `detected_not_run` when Praxile detected commands but they were not executed. Reward reports now separate task execution from learning value with `objective_reward`, `user_feedback_reward`, `llm_judge_reward`, `final_reward`, `execution_score`, `safety_score`, `regression_score`, `scope_control_score`, `experience_value_score`, `proposal_quality_score`, and `should_generate_experience`.
+
+`praxile spec verify latest` performs post-run spec compliance checking against attached or explicit spec files. It reports satisfied acceptance criteria, missing criteria, non-goal/constraint violations, success-metric coverage, and whether the implementation likely needs a reverse spec update. The report is written back to the trajectory as `spec_compliance`. Runs with attached spec files also compute this automatically during normal finish; partial or failed compliance lowers reward/scope scores and blocks ordinary memory/skill proposals from treating an incomplete implementation as reusable experience.
 
 `evolution.consolidation_min_duplicates`, `evolution.consolidation_stale_days`, and `evolution.consolidation_low_value_max_confidence` tune `praxile consolidate --all`. Consolidation remains proposal-only: it can propose `asset_merge`, `asset_deprecate`, `asset_rewrite`, and `asset_archive` governance updates plus cleanup review notes for duplicate, stale, conflicting, or low-value assets, but never deletes experience assets automatically.
 

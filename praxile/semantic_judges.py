@@ -10,7 +10,7 @@ from .utils import shorten
 
 
 POSITIVE_ATTRIBUTIONS = {"weak_positive", "strong_positive"}
-NEGATIVE_ATTRIBUTIONS = {"weak_negative", "strong_negative"}
+NEGATIVE_ATTRIBUTIONS = {"weak_negative", "harmful"}
 
 
 def semantic_judges_enabled(config: Config) -> bool:
@@ -102,8 +102,8 @@ class AttributionJudge:
                     "You may judge whether a loaded experience asset actually influenced this run, but you must not "
                     "propose durable memory changes.",
                     (
-                        "Return schema: {\"attribution_level\":\"none|loaded_only|weak_positive|weak_negative|"
-                        "strong_positive|strong_negative|mixed|uncertain\",\"used_explicitly\":false,"
+                        "Return schema: {\"attribution_level\":\"none|loaded_only|referenced|weak_positive|weak_negative|"
+                        "strong_positive|harmful|neutral|mixed|uncertain\",\"used_explicitly\":false,"
                         "\"confidence\":0.0,\"evidence\":[\"short evidence\"],"
                         "\"should_update_asset_outcome\":false,\"reason\":\"short reason\"}\n\n"
                         f"Input:\n{json.dumps(payload, ensure_ascii=False)}"
@@ -115,21 +115,23 @@ class AttributionJudge:
                 timeout=int(self.config.get("semantic_judges", "attribution_judge", "timeout_seconds", default=12)),
             )
             parsed = parse_json_object(response.get("content", ""))
-            level = str(parsed.get("attribution_level") or "uncertain")
+            level = _normalize_attribution_level(parsed.get("attribution_level"))
             if level not in {
                 "none",
                 "loaded_only",
+                "referenced",
                 "weak_positive",
                 "weak_negative",
                 "strong_positive",
-                "strong_negative",
+                "harmful",
+                "neutral",
                 "mixed",
                 "uncertain",
             }:
                 level = "uncertain"
             evidence = parsed.get("evidence") if isinstance(parsed.get("evidence"), list) else []
             should_update = bool(parsed.get("should_update_asset_outcome"))
-            if level in {"none", "loaded_only", "uncertain"}:
+            if level in {"none", "loaded_only", "referenced", "neutral", "uncertain"}:
                 should_update = False
             return {
                 "path": path,
@@ -142,7 +144,7 @@ class AttributionJudge:
                     "latency_ms": response.get("latency_ms"),
                 },
                 "attribution_level": level,
-                "used_explicitly": bool(parsed.get("used_explicitly")) or level in {"strong_positive", "strong_negative"},
+                "used_explicitly": bool(parsed.get("used_explicitly")) or level in {"strong_positive", "harmful"},
                 "referenced": path in referenced,
                 "confidence": _score(parsed.get("confidence"), default=0.5),
                 "evidence": [str(item) for item in evidence[:5]],
@@ -310,6 +312,19 @@ def _negative_delta(value: Any, *, default: float) -> float:
 def _recommended_action(value: Any) -> str:
     text = str(value or "inspect_or_edit")
     return text if text in {"inspect_or_edit", "inspect", "reject_or_edit"} else "inspect_or_edit"
+
+
+def _normalize_attribution_level(value: Any) -> str:
+    text = str(value or "uncertain").strip().lower()
+    aliases = {
+        "medium_positive": "weak_positive",
+        "medium_negative": "weak_negative",
+        "strong_negative": "harmful",
+        "negative": "weak_negative",
+        "positive": "weak_positive",
+        "none": "none",
+    }
+    return aliases.get(text, text)
 
 
 def _compact_actions(trajectory: dict[str, Any]) -> list[dict[str, Any]]:

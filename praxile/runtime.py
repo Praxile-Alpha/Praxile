@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -14,6 +15,8 @@ from .model import ModelRouter, ModelUnavailable
 from .reward import RewardEngine
 from .security import SafetyPolicy
 from .semantic_judges import AttributionJudge
+from .silent_failure import detect_silent_failure_signals
+from .specs import build_spec_context, spec_context_prompt, verify_spec_compliance
 from .store import ExperienceStore
 from .task_analyzer import TaskAnalyzer
 from .tools import ToolRegistry
@@ -38,6 +41,9 @@ class AgentRuntime:
         self.analyzer = TaskAnalyzer(config, router=self.router)
         self._trace_cleanup_done = False
         self.action_schemas = ActionSchemaRegistry()
+        self.primary_executor_id = str(
+            config.get("executors", "primary_executor_id", default="coding_agent") or "coding_agent"
+        )
 
     def run(
         self,
@@ -47,6 +53,8 @@ class AgentRuntime:
         max_steps: int | None = None,
         dry_run: bool = False,
         resume: str | None = None,
+        spec_files: list[str] | None = None,
+        parallel_readonly_explore: bool | None = None,
     ) -> dict[str, Any]:
         try:
             self.store.initialize(self.config)
@@ -62,13 +70,17 @@ class AgentRuntime:
             snapshot = self.project.snapshot(refresh=True)
             snapshot["interop"] = interop_policy(self.config)
             logger = TrajectoryLogger(task, snapshot)
+            self._register_base_executors(logger)
             logger.data["dry_run"] = dry_run
+            logger.set_spec_context(build_spec_context(self.config.paths.root, spec_files))
             retrieved = self.store.retrieve(task, limit=8)
             logger.set_loaded_context(retrieved)
             self.store.record_asset_usage(logger.task_id, retrieved, used_in_prompt=True)
             analysis = self.analyzer.analyze(task, retrieved)
             logger.set_task_analysis(analysis)
             logger.set_plan(analysis["plan"])
+            if self._parallel_readonly_enabled(parallel_readonly_explore):
+                self._run_parallel_readonly_exploration(task, logger)
             route = self.router.describe_route(
                 "coding_agent",
                 private=analysis["privacy_sensitive"],
@@ -92,6 +104,8 @@ class AgentRuntime:
                     "high_risk": analysis["high_risk"],
                     "dry_run": dry_run,
                     "test_commands": test_commands,
+                    "spec_files": spec_files or [],
+                    "parallel_readonly_explore": parallel_readonly_explore,
                 },
             )
 
@@ -112,6 +126,7 @@ class AgentRuntime:
                         "risk_level": "medium",
                     },
                     status="needs_human",
+                    executor=self._primary_executor(),
                 )
                 result_status = "needs_human"
                 result_summary = "Architecture gate triggered; no code edits were performed."
@@ -132,6 +147,8 @@ class AgentRuntime:
                             "high_risk": True,
                             "dry_run": True,
                             "test_commands": test_commands,
+                            "spec_files": spec_files or [],
+                            "parallel_readonly_explore": parallel_readonly_explore,
                         },
                     )
                     result_summary = "Architecture gate triggered; shadow-mode planning was recorded without landing edits."
@@ -151,6 +168,8 @@ class AgentRuntime:
                         "high_risk": analysis["high_risk"],
                         "dry_run": dry_run,
                         "test_commands": test_commands,
+                        "spec_files": spec_files or [],
+                        "parallel_readonly_explore": parallel_readonly_explore,
                     },
                 )
 
@@ -171,12 +190,16 @@ class AgentRuntime:
         if not checkpoint:
             raise FileNotFoundError(f"No checkpoint found for task: {task_id}")
         logger = TrajectoryLogger.from_data(checkpoint["trajectory"])
+        self._register_base_executors(logger)
         context = dict(checkpoint.get("context") or {})
         task = task_override or context.get("task") or logger.data.get("user_task", "")
         if task_override:
             logger.data["user_task"] = task_override
         resume_dry_run = dry_run or bool(context.get("dry_run", False))
         resume_test_commands = test_commands if test_commands is not None else context.get("test_commands")
+        resume_spec_files = context.get("spec_files") or []
+        if not logger.data.get("spec_context"):
+            logger.set_spec_context(build_spec_context(self.config.paths.root, resume_spec_files))
         messages = checkpoint.get("messages") or None
         retrieved = context.get("retrieved") or []
         private = bool(context.get("private", logger.data.get("task_analysis", {}).get("privacy_sensitive", False)))
@@ -200,6 +223,7 @@ class AgentRuntime:
                 "high_risk": high_risk,
                 "dry_run": resume_dry_run,
                 "test_commands": resume_test_commands,
+                "spec_files": resume_spec_files,
             },
         )
         return self._finish_run(
@@ -231,6 +255,7 @@ class AgentRuntime:
                     "risk_level": "low",
                 },
                 status="success",
+                executor=self._verification_executor(),
             )
         for result in test_results:
             logger.add_action(
@@ -238,10 +263,14 @@ class AgentRuntime:
                 input_data={"command": result.get("data", {}).get("command")},
                 observation=result,
                 status=result.get("status", "unknown"),
+                executor=self._verification_executor(),
             )
 
         logger.set_diff_summary(self.git.diff_summary())
         trajectory = logger.finish(status=result_status, summary=result_summary)
+        if (trajectory.get("spec_context") or {}).get("spec_files"):
+            trajectory["spec_compliance"] = verify_spec_compliance(self.config.paths.root, trajectory)
+        trajectory["silent_failure_signals"] = detect_silent_failure_signals(trajectory, test_results)
         llm_judge = self._llm_judge_reward(trajectory)
         if llm_judge:
             trajectory["llm_judge_reward"] = llm_judge
@@ -258,6 +287,7 @@ class AgentRuntime:
                 "confidence": proposal.get("confidence"),
                 "confidence_level": proposal.get("confidence_level"),
                 "evidence_summary": proposal.get("evidence_summary"),
+                "proposal_gate": proposal.get("proposal_gate"),
                 "target_files": proposal["target_files"],
             }
             for proposal in proposals
@@ -426,6 +456,8 @@ class AgentRuntime:
             "proposal_counts": proposal_counts,
             "proposal_risk_counts": risk_counts,
             "proposal_confidence_counts": confidence_counts,
+            "proposal_gate": trajectory.get("proposal_gate_summary", {}),
+            "silent_failure_signals": trajectory.get("silent_failure_signals", []),
             "experience_generation": trajectory.get("reward_report", {}).get("experience_generation", {}),
             "review_command": f"praxile review --source-run {trajectory.get('task_id')}",
         }
@@ -439,6 +471,113 @@ class AgentRuntime:
         if status == "needs_human":
             return "needs_human"
         return "unknown"
+
+    def _register_base_executors(self, logger: TrajectoryLogger) -> None:
+        logger.register_executor(
+            self.primary_executor_id,
+            kind="agent_runtime",
+            role="coding_agent",
+            description="Primary Praxile coding/runtime executor.",
+        )
+        logger.register_executor(
+            "verification",
+            kind="verification",
+            role="test_runner",
+            description="Runs configured test/lint/build verification commands.",
+        )
+
+    def _primary_executor(self) -> dict[str, Any]:
+        return {
+            "executor_id": self.primary_executor_id,
+            "kind": "agent_runtime",
+            "role": "coding_agent",
+        }
+
+    def _verification_executor(self) -> dict[str, Any]:
+        return {
+            "executor_id": "verification",
+            "kind": "verification",
+            "role": "test_runner",
+        }
+
+    def _action_executor(self, action_type: str | None, observation: dict[str, Any]) -> dict[str, Any]:
+        if action_type == "batch":
+            executor = (observation.get("data") or {}).get("executor")
+            if isinstance(executor, dict):
+                return executor
+        return self._primary_executor()
+
+    def _parallel_readonly_enabled(self, override: bool | None) -> bool:
+        if override is not None:
+            return bool(override)
+        return bool(self.config.get("executors", "parallel_readonly_exploration_enabled", default=False))
+
+    def _run_parallel_readonly_exploration(self, task: str, logger: TrajectoryLogger) -> None:
+        actions = self._readonly_exploration_actions(task)
+        if not actions:
+            return
+        coordinator = {
+            "executor_id": "parallel_readonly",
+            "kind": "parallel_readonly_coordinator",
+            "role": "pre_model_exploration",
+        }
+        logger.register_executor(
+            coordinator["executor_id"],
+            kind=coordinator["kind"],
+            role=coordinator["role"],
+            description="Coordinates safe concurrent read-only project exploration before model action planning.",
+            parent_executor_id=self.primary_executor_id,
+        )
+        observation = self.tools.execute(
+            {
+                "type": "batch",
+                "executor_id": coordinator["executor_id"],
+                "actions": actions,
+            },
+            task_id=logger.task_id,
+            step=len(logger.data.get("actions", [])) + 1,
+        )
+        for executor in (observation.get("data") or {}).get("executor_events") or []:
+            if isinstance(executor, dict):
+                logger.register_executor(
+                    str(executor.get("executor_id") or ""),
+                    kind=str(executor.get("kind") or "readonly_worker"),
+                    role=str(executor.get("role") or "read_only"),
+                    parent_executor_id=str(executor.get("parent_executor_id") or coordinator["executor_id"]),
+                    description="Concurrent read-only exploration worker.",
+                )
+        logger.data["parallel_readonly_exploration"] = {
+            "enabled": True,
+            "action_count": len(actions),
+            "status": observation.get("status"),
+            "created_at": utc_now(),
+        }
+        logger.add_action(
+            action_type="parallel_readonly_exploration",
+            input_data={"actions": actions},
+            observation=observation,
+            status=observation.get("status", "unknown"),
+            executor=coordinator,
+        )
+        self._trace(
+            "parallel_readonly_exploration",
+            task_id=logger.task_id,
+            status=observation.get("status"),
+            actions=len(actions),
+            executors=len((observation.get("data") or {}).get("executor_events") or []),
+        )
+
+    def _readonly_exploration_actions(self, task: str) -> list[dict[str, Any]]:
+        actions: list[dict[str, Any]] = [
+            {"type": "project_map", "refresh": False},
+            {"type": "list_files"},
+        ]
+        query = _exploration_query(task)
+        if query:
+            actions.append({"type": "find_files", "query": query, "limit": 40})
+            actions.append({"type": "search", "pattern": query, "limit": 40})
+        max_concurrency = max(1, min(16, int(self.config.get("executors", "max_readonly_concurrency", default=8) or 8)))
+        return actions[:max_concurrency]
 
     def _referenced_asset_paths(self, trajectory: dict[str, Any]) -> list[str]:
         loaded = trajectory.get("loaded_assets") or []
@@ -549,7 +688,13 @@ class AgentRuntime:
                         },
                         "risk_level": "low",
                     }
-                    logger.add_action(action_type="model_response", input_data={}, observation=observation, status="failure")
+                    logger.add_action(
+                        action_type="model_response",
+                        input_data={},
+                        observation=observation,
+                        status="failure",
+                        executor=self._primary_executor(),
+                    )
                     logger.add_model_performance(
                         {
                             "provider": response.get("provider"),
@@ -584,7 +729,13 @@ class AgentRuntime:
                         },
                         "risk_level": "low",
                     }
-                    logger.add_action(action_type="model_response", input_data={}, observation=observation, status="failure")
+                    logger.add_action(
+                        action_type="model_response",
+                        input_data={},
+                        observation=observation,
+                        status="failure",
+                        executor=self._primary_executor(),
+                    )
                     logger.add_model_performance(
                         {
                             "provider": response.get("provider"),
@@ -620,6 +771,7 @@ class AgentRuntime:
                     input_data={k: v for k, v in action.items() if k != "content"},
                     observation=observation,
                     status=observation.get("status", "unknown"),
+                    executor=self._action_executor(action_type, observation),
                 )
                 self._trace(
                     "tool_action",
@@ -661,6 +813,7 @@ class AgentRuntime:
                 input_data={"task": task},
                 observation={"status": "needs_human", "output": output, "data": {}, "risk_level": "low"},
                 status="needs_human",
+                executor=self._primary_executor(),
             )
             logger.add_model_performance(
                 {
@@ -826,8 +979,22 @@ class AgentRuntime:
             for item in retrieved
         )
         allowed = "\n".join(f"- {item}" for item in self.config.get("safety", "allowed_command_prefixes", default=[]))
+        spec_context = spec_context_prompt(logger.data.get("spec_context") or {})
+        exploration = logger.data.get("parallel_readonly_exploration") or {}
+        exploration_text = "(disabled)"
+        if exploration:
+            action = next(
+                (
+                    item
+                    for item in reversed(logger.data.get("actions", []))
+                    if item.get("action_type") == "parallel_readonly_exploration"
+                ),
+                {},
+            )
+            observation = action.get("observation") if isinstance(action, dict) else {}
+            exploration_text = shorten(str((observation or {}).get("output") or ""), 3000) or "(no output)"
         system = (
-            "You are Praxile, a local code-project self-evolution harness worker. "
+            "You are Praxile, a local code-project governed experience harness worker. "
             "You must operate only through the JSON action protocol. "
             "Return exactly one JSON object and no markdown.\n\n"
             f"{self.action_schemas.prompt_summary()}\n\n"
@@ -851,7 +1018,9 @@ class AgentRuntime:
         )
         user = (
             f"Task: {task}\n\n"
+            f"Spec / constitution context:\n{spec_context}\n\n"
             f"Project files:\n{tree or '(no files listed)'}\n\n"
+            f"Parallel read-only exploration:\n{exploration_text}\n\n"
             f"Retrieved memory/skills/rules:\n{context or '(none)'}\n\n"
             f"Allowed command prefixes:\n{allowed}\n\n"
             "Choose the next action."
@@ -871,3 +1040,30 @@ def _score(value: Any, *, default: float) -> float:
     except (TypeError, ValueError):
         parsed = default
     return round(max(0.0, min(1.0, parsed)), 3)
+
+
+def _exploration_query(task: str) -> str:
+    words = [
+        item.lower()
+        for item in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}", task or "")
+        if item.lower()
+        not in {
+            "the",
+            "and",
+            "for",
+            "with",
+            "fix",
+            "add",
+            "update",
+            "implement",
+            "change",
+            "修改",
+            "实现",
+            "修复",
+            "新增",
+        }
+    ]
+    if not words:
+        return ""
+    words.sort(key=lambda item: (-len(item), item))
+    return words[0][:80]

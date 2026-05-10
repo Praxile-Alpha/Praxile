@@ -5,6 +5,7 @@
 ```text
 .praxile/
   config.json
+  constitution.md
   memory/
     user.md
     project.md
@@ -35,14 +36,22 @@
   checkpoints/
   db/
   logs/
+  workspaces/
+    <workspace-id>/
+      metadata.json
+      root/
 ```
 
 The `.praxile/` directory is project-local. Accepted assets from one repository should not be treated as global user memory or automatically loaded by an external framework.
+
+`constitution.md` is the repo-local experience constitution. It records the governance principles that keep durable memory, skills, rules, evals, and frozen boundaries evidence-backed and reviewable. `praxile constitution check` verifies the file exists and still contains the required principles.
 
 Experience assets are lifecycle-managed. Praxile loads only `active` assets during normal retrieval; `deprecated`, `superseded`, and `archived` assets stay auditable on disk and in the index but are excluded by default. Lifecycle metadata is stored as sidecar `*.meta.json` files, so governance proposals can retire or supersede an asset without rewriting the original learning note. Use `praxile memory list --include-inactive` and `praxile asset status <PATH>` when auditing retired assets.
 
 Skills additionally keep `metadata.json` for status/version and `versions/` for accepted snapshots, so rollbacks and history remain clear.
 
 `experience/artifacts/` stores runtime evidence such as optional browser screenshots. These artifacts support review, but they do not replace human UX acceptance.
+
+`workspaces/` stores optional per-task isolated workspaces created by `praxile run --workspace-mode copy` or `--workspace-mode git-worktree`. Isolated runs import their trajectory and proposals back into the source project and write patch artifacts under `experience/artifacts/workspaces/`; source project files are not changed automatically.
 
 `checkpoints/` stores resumable in-flight task state and is cleared when a run finishes normally. `logs/trace.jsonl` stores structured runtime events for debugging model routing, safety blocks, context compression, and checkpoint writes.

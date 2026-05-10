@@ -70,5 +70,68 @@ class TestRewardEngine(unittest.TestCase):
         report = self.engine.build_report(trajectory, test_results)
         self.assertEqual(report["experience_generation"]["evidence_strength"], "high")
 
+    def test_spec_compliance_gap_lowers_reward_and_records_objective_signal(self):
+        trajectory = {
+            "result": {"status": "completed"},
+            "actions": [{"action_type": "edit_file", "status": "success", "input": {"path": "search.py"}}],
+            "spec_compliance": {
+                "status": "partial",
+                "score": 0.42,
+                "missing": [{"text": "Add P95 verification"}],
+                "violations": [{"type": "constraint", "text": "Use PostgreSQL only"}],
+                "success_metric_coverage": [{"metric": "P95 < 200ms", "covered": False}],
+            },
+        }
+        report = self.engine.build_report(trajectory, [{"status": "success"}])
+
+        self.assertLess(report["task_success"], 0.8)
+        self.assertLess(report["scope_control_score"], 0.75)
+        self.assertEqual(report["objective_signals"]["spec_compliance_status"], "partial")
+        self.assertEqual(report["objective_signals"]["spec_compliance_violation_count"], 1)
+        self.assertTrue(any("Spec compliance needs review" in note for note in report["notes"]))
+
+    def test_executor_attribution_is_reported(self):
+        trajectory = {
+            "task_id": "task_exec",
+            "result": {"status": "completed"},
+            "parallel_readonly_exploration": {"enabled": True, "action_count": 2},
+            "executors": [
+                {"executor_id": "coding_agent", "kind": "agent_runtime", "role": "coding"},
+                {"executor_id": "parallel_readonly", "kind": "parallel_readonly_coordinator", "role": "pre_model_exploration"},
+            ],
+            "actions": [
+                {
+                    "action_type": "parallel_readonly_exploration",
+                    "status": "success",
+                    "executor": {"executor_id": "parallel_readonly", "kind": "parallel_readonly_coordinator"},
+                    "observation": {
+                        "data": {
+                            "count": 2,
+                            "executor_events": [
+                                {"executor_id": "readonly_explorer_1", "kind": "readonly_worker", "role": "list_files"},
+                                {"executor_id": "readonly_explorer_2", "kind": "readonly_worker", "role": "search"},
+                            ],
+                            "observations": [{"status": "success"}, {"status": "failure"}],
+                        }
+                    },
+                },
+                {
+                    "action_type": "finish",
+                    "status": "success",
+                    "executor": {"executor_id": "coding_agent", "kind": "agent_runtime"},
+                },
+            ],
+        }
+
+        report = self.engine.build_report(trajectory, [])
+
+        attribution = report["objective_signals"]["executor_attribution"]
+        self.assertEqual(attribution["quality"], "complete")
+        self.assertEqual(attribution["action_executor_counts"]["parallel_readonly"], 1)
+        self.assertEqual(attribution["parallel_readonly"]["worker_count"], 2)
+        self.assertEqual(attribution["parallel_readonly"]["failed_observation_count"], 1)
+        self.assertTrue(report["experience_generation"]["signals"]["parallel_readonly_issue"])
+        self.assertTrue(any("Parallel read-only exploration" in note for note in report["notes"]))
+
 if __name__ == "__main__":
     unittest.main()

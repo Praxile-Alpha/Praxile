@@ -51,6 +51,7 @@ class EvidenceExtractor:
         # Reward & Outcome
         reward = trajectory.get("reward_report", {})
         outcome = trajectory.get("result", {}).get("status", "unknown")
+        executor_attribution = EvidenceExtractor._executor_attribution(trajectory, reward)
 
         return {
             "task_id": task_id,
@@ -70,6 +71,8 @@ class EvidenceExtractor:
             "rejected_proposals": EvidenceExtractor._proposal_summaries(trajectory, status="rejected"),
             "user_feedback": EvidenceExtractor._feedback_events(trajectory),
             "blocked_actions": blocked_actions,
+            "executor_attribution": executor_attribution,
+            "executors": executor_attribution.get("executors", []),
             "reward": {
                 "overall": reward.get("overall", 0.0),
                 "task_success": reward.get("task_success"),
@@ -256,6 +259,53 @@ class EvidenceExtractor:
                 }
             )
         return result
+
+    @staticmethod
+    def _executor_attribution(trajectory: dict[str, Any], reward: dict[str, Any]) -> dict[str, Any]:
+        objective = reward.get("objective_signals", {}) if isinstance(reward.get("objective_signals"), dict) else {}
+        attribution = objective.get("executor_attribution")
+        if isinstance(attribution, dict) and attribution:
+            return attribution
+
+        executors: dict[str, dict[str, Any]] = {}
+        for item in trajectory.get("executors") or []:
+            if not isinstance(item, dict):
+                continue
+            executor_id = str(item.get("executor_id") or "").strip()
+            if not executor_id:
+                continue
+            executors[executor_id] = {
+                "executor_id": executor_id,
+                "kind": item.get("kind") or "unknown",
+                "role": item.get("role") or "",
+                "parent_executor_id": item.get("parent_executor_id"),
+            }
+        action_counts: dict[str, int] = {}
+        missing = 0
+        for action in trajectory.get("actions", []) or []:
+            executor = action.get("executor") if isinstance(action.get("executor"), dict) else {}
+            executor_id = str(executor.get("executor_id") or "").strip()
+            if not executor_id:
+                missing += 1
+                continue
+            action_counts[executor_id] = action_counts.get(executor_id, 0) + 1
+            executors.setdefault(
+                executor_id,
+                {
+                    "executor_id": executor_id,
+                    "kind": executor.get("kind") or "unknown",
+                    "role": executor.get("role") or "",
+                    "parent_executor_id": executor.get("parent_executor_id"),
+                },
+            )
+        return {
+            "quality": "complete" if action_counts and not missing else ("partial" if action_counts else "legacy_missing"),
+            "registered_executor_count": len(executors),
+            "action_executor_counts": action_counts,
+            "unattributed_action_count": missing,
+            "executors": list(executors.values()),
+            "parallel_readonly": trajectory.get("parallel_readonly_exploration") or {},
+        }
 
     @staticmethod
     def _feedback_events(trajectory: dict[str, Any]) -> list[dict[str, Any]]:

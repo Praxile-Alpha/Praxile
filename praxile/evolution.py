@@ -12,6 +12,7 @@ from .episodes import EpisodeBuilder
 from .patterns import PatternMiner
 from .json_utils import RobustJSONError, parse_json_value
 from .model import ModelError, ModelUnavailable
+from .silent_failure import apply_silent_failure_to_proposals
 from .utils import new_id, slugify, unified_diff, utc_now
 
 
@@ -69,7 +70,8 @@ class EvolutionEngine:
             trajectory.setdefault("experience_generation", generation)
             return []
         proposals: list[dict[str, Any]] = []
-        proposals.append(self._memory_proposal(trajectory))
+        if self._should_generate_memory_proposal(trajectory):
+            proposals.append(self._memory_proposal(trajectory))
         skill = self._skill_proposal(trajectory)
         if skill:
             proposals.append(skill)
@@ -93,7 +95,24 @@ class EvolutionEngine:
             proposals.append(routing)
         proposals.extend(self._llm_assisted_proposals(trajectory))
         self._apply_llm_judge_to_proposals(proposals, trajectory.get("llm_judge_reward", {}))
-        return self._filter_suppressed_proposals(proposals)
+        apply_silent_failure_to_proposals(proposals, trajectory.get("silent_failure_signals") or [])
+        filtered = self._filter_suppressed_proposals(proposals)
+        return self._apply_proposal_gate(filtered, trajectory)
+
+    def _should_generate_memory_proposal(self, trajectory: dict[str, Any]) -> bool:
+        report = trajectory.get("reward_report", {}) or {}
+        signals = (report.get("experience_generation") or {}).get("signals") or {}
+        if signals.get("memory_requested"):
+            return True
+        if signals.get("failures") or signals.get("blocked_actions") or signals.get("architecture_gate"):
+            return True
+        if signals.get("model_performance"):
+            return True
+        if trajectory.get("spec_context", {}).get("spec_files"):
+            return True
+        if _failed_commands(trajectory) or _verification_commands(trajectory):
+            return True
+        return False
 
     def _apply_llm_judge_to_proposals(self, proposals: list[dict[str, Any]], judge: dict[str, Any]) -> None:
         if not isinstance(judge, dict) or not judge.get("active"):
@@ -158,6 +177,128 @@ class EvolutionEngine:
                 )
             filtered.append(proposal)
         return filtered
+
+    def _apply_proposal_gate(self, proposals: list[dict[str, Any]], trajectory: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.config.get("proposal_gate", "enabled", default=True):
+            trajectory["proposal_gate_summary"] = {
+                "generated": len(proposals),
+                "pending": len(proposals),
+                "suppressed": 0,
+                "disabled": True,
+                "constitution_files": trajectory.get("spec_context", {}).get("constitution_files") or [],
+            }
+            return proposals
+        passed: list[dict[str, Any]] = []
+        suppressed: list[dict[str, Any]] = []
+        for proposal in proposals:
+            gate = self._proposal_gate_decision(proposal, trajectory)
+            proposal["proposal_gate"] = gate
+            if gate["passed"]:
+                passed.append(proposal)
+            else:
+                weak = {
+                    "proposal_id": proposal.get("proposal_id"),
+                    "type": proposal.get("type"),
+                    "title": proposal.get("title"),
+                    "confidence": proposal.get("confidence"),
+                    "confidence_level": proposal.get("confidence_level"),
+                    "proposal_gate": gate,
+                    "target_files": proposal.get("target_files") or [],
+                }
+                suppressed.append(weak)
+        trajectory["proposal_gate_summary"] = {
+            "generated": len(proposals),
+            "pending": len(passed),
+            "suppressed": len(suppressed),
+            "constitution_files": trajectory.get("spec_context", {}).get("constitution_files") or [],
+        }
+        if suppressed:
+            trajectory["suppressed_experience_candidates"] = suppressed
+        return passed
+
+    def _proposal_gate_decision(self, proposal: dict[str, Any], trajectory: dict[str, Any]) -> dict[str, Any]:
+        reasons: list[str] = []
+        suppressed_reasons: list[str] = []
+        report = trajectory.get("reward_report", {}) or {}
+        evidence_strength = str((report.get("experience_generation") or {}).get("evidence_strength") or "low")
+        spec_compliance = trajectory.get("spec_compliance") if isinstance(trajectory.get("spec_compliance"), dict) else {}
+        spec_status = str(spec_compliance.get("status") or "unknown")
+        spec_violations = spec_compliance.get("violations") or []
+        spec_missing = spec_compliance.get("missing") or []
+        confidence = _float(proposal.get("confidence"), default=0.0)
+        min_confidence = float(self.config.get("proposal_gate", "min_confidence", default=0.55) or 0.55)
+        critical_types = {"architecture_gate", "frozen_boundary", "routing"}
+        compliance_safe_types = {
+            "eval_case",
+            "eval_checklist",
+            "failure_pattern",
+            "harness_rule",
+            "architecture_gate",
+            "frozen_boundary",
+            "routing",
+            "experience_consolidation",
+            "asset_deprecate",
+            "asset_rewrite",
+            "asset_archive",
+            "asset_merge",
+        }
+        source_ok = bool(proposal.get("source_task_id") or proposal.get("source", {}).get("task_id"))
+        evidence_ok = bool(proposal.get("evidence_summary") or proposal.get("evidence"))
+        scope_ok = bool(proposal.get("applicability_scope") or proposal.get("future_applicability"))
+        anti_scope_ok = bool(proposal.get("anti_scope"))
+        rollback_ok = bool(proposal.get("target_files") or proposal.get("rollback"))
+
+        if source_ok:
+            reasons.append("Source task is recorded.")
+        else:
+            suppressed_reasons.append("Missing source_task_id.")
+        if evidence_ok:
+            reasons.append(f"Evidence strength is {evidence_strength}.")
+        else:
+            suppressed_reasons.append("Missing evidence summary.")
+        if confidence >= min_confidence or proposal.get("type") in critical_types:
+            reasons.append("Confidence is above threshold or proposal type is governance-critical.")
+        else:
+            suppressed_reasons.append(f"Confidence {confidence} is below threshold {min_confidence}.")
+        if scope_ok:
+            reasons.append("Applicability scope is present.")
+        else:
+            suppressed_reasons.append("Missing applicability scope.")
+        if anti_scope_ok:
+            reasons.append("Anti-scope is present.")
+        else:
+            suppressed_reasons.append("Missing anti-scope.")
+        if rollback_ok:
+            reasons.append("Target files or rollback path are present.")
+        else:
+            suppressed_reasons.append("Missing target files or rollback path.")
+
+        weak_evidence = evidence_strength == "low" and proposal.get("type") not in critical_types
+        if weak_evidence and confidence < 0.7:
+            suppressed_reasons.append("Evidence is low and confidence is not strong enough.")
+        if spec_compliance and spec_status in {"partial", "failed"} and proposal.get("type") not in compliance_safe_types:
+            if spec_violations:
+                suppressed_reasons.append("Spec compliance violations exist; do not persist implementation-derived experience as normal memory/skill.")
+            elif spec_missing:
+                suppressed_reasons.append("Spec acceptance criteria are missing; inspect before persisting implementation-derived experience.")
+            else:
+                suppressed_reasons.append("Spec compliance is incomplete; inspect before persisting implementation-derived experience.")
+        if spec_compliance and spec_status == "full":
+            reasons.append("Attached spec compliance is satisfied.")
+
+        passed = not suppressed_reasons
+        return {
+            "passed": passed,
+            "decision": "pending" if passed else "weak_candidate",
+            "quality_score": round(min(1.0, confidence * 0.6 + (0.4 if evidence_ok and scope_ok and anti_scope_ok else 0.0)), 3),
+            "evidence_strength": evidence_strength,
+            "scope_valid": scope_ok,
+            "anti_scope_valid": anti_scope_ok,
+            "duplicate_risk": "unknown",
+            "spec_compliance_status": spec_status if spec_compliance else None,
+            "reasons": reasons,
+            "suppressed_reasons": suppressed_reasons,
+        }
 
     def _proposal(
         self,
@@ -264,6 +405,7 @@ class EvolutionEngine:
         verification_commands = _verification_commands(trajectory)
         failure_excerpts = _failure_excerpts(trajectory)
         project_terms = _project_terms(trajectory)
+        executor_lines = _executor_evidence_lines(trajectory)
         evidence_lines = []
         if edited_paths:
             evidence_lines.append(f"- Touched files: {', '.join(f'`{path}`' for path in edited_paths[:8])}")
@@ -275,6 +417,8 @@ class EvolutionEngine:
             evidence_lines.append(f"- Failure excerpt: {failure_excerpts[0]}")
         if notes:
             evidence_lines.append(f"- Reward signals: {notes}")
+        if executor_lines:
+            evidence_lines.append(f"- Executor attribution: {executor_lines[0].lstrip('- ')}")
         if not evidence_lines:
             evidence_lines.append("- Evidence: source task explicitly requested project-local memory.")
         content = (
@@ -291,6 +435,8 @@ class EvolutionEngine:
             "- A newer accepted memory, skill, or failure pattern explicitly supersedes this note.\n"
             "\n### Concrete Evidence\n\n"
             + "\n".join(evidence_lines)
+            + "\n\n### Executor Attribution\n\n"
+            + ("\n".join(executor_lines) if executor_lines else "- Executor attribution was not recorded in this source trajectory.")
             + "\n\n### Next-Time Use\n\n"
             "- Load this memory only for similar project-local tasks with matching files, commands, tests, or failure signatures.\n"
             "- Reproduce the narrow failure or verification command before broad edits when the task is a repair.\n"
@@ -310,6 +456,7 @@ class EvolutionEngine:
                 f"Result status: {trajectory.get('result', {}).get('status', 'unknown')}.",
                 f"Experience generation: {report.get('experience_generation', {}).get('reason', 'not recorded')}.",
                 "The memory is scoped to this project and keeps the source task ID.",
+                *(executor_lines[:2] or []),
             ],
             confidence=0.55 if trajectory.get("result", {}).get("status") == "needs_human" else 0.7,
             affected_files=edited_paths,
@@ -492,6 +639,7 @@ class EvolutionEngine:
         for test in failed_tests[:4]:
             details.append(f"- Command `{test.get('data', {}).get('command')}` failed: {test.get('output', '')[:300]}")
         detail_text = "\n".join(details) if details else "- Reward report recorded a failed or blocked action."
+        executor_lines = _executor_evidence_lines(trajectory)
         first_failed = (failed[:1] or [{}])[0]
         first_test = (failed_tests[:1] or [{}])[0]
         trigger_command = first_test.get("data", {}).get("command") or first_failed.get("input", {}).get("command") or "(not recorded)"
@@ -530,6 +678,8 @@ class EvolutionEngine:
             f"{symptom[:500]}\n\n"
             "## Signal Details\n\n"
             + detail_text
+            + "\n\n## Executor Attribution\n\n"
+            + ("\n".join(executor_lines) if executor_lines else "- Executor attribution was not recorded.")
             + "\n\n## Fix Strategy\n\n"
             "- Reproduce the failure with the narrowest safe command before broad edits.\n"
             "- Do not bypass safety blocks; either adjust configuration after review or ask for manual execution.\n"
@@ -690,11 +840,14 @@ class EvolutionEngine:
         task = trajectory.get("user_task", "").lower()
         report = trajectory.get("reward_report", {})
         objective = report.get("objective_signals", {})
+        executor_attribution = objective.get("executor_attribution") if isinstance(objective.get("executor_attribution"), dict) else {}
+        parallel = executor_attribution.get("parallel_readonly") if isinstance(executor_attribution.get("parallel_readonly"), dict) else {}
         detected_tests = objective.get("tests_detected") or []
         tests_run = objective.get("tests_run")
         ui_sensitive = report.get("signals", {}).get("ui_sensitive")
         architecture_sensitive = report.get("signals", {}).get("architecture_sensitive")
         failed_or_blocked = objective.get("blocked_actions", 0) or objective.get("failed_actions", 0)
+        parallel_readonly_issue = bool(parallel.get("failed_observation_count") or parallel.get("blocked_observation_count"))
         rules: list[str] = []
         name = "task-execution-guardrails"
         title = "Add task execution guardrail"
@@ -721,6 +874,16 @@ class EvolutionEngine:
                 [
                     "Tasks touching shared contracts, auth/session, routing, storage, migrations, or frozen boundaries must pause normal implementation.",
                     "High-risk implementation requires a strong model route and explicit human approval before edits.",
+                ]
+            )
+        if parallel_readonly_issue:
+            name = "parallel-readonly-context-integrity"
+            title = "Require context review after failed parallel exploration"
+            rules.extend(
+                [
+                    "If parallel read-only exploration has failed or blocked sub-observations, do not treat missing search results as proof that context does not exist.",
+                    "Inspect failed explorer outputs before accepting memory, skill, rule, or pattern proposals from the run.",
+                    "Prefer a narrower follow-up exploration or manual review before broad implementation.",
                 ]
             )
         if failed_or_blocked:
@@ -860,10 +1023,16 @@ class EvolutionEngine:
                     "step": action.get("step"),
                     "action_type": action.get("action_type"),
                     "status": action.get("status"),
+                    "executor": action.get("executor"),
                     "output": str(action.get("observation", {}).get("output", ""))[:500],
                 }
                 for action in trajectory.get("actions", [])[:12]
             ],
+            "executor_attribution": (
+                (trajectory.get("reward_report", {}).get("objective_signals", {}) or {}).get("executor_attribution")
+                if isinstance(trajectory.get("reward_report", {}).get("objective_signals", {}), dict)
+                else None
+            ),
         }
         system = (
             "You propose optional Praxile experience assets from one trajectory. "
@@ -964,6 +1133,13 @@ def _normalized_risk(proposal_type: str, risk_level: str) -> str:
     if proposal_type in {"architecture_gate", "frozen_boundary"}:
         return "high"
     return risk
+
+
+def _float(value: Any, *, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _confidence_level(confidence: float) -> str:
@@ -1149,7 +1325,61 @@ def _skill_source_evidence_lines(trajectory: dict[str, Any]) -> list[str]:
         lines.append(f"- Verification command from trajectory: `{command}`")
     for action in _fix_action_lines(trajectory)[:4]:
         lines.append(f"- Observed repair action: {action}")
+    lines.extend(_executor_evidence_lines(trajectory)[:3])
     return lines or ["- No concrete file or command was recorded; keep this skill as a draft until a stronger run confirms it."]
+
+
+def _executor_evidence_lines(trajectory: dict[str, Any]) -> list[str]:
+    report = trajectory.get("reward_report", {}) if isinstance(trajectory.get("reward_report"), dict) else {}
+    objective = report.get("objective_signals", {}) if isinstance(report.get("objective_signals"), dict) else {}
+    attribution = objective.get("executor_attribution") if isinstance(objective.get("executor_attribution"), dict) else {}
+    if not attribution:
+        executors = trajectory.get("executors") or []
+        if not executors:
+            return []
+        attribution = {
+            "quality": "recorded",
+            "executors": executors,
+            "action_executor_counts": _action_executor_counts(trajectory),
+            "parallel_readonly": trajectory.get("parallel_readonly_exploration") or {},
+        }
+
+    lines: list[str] = []
+    quality = attribution.get("quality")
+    if quality:
+        lines.append(f"- Executor attribution quality: `{quality}`")
+    counts = attribution.get("action_executor_counts") if isinstance(attribution.get("action_executor_counts"), dict) else {}
+    if counts:
+        rendered = ", ".join(f"`{key}`={value}" for key, value in list(counts.items())[:6])
+        lines.append(f"- Top-level action ownership: {rendered}")
+    parallel = attribution.get("parallel_readonly") if isinstance(attribution.get("parallel_readonly"), dict) else {}
+    if parallel.get("enabled"):
+        lines.append(
+            "- Parallel read-only exploration: "
+            f"{parallel.get('subaction_count', parallel.get('action_count', 0))} subaction(s), "
+            f"{parallel.get('worker_count', 0)} worker(s), "
+            f"{parallel.get('failed_observation_count', 0)} failed, "
+            f"{parallel.get('blocked_observation_count', 0)} blocked."
+        )
+    executors = attribution.get("executors") if isinstance(attribution.get("executors"), list) else []
+    worker_roles = [
+        f"`{item.get('executor_id')}`:{item.get('role') or item.get('kind')}"
+        for item in executors
+        if isinstance(item, dict) and str(item.get("kind") or "").startswith("readonly")
+    ]
+    if worker_roles:
+        lines.append(f"- Read-only workers: {', '.join(worker_roles[:6])}")
+    return lines
+
+
+def _action_executor_counts(trajectory: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for action in trajectory.get("actions", []) or []:
+        executor = action.get("executor") if isinstance(action.get("executor"), dict) else {}
+        executor_id = str(executor.get("executor_id") or "").strip()
+        if executor_id:
+            counts[executor_id] = counts.get(executor_id, 0) + 1
+    return counts
 
 
 def _fix_action_lines(trajectory: dict[str, Any]) -> list[str]:

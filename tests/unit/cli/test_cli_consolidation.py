@@ -26,7 +26,7 @@ class TestCLIConsolidation(unittest.TestCase):
         
         # 1. Consolidate
         args_consolidate = argparse.Namespace(
-            all=False, duplicates=True, stale=False, conflicts=False, low_value=False, stale_days=None, summary=False
+            all=False, experience=False, duplicates=True, stale=False, conflicts=False, low_value=False, stale_days=None, summary=False
         )
         cmd_consolidate(args_consolidate, Path("."))
         

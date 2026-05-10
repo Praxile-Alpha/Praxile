@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "praxile"
 version = "0.1.0"
-description = "Standalone local self-evolving agent harness for code projects"
+description = "Governed experience harness for AI coding projects"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Praxile Contributors" }]
 license = "MIT"
-keywords = ["agent", "self-evolution", "coding-agent", "local-first", "agent-harness"]
+keywords = ["agent", "experience", "coding-agent", "local-first", "agent-harness"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

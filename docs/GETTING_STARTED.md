@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide is the first-run path for Praxile as a standalone local self-evolving agent harness.
+This guide is the first-run path for Praxile as a governed experience harness for AI coding.
 
 ## 1. Install
 
@@ -30,10 +30,10 @@ python -m pip install -e ".[browser]"  # optional Playwright screenshots
 python -m playwright install chromium
 ```
 
-To preview the self-evolution loop before configuring a model endpoint, run:
+To preview the governed experience loop before configuring a model endpoint, run:
 
 ```bash
-praxile demo --fast --accept-first
+praxile demo --fast --accept-first --show-files
 ```
 
 The demo is local and deterministic: it creates a tiny Python project, captures or simulates a failing verification signal, fixes the bug, records the trajectory/reward/proposals, and accepts one low-risk memory proposal only inside that demo project. Use `--fast` for the no-subprocess preview; omit it when you want the demo to run the local unittest command.
@@ -48,6 +48,9 @@ praxile init
 praxile setup
 praxile doctor
 praxile doctor --online
+praxile constitution check
+praxile spec check
+praxile spec verify latest
 praxile index status
 ```
 

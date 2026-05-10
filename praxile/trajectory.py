@@ -17,8 +17,10 @@ class TrajectoryLogger:
             "loaded_skills": [],
             "loaded_rules": [],
             "loaded_assets": [],
+            "spec_context": {},
             "task_analysis": {},
             "plan": [],
+            "executors": [],
             "actions": [],
             "artifacts": [],
             "diff_summary": {},
@@ -78,6 +80,35 @@ class TrajectoryLogger:
     def set_task_analysis(self, analysis: dict[str, Any]) -> None:
         self.data["task_analysis"] = analysis
 
+    def set_spec_context(self, context: dict[str, Any]) -> None:
+        self.data["spec_context"] = context
+
+    def register_executor(
+        self,
+        executor_id: str,
+        *,
+        kind: str,
+        role: str | None = None,
+        description: str | None = None,
+        parent_executor_id: str | None = None,
+    ) -> None:
+        if not executor_id:
+            return
+        executors = self.data.setdefault("executors", [])
+        existing = next((item for item in executors if item.get("executor_id") == executor_id), None)
+        payload = {
+            "executor_id": executor_id,
+            "kind": kind,
+            "role": role,
+            "description": description,
+            "parent_executor_id": parent_executor_id,
+            "registered_at": utc_now(),
+        }
+        if existing:
+            existing.update({key: value for key, value in payload.items() if value is not None})
+        else:
+            executors.append(payload)
+
     def add_action(
         self,
         *,
@@ -86,18 +117,20 @@ class TrajectoryLogger:
         observation: dict[str, Any],
         status: str,
         cost: dict[str, Any] | None = None,
+        executor: dict[str, Any] | None = None,
     ) -> None:
-        self.data["actions"].append(
-            {
-                "step": len(self.data["actions"]) + 1,
-                "action_type": action_type,
-                "input": input_data,
-                "observation": observation,
-                "status": status,
-                "cost": cost or {},
-                "created_at": utc_now(),
-            }
-        )
+        action_record = {
+            "step": len(self.data["actions"]) + 1,
+            "action_type": action_type,
+            "input": input_data,
+            "observation": observation,
+            "status": status,
+            "cost": cost or {},
+            "created_at": utc_now(),
+        }
+        if executor:
+            action_record["executor"] = executor
+        self.data["actions"].append(action_record)
         if action_type not in {
             "architecture_gate",
             "dry_run_skip_tests",

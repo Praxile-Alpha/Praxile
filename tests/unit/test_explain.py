@@ -62,16 +62,17 @@ class TestExplain(unittest.TestCase):
 
     def test_asset_attribution_level(self):
         self.assertEqual(_asset_attribution_level({"path": "memory/project.md"}), "loaded_only")
-        self.assertEqual(_asset_attribution_level({"referenced": True}), "medium")
-        self.assertEqual(_asset_attribution_level({"used_explicitly": True}), "strong")
+        self.assertEqual(_asset_attribution_level({"referenced": True}), "referenced")
+        self.assertEqual(_asset_attribution_level({"used_explicitly": True}), "referenced")
+        self.assertEqual(_asset_attribution_level({"used_explicitly": True, "positive_outcome_count": 1}), "strong_positive")
         self.assertEqual(_asset_attribution_level({"path": "x", "positive_outcome_count": 2}), "weak_positive")
         self.assertEqual(_asset_attribution_level({"path": "x", "negative_outcome_count": 1}), "weak_negative")
         self.assertEqual(
             _asset_attribution_level({"path": "x", "positive_outcome_count": 1, "negative_outcome_count": 1}),
             "mixed",
         )
-        self.assertEqual(_asset_attribution_level({"path": "x", "user_helpful_count": 1}), "user_helpful")
-        self.assertEqual(_asset_attribution_level({"path": "x", "user_harmful_count": 1}), "user_harmful")
+        self.assertEqual(_asset_attribution_level({"path": "x", "user_helpful_count": 1}), "strong_positive")
+        self.assertEqual(_asset_attribution_level({"path": "x", "user_harmful_count": 1}), "harmful")
 
 if __name__ == "__main__":
     unittest.main()

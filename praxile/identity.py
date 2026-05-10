@@ -9,7 +9,7 @@ from .constants import __version__
 AGENT_ID = "praxile.local-self-evolving-agent"
 
 AGENT_BOUNDARY = {
-    "agent": "Praxile is a standalone local self-evolving agent harness built around Environment -> Reward -> Experience.",
+    "agent": "Praxile is a standalone local governed experience harness built around Environment -> Reward -> Experience.",
     "state": "Praxile owns .praxile/ state, project memory, project skills, trajectories, reward reports, proposals, approvals, rollback, architecture gates, and harness rules.",
     "adapter_rule": "Hermes, OpenClaw, and other agent frameworks are optional adapters, not required parents or product surfaces.",
     "brand_rule": "Do not present Praxile's self-evolution loop as an external framework feature.",
@@ -45,7 +45,7 @@ ADAPTER_MATRIX: dict[str, dict[str, str]] = {
     "gateway": {
         "optional_adapter": "Messaging gateways are optional frontends outside the MVP.",
         "praxile": "Owns CLI-first local project execution.",
-        "boundary": "Gateway delivery is not required for the self-evolution loop.",
+        "boundary": "Gateway delivery is not required for the governed experience loop.",
     },
     "trajectory": {
         "optional_adapter": "External trajectory/research tooling may consume exports.",

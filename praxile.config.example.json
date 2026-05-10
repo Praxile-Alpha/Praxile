@@ -22,6 +22,12 @@
     "enabled": true,
     "every_steps": 1
   },
+  "executors": {
+    "primary_executor_id": "coding_agent",
+    "parallel_readonly_exploration_enabled": false,
+    "max_readonly_concurrency": 8,
+    "readonly_executor_prefix": "readonly_explorer"
+  },
   "context": {
     "compression_enabled": true,
     "max_prompt_chars": 120000,
@@ -112,6 +118,10 @@
     "consolidation_stale_days": 90,
     "consolidation_low_value_max_confidence": 0.4
   },
+  "proposal_gate": {
+    "enabled": true,
+    "min_confidence": 0.55
+  },
   "memory": {
     "shard_enabled": true,
     "project_memory_soft_limit_bytes": 200000,
@@ -134,6 +144,21 @@
   },
   "architecture_gate": {
     "shadow_mode": false
+  },
+  "workspace": {
+    "default_mode": "in-place",
+    "keep_after_run": true,
+    "copy_excludes": [
+      ".git",
+      "node_modules",
+      "__pycache__",
+      ".pytest_cache",
+      ".mypy_cache",
+      ".ruff_cache",
+      "dist",
+      "build",
+      ".next"
+    ]
   },
   "interop_guardrails": {
     "refuse_writes_when_external_agent_detected": true,
@@ -236,6 +261,239 @@
     "embedding": {
       "provider": "local",
       "model": "local_hash"
+    }
+  },
+  "model_role_reference": {
+    "note": "Documentation only. These are the role names Praxile can route to after model_providers/model_roles are configured.",
+    "required_for_autonomous_code_edits": [
+      "coding_agent"
+    ],
+    "recommended_for_self_evolution": [
+      "evidence_extraction",
+      "experience_reflection",
+      "proposal_composer",
+      "review_recommendation"
+    ],
+    "optional_semantic_judges": [
+      "reward_judge",
+      "feedback_classifier",
+      "attribution_judge",
+      "counterexample_checker",
+      "pattern_mining",
+      "project_pattern_composer"
+    ],
+    "optional_deep_analysis": [
+      "deep_project_pattern_mining"
+    ],
+    "retrieval": [
+      "embedding"
+    ]
+  },
+  "model_setup_examples": {
+    "note": "Examples only. This block is not active config. Copy one example's model_providers, model_roles, and routing into the active top-level keys above, or run `praxile setup`.",
+    "ollama_single_model": {
+      "model_providers": {
+        "local_ollama": {
+          "type": "ollama",
+          "base_url": "http://localhost:11434/v1",
+          "api_key_env": "OLLAMA_API_KEY",
+          "timeout_seconds": 30,
+          "models": [
+            {
+              "name": "qwen2.5-coder:7b",
+              "role": "local_coding_and_evolution",
+              "context_window": 0,
+              "supports_tools": false
+            }
+          ]
+        }
+      },
+      "model_roles": {
+        "coding_agent": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "evidence_extraction": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "experience_reflection": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "deep_project_pattern_mining": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "max_context_runs": 20
+        },
+        "reward_judge": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "proposal_composer": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "review_recommendation": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "cheap_reasoner": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "feedback_classifier": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "attribution_judge": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "pattern_mining": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "counterexample_checker": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "project_pattern_composer": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "embedding": {
+          "provider": "local",
+          "model": "local_hash"
+        }
+      },
+      "routing": {
+        "default_model": "local_ollama:qwen2.5-coder:7b",
+        "planning_model": "local_ollama:qwen2.5-coder:7b",
+        "coding_model": "local_ollama:qwen2.5-coder:7b",
+        "evolution_model": "local_ollama:qwen2.5-coder:7b",
+        "private_model": "local_ollama:qwen2.5-coder:7b",
+        "cheap_model": "local_ollama:qwen2.5-coder:7b"
+      }
+    },
+    "cloud_coding_local_judges": {
+      "model_providers": {
+        "openai_compatible": {
+          "type": "openai_compatible",
+          "base_url": "https://api.openai.com/v1",
+          "api_key_env": "OPENAI_API_KEY",
+          "timeout_seconds": 30,
+          "models": [
+            {
+              "name": "your-coding-model",
+              "role": "strong_coding",
+              "context_window": 0,
+              "supports_tools": false
+            }
+          ]
+        },
+        "local_ollama": {
+          "type": "ollama",
+          "base_url": "http://localhost:11434/v1",
+          "api_key_env": "OLLAMA_API_KEY",
+          "timeout_seconds": 20,
+          "models": [
+            {
+              "name": "qwen2.5-coder:7b",
+              "role": "local_semantic_judge",
+              "context_window": 0,
+              "supports_tools": false
+            }
+          ]
+        }
+      },
+      "model_roles": {
+        "coding_agent": {
+          "provider": "openai_compatible",
+          "model": "your-coding-model",
+          "fallback": [
+            {
+              "provider": "local_ollama",
+              "model": "qwen2.5-coder:7b"
+            }
+          ]
+        },
+        "proposal_composer": {
+          "provider": "openai_compatible",
+          "model": "your-coding-model"
+        },
+        "deep_project_pattern_mining": {
+          "provider": "openai_compatible",
+          "model": "your-coding-model",
+          "max_context_runs": 20
+        },
+        "evidence_extraction": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "experience_reflection": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "reward_judge": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "review_recommendation": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b"
+        },
+        "cheap_reasoner": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "feedback_classifier": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "attribution_judge": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "pattern_mining": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "counterexample_checker": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "project_pattern_composer": {
+          "provider": "local_ollama",
+          "model": "qwen2.5-coder:7b",
+          "mode": "optional"
+        },
+        "embedding": {
+          "provider": "local",
+          "model": "local_hash"
+        }
+      },
+      "routing": {
+        "default_model": "openai_compatible:your-coding-model",
+        "planning_model": "openai_compatible:your-coding-model",
+        "coding_model": "openai_compatible:your-coding-model",
+        "evolution_model": "local_ollama:qwen2.5-coder:7b",
+        "private_model": "local_ollama:qwen2.5-coder:7b",
+        "cheap_model": "local_ollama:qwen2.5-coder:7b"
+      }
     }
   },
   "cost_control": {

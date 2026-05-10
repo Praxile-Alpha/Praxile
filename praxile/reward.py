@@ -16,6 +16,11 @@ class RewardEngine:
         failures = [action for action in actions if action.get("status") == "failure"]
         edits = [action for action in actions if action.get("action_type") == "edit_file" and action.get("status") == "success"]
         gate_actions = [action for action in actions if action.get("action_type") == "architecture_gate"]
+        executor_attribution = _executor_attribution_summary(trajectory, actions)
+        parallel_readonly = executor_attribution.get("parallel_readonly", {})
+        parallel_readonly_issue = bool(
+            parallel_readonly.get("failed_observation_count") or parallel_readonly.get("blocked_observation_count")
+        )
         tests_run = bool(test_results)
         tests_passed = bool(test_results) and all(item.get("status") == "success" for item in test_results)
         if not test_results:
@@ -23,6 +28,14 @@ class RewardEngine:
         detected_tests = trajectory.get("environment_snapshot", {}).get("tests_detected", [])
         ui_sensitive = bool(task_analysis.get("ui_human_review_required"))
         architecture_sensitive = bool(gate_actions) or bool(task_analysis.get("architecture_gate_required"))
+        spec_compliance = trajectory.get("spec_compliance") if isinstance(trajectory.get("spec_compliance"), dict) else {}
+        spec_status = str(spec_compliance.get("status") or "unknown")
+        spec_score = _score(spec_compliance.get("score"), default=None)
+        spec_missing_count = len(spec_compliance.get("missing") or [])
+        spec_violation_count = len(spec_compliance.get("violations") or [])
+        spec_metric_missing_count = len(
+            [item for item in spec_compliance.get("success_metric_coverage") or [] if not item.get("covered")]
+        )
         scores = self._reward_scores()
         weights = self._reward_weights()
         thresholds = self._cost_thresholds()
@@ -35,6 +48,11 @@ class RewardEngine:
             task_success = scores["needs_human"]
         elif result_status == "failed":
             task_success = scores["failed"]
+        if spec_compliance:
+            if spec_status == "failed":
+                task_success = min(task_success, 0.35)
+            elif spec_status == "partial":
+                task_success = round(task_success * (0.78 if spec_violation_count else 0.88), 3)
 
         process_safety = scores["safe_process"] if not blocked else scores["blocked_process"]
         if any(item.get("risk_level") == "high" for item in blocked):
@@ -76,10 +94,30 @@ class RewardEngine:
             "architecture_sensitive": architecture_sensitive,
             "model_performance": bool(model_performance),
             "memory_requested": memory_requested,
+            "spec_compliance": bool(spec_compliance),
+            "spec_compliance_gap": spec_status in {"partial", "failed"},
+            "executor_attribution": executor_attribution.get("quality") not in {"none", "legacy_missing"},
+            "parallel_readonly_issue": parallel_readonly_issue,
         }
-        has_experience_signal = any(experience_signals.values())
+        proposal_driving_signals = {
+            key: value
+            for key, value in experience_signals.items()
+            if key not in {"executor_attribution"}
+        }
+        has_experience_signal = any(proposal_driving_signals.values())
         experience_value = scores["experience_with_signal"] if has_experience_signal else scores["experience_without_signal"]
         scope_control_score = self._scope_control_score(actions, edits, scores)
+        silent_failure_signals = trajectory.get("silent_failure_signals") or []
+        if spec_compliance and spec_status in {"partial", "failed"}:
+            scope_control_score = round(scope_control_score * (0.62 if spec_violation_count else 0.82), 3)
+        if silent_failure_signals:
+            max_silent_risk = _max_signal_risk(silent_failure_signals)
+            if max_silent_risk == "high":
+                scope_control_score = round(scope_control_score * 0.65, 3)
+            elif max_silent_risk == "medium":
+                scope_control_score = round(scope_control_score * 0.8, 3)
+            else:
+                scope_control_score = round(scope_control_score * 0.92, 3)
         proposal_quality_score = round((experience_value * 0.6 + scope_control_score * 0.2 + process_safety * 0.2), 3)
         min_experience_score = self._float("reward", "min_experience_value_for_proposals", default=0.5)
         should_generate_experience = bool(experience_value >= min_experience_score or memory_requested)
@@ -91,6 +129,8 @@ class RewardEngine:
             gate_actions=bool(gate_actions),
             model_performance=bool(model_performance),
             memory_requested=memory_requested,
+            spec_compliance=bool(spec_compliance),
+            spec_compliance_gap=spec_status in {"partial", "failed"},
         )
         overall = round(
             task_success * weights["task_success"]
@@ -109,6 +149,10 @@ class RewardEngine:
             "edited_files_count": len(edits),
             "process_safety": process_safety,
             "regression_risk": 1.0 - regression_score,
+            "spec_compliance_status": spec_status if spec_compliance else None,
+            "spec_compliance_score": spec_score,
+            "spec_compliance_violations": spec_violation_count,
+            "spec_compliance_missing": spec_missing_count,
             "score": overall
         }
 
@@ -167,6 +211,27 @@ class RewardEngine:
             notes.append("File edits were captured with diff and rollback backups.")
         if model_performance:
             notes.append("Model routing/performance signals were captured for future routing review.")
+        if parallel_readonly.get("enabled"):
+            notes.append(
+                "Parallel read-only exploration was attributed separately from primary implementation actions."
+            )
+        if parallel_readonly_issue:
+            notes.append("Parallel read-only exploration had failed or blocked sub-observations; inspect loaded context before learning from the run.")
+            human_reasons.append("Exploration failures can make the agent under-informed even if the main task appears complete.")
+        if spec_compliance:
+            if spec_status == "full":
+                notes.append("Spec compliance check passed for attached spec context.")
+            else:
+                notes.append(
+                    "Spec compliance needs review: "
+                    f"status={spec_status}, missing={spec_missing_count}, violations={spec_violation_count}, "
+                    f"unverified_metrics={spec_metric_missing_count}."
+                )
+                human_reasons.append("Attached spec context was not fully satisfied; durable learning should avoid normalizing the gap.")
+                human_items.append("Review spec compliance before accepting implementation-derived memory or skill proposals.")
+        if silent_failure_signals:
+            notes.append(f"{len(silent_failure_signals)} silent-failure risk signal(s) require inspection.")
+            human_reasons.append("A run can appear successful while violating scope, verification, or governance expectations.")
         if ui_sensitive:
             notes.append("UX-sensitive work requires human confirmation of salience, feedback, and interaction feel.")
             human_reasons.append("Automated checks cannot fully verify visual prominence or perceived feedback.")
@@ -203,6 +268,8 @@ class RewardEngine:
             "experience_value": experience_value,
             "experience_value_score": experience_value,
             "proposal_quality_score": proposal_quality_score,
+            "silent_failure_signals": silent_failure_signals,
+            "spec_compliance": spec_compliance,
             "objective_reward": objective_reward,
             "user_feedback_reward": user_feedback_reward,
             "llm_judge_reward": llm_judge_reward,
@@ -245,6 +312,13 @@ class RewardEngine:
                 "failed_actions": len(failures),
                 "architecture_gate_triggered": architecture_sensitive,
                 "model_performance_signals": len(model_performance),
+                "executor_attribution": executor_attribution,
+                "silent_failure_signal_count": len(silent_failure_signals),
+                "spec_compliance_status": spec_status if spec_compliance else None,
+                "spec_compliance_score": spec_score,
+                "spec_compliance_violation_count": spec_violation_count,
+                "spec_compliance_missing_count": spec_missing_count,
+                "spec_success_metric_missing_count": spec_metric_missing_count,
             },
             "llm_assisted_signals": {
                 "enabled": bool(llm_judge_reward.get("enabled", False)),
@@ -266,6 +340,7 @@ class RewardEngine:
                 "ui_sensitive": ui_sensitive,
                 "architecture_sensitive": architecture_sensitive,
                 "experience_signals": experience_signals,
+                "executor_attribution_quality": executor_attribution.get("quality"),
             },
             "test_results": test_results,
             "config": {
@@ -377,10 +452,14 @@ class RewardEngine:
         gate_actions: bool,
         model_performance: bool,
         memory_requested: bool,
+        spec_compliance: bool,
+        spec_compliance_gap: bool,
     ) -> str:
+        if spec_compliance and not spec_compliance_gap and tests_passed is True and edits:
+            return "high"
         if tests_passed is True and (edits or failures or gate_actions):
             return "high"
-        if failures or blocked or gate_actions or edits or model_performance:
+        if failures or blocked or gate_actions or edits or model_performance or spec_compliance:
             return "medium"
         if memory_requested:
             return "medium"
@@ -423,6 +502,109 @@ class RewardEngine:
         return any(marker in lower for marker in markers)
 
 
+def _executor_attribution_summary(trajectory: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+    registered: dict[str, dict[str, Any]] = {}
+    for item in trajectory.get("executors") or []:
+        if not isinstance(item, dict):
+            continue
+        executor_id = str(item.get("executor_id") or "").strip()
+        if not executor_id:
+            continue
+        registered[executor_id] = {
+            "executor_id": executor_id,
+            "kind": str(item.get("kind") or "unknown"),
+            "role": str(item.get("role") or ""),
+            "parent_executor_id": item.get("parent_executor_id"),
+        }
+
+    action_counts: dict[str, int] = {}
+    failure_counts: dict[str, int] = {}
+    blocked_counts: dict[str, int] = {}
+    unattributed_actions = 0
+    worker_events: dict[str, dict[str, Any]] = {}
+    parallel_statuses: list[str] = []
+    parallel_action_count = 0
+    parallel_max_concurrency = None
+
+    for action in actions:
+        executor = action.get("executor") if isinstance(action.get("executor"), dict) else {}
+        executor_id = str(executor.get("executor_id") or "").strip()
+        if executor_id:
+            registered.setdefault(
+                executor_id,
+                {
+                    "executor_id": executor_id,
+                    "kind": str(executor.get("kind") or "unknown"),
+                    "role": str(executor.get("role") or ""),
+                    "parent_executor_id": executor.get("parent_executor_id"),
+                },
+            )
+            action_counts[executor_id] = action_counts.get(executor_id, 0) + 1
+            if action.get("status") == "failure":
+                failure_counts[executor_id] = failure_counts.get(executor_id, 0) + 1
+            if action.get("status") == "blocked":
+                blocked_counts[executor_id] = blocked_counts.get(executor_id, 0) + 1
+        else:
+            unattributed_actions += 1
+
+        observation = action.get("observation") if isinstance(action.get("observation"), dict) else {}
+        data = observation.get("data") if isinstance(observation.get("data"), dict) else {}
+        for event in data.get("executor_events") or []:
+            if not isinstance(event, dict):
+                continue
+            worker_id = str(event.get("executor_id") or "").strip()
+            if not worker_id:
+                continue
+            worker_events[worker_id] = {
+                "executor_id": worker_id,
+                "kind": str(event.get("kind") or "readonly_worker"),
+                "role": str(event.get("role") or "read_only"),
+                "parent_executor_id": event.get("parent_executor_id"),
+            }
+            registered.setdefault(worker_id, worker_events[worker_id])
+        if action.get("action_type") == "parallel_readonly_exploration":
+            parallel_action_count += int(data.get("count") or 0)
+            parallel_max_concurrency = data.get("max_concurrency", parallel_max_concurrency)
+            for item in data.get("observations") or []:
+                if isinstance(item, dict):
+                    parallel_statuses.append(str(item.get("status") or "unknown"))
+
+    total_actions = len(actions)
+    if not total_actions and not registered:
+        quality = "none"
+    elif unattributed_actions == 0 and total_actions:
+        quality = "complete"
+    elif unattributed_actions < total_actions:
+        quality = "partial"
+    else:
+        quality = "legacy_missing"
+
+    parallel_summary = dict(trajectory.get("parallel_readonly_exploration") or {})
+    parallel_summary.update(
+        {
+            "enabled": bool(parallel_summary.get("enabled")) or bool(worker_events),
+            "worker_count": len(worker_events),
+            "subaction_count": parallel_action_count or parallel_summary.get("action_count", 0),
+            "failed_observation_count": sum(1 for status in parallel_statuses if status == "failure"),
+            "blocked_observation_count": sum(1 for status in parallel_statuses if status == "blocked"),
+            "observation_statuses": parallel_statuses,
+        }
+    )
+    if parallel_max_concurrency is not None:
+        parallel_summary["max_concurrency"] = parallel_max_concurrency
+
+    return {
+        "quality": quality,
+        "registered_executor_count": len(registered),
+        "action_executor_counts": action_counts,
+        "failed_actions_by_executor": failure_counts,
+        "blocked_actions_by_executor": blocked_counts,
+        "unattributed_action_count": unattributed_actions,
+        "executors": list(registered.values())[:24],
+        "parallel_readonly": parallel_summary,
+    }
+
+
 def _component_active(component: dict[str, Any]) -> bool:
     if component.get("active") is True:
         return True
@@ -432,6 +614,19 @@ def _component_active(component: dict[str, Any]) -> bool:
         return float(component.get("score", 0.0) or 0.0) > 0.0 and "score" in component
     except (TypeError, ValueError):
         return False
+
+
+def _max_signal_risk(signals: list[dict[str, Any]]) -> str:
+    order = {"low": 0, "medium": 1, "high": 2}
+    return max((str(item.get("risk") or "low") for item in signals), key=lambda item: order.get(item, 0), default="low")
+
+
+def _score(value: Any, *, default: float | None) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return round(max(0.0, min(1.0, parsed)), 4)
 
 
 def _active_reward_components(

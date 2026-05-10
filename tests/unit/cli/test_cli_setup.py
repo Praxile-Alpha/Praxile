@@ -34,6 +34,14 @@ def test_setup_configures_ollama_non_interactively(tmp_path: Path):
     assert config.get("routing", "coding_model") == "local_ollama:qwen-test"
 
 
+def test_init_creates_experience_constitution(tmp_path: Path):
+    assert main(["--project", str(tmp_path), "init", "--no-detect"]) == 0
+
+    constitution = tmp_path / ".praxile" / "constitution.md"
+    assert constitution.exists()
+    assert "No durable asset without evidence" in constitution.read_text(encoding="utf-8")
+
+
 def test_setup_none_keeps_clean_model_configuration(tmp_path: Path):
     assert main(["--project", str(tmp_path), "init", "--no-detect"]) == 0
     assert main(["--project", str(tmp_path), "setup", "--provider", "none", "--channel", "none"]) == 0

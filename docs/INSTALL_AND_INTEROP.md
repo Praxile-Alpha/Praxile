@@ -1,8 +1,8 @@
 # Install And Interop
 
-Praxile should be published and used as an independent local self-evolving agent harness for code projects.
+Praxile should be published and used as an independent governed experience harness for AI coding.
 
-It is not a fork-only feature, plugin, or thin wrapper around Hermes or OpenClaw. Praxile owns the Environment -> Reward -> Experience loop. Hermes, OpenClaw, local models, and cloud endpoints are optional adapters or endpoint sources. The durable project state remains in `.praxile/` inside the user's code repository.
+It is not a fork-only feature, plugin, general-purpose coding agent, or thin wrapper around Hermes or OpenClaw. Praxile owns the Environment -> Reward -> Experience governance loop. Hermes, OpenClaw, local models, and cloud endpoints are optional adapters or endpoint sources. The durable project state remains in `.praxile/` inside the user's code repository.
 
 ## Recommended User Install
 
@@ -170,7 +170,7 @@ That command is not implemented in the MVP. Until then, OpenClaw interop should 
 Praxile should use an explicit adapter contract instead of depending on external agent framework behavior.
 
 ```text
-Praxile Agent Core
+Praxile Core
   owns runtime, environment adapters, .praxile state, reward, experience, proposals, approval, rollback, gates
 
 Provider Adapter
