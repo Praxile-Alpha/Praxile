@@ -51,7 +51,7 @@ It is designed for teams and developers who want AI coding workflows to become m
 
 Most coding agents can edit files, call tools, and run tests.
 
-The harder problem is deciding **what should become long-term project knowledge after the run**.
+But the harder problem is deciding **what should become long-term project knowledge after the run**.
 
 | Problem | Typical coding-agent workflow | With Praxile |
 |---|---|---|
