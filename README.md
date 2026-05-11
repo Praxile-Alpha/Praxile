@@ -3,7 +3,6 @@
 <div align="center">
 
 <!-- Optional: replace this with your project logo. -->
-
 <!-- <img src="assets/praxile-logo.png" alt="Praxile" width="64%" /> -->
 
 <h3>Governed experience harness for AI coding</h3>
@@ -13,7 +12,8 @@
 </p>
 
 <p>
-  Turn AI coding-agent runs into <b>evidence-backed</b>, <b>reviewable</b>, repository-local knowledge.
+  Capture what coding agents actually did, turn each run into evidence-backed proposals,<br />
+  and store only approved repository-local knowledge under <code>.praxile/</code>.
 </p>
 
 <p>
@@ -31,163 +31,173 @@
 
 </div>
 
-***
-<img width="1621" height="970" alt="d20b5d3d-0950-44ba-be6b-a86406aef4a0" src="https://github.com/user-attachments/assets/a656c8d5-dff4-41be-8826-d130e7a70773" />
+---
+
 ## What is Praxile?
 
 **Praxile** is a governed experience harness for AI coding.
 
-It captures what an AI coding agent actually did, turns the run into evidence-backed proposals, and stores only approved repository-local experience under `.praxile/`.
+It sits around coding-agent work: it records environment interaction, builds a trajectory, computes reward and risk signals, extracts evidence, generates reviewable proposals, and writes durable repository knowledge only after human approval.
 
-Praxile is **not** a general-purpose coding agent, **not** a hidden global memory, and **not** a Spec Kit replacement.
+Praxile is **not** another general-purpose coding agent, **not** a hidden global memory, and **not** a Spec Kit replacement.
 
-It is the governance layer around AI coding work:
+It is designed for teams and developers who want AI coding workflows to become more reusable over time without losing control over what the project remembers.
 
-- environment interaction;
-- trajectory logging;
-- reward and feedback;
-- evidence extraction;
-- proposal review;
-- audit and rollback;
-- future retrieval.
+> Spec-driven development governs what the agent should build before execution. Praxile governs what the project should learn after execution.
 
-The goal is simple:
-
-> Coding agents should not have to relearn the same repository over and over again — but they should not remember unchecked experience either.
-
-***
+---
 
 ## Why Praxile?
 
 Most coding agents can edit files, call tools, and run tests.
 
-The harder problem is deciding **what the project should remember after the run**.
+The harder problem is deciding **what should become long-term project knowledge after the run**.
 
-Without a governed experience layer, coding-agent workflows often become:
+| Problem | Typical coding-agent workflow | With Praxile |
+|---|---|---|
+| Project experience | Lost after each run | Captured as evidence-backed repository experience |
+| Long-term memory | Hidden or automatic | Proposal-governed and human-approved |
+| Repeated failures | Rediscovered manually | Converted into scoped failure patterns |
+| Project rules | Buried in prompts | Stored as repository-local governed assets |
+| Spec alignment | Checked informally | Spec context can influence reward and proposal quality |
+| Silent failures | Hard to detect | Risk signals flag runs that look successful but are weakly verified |
+| Explainability | Difficult to inspect | `praxile explain latest` shows retrieval, reward, and proposals |
+| Governance | Manual and scattered | Audit, rollback, lifecycle status, and provenance graph |
 
-| Problem            | Typical agent workflow | With Praxile                                           |
-| ------------------ | ---------------------- | ------------------------------------------------------ |
-| Project experience | Lost after each run    | Captured as evidence-backed local experience           |
-| Long-term memory   | Hidden or automatic    | Proposal-governed and human-approved                   |
-| Repeated failures  | Rediscovered manually  | Converted into reusable failure patterns               |
-| Project rules      | Buried in prompts      | Stored as scoped repository-local assets               |
-| Feedback           | Informal and discarded | Recorded as reward and governance signal               |
-| Explainability     | Hard to inspect        | `praxile explain latest` shows why experience was used |
-| Safety             | Depends on the agent   | Enforced by rules, review gates, rollback, and audit   |
-
-Praxile makes the memory loop explicit:
-
-```text
-User Task
-  -> Environment Interaction
-  -> Trajectory
-  -> Reward Report
-  -> Evidence / Episodes
-  -> Experience Proposals
-  -> Human Review
-  -> Approved Repository Asset
-  -> Future Retrieval
-```
-
-***
-
-## Core ideas
-
-### 1. Spec before coding, experience after coding
-
-Spec-driven development helps define what an agent should build before execution.
-
-Praxile focuses on what happens after execution:
-
-```text
-What did the agent try?
-What evidence was produced?
-What failed?
-What passed?
-What should be reused?
-What must be reviewed before becoming durable knowledge?
-```
-
-In short:
-
-> Specs govern intent. Praxile governs experience.
-
-### 2. No durable memory without review
-
-Praxile does not silently rewrite long-term memory.
-
-A run can produce evidence. Evidence can become an episode. Episodes can reveal patterns. Patterns can produce proposals.
-
-But durable repository knowledge is written only after review.
-
-### 3. Markdown-first, indexed for retrieval
-
-Praxile keeps durable assets readable and reviewable.
-
-- Markdown / JSON under `.praxile/` keeps experience inspectable.
-- SQLite / FTS / optional vector indexes support search and retrieval.
-- Usage and feedback metadata support attribution and lifecycle governance.
-
-***
-
-## Feature highlights
-
-- **Repository-local experience**\
-  Memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.
-- **Proposal-governed evolution**\
-  Durable changes start as evidence-backed proposals and require explicit review.
-- **Trajectory and reward reports**\
-  Praxile separates task success, regression safety, process safety, cost, experience value, and user feedback.
-- **Evidence-driven learning**\
-  Runs are converted into evidence, episodes, patterns, and scoped proposals.
-- **Spec-aware workflow**\
-  Optional `spec.md`, `plan.md`, `tasks.md`, and `constitution.md` context can shape reward and proposal gating.
-- **Explainable retrieval**\
-  Praxile can explain which assets were loaded, why they matched, and how they influenced future runs.
-- **Safety and rollback**\
-  Sensitive path protection, dangerous command blocking, backups, architecture gates, and proposal rollback are built into the loop.
-
-***
+---
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
-    classDef user fill:#EEF4FF,stroke:#5B8DEF,color:#16325C,stroke-width:1.5px;
-    classDef runtime fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.5px;
-    classDef exp fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.5px;
-    classDef review fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.5px;
-    classDef model fill:#F7F0FF,stroke:#8B5CF6,color:#352063,stroke-width:1.5px;
+    classDef input fill:#EEF4FF,stroke:#5B8DEF,color:#16325C,stroke-width:1.5px;
+    classDef interface fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.5px;
+    classDef runtime fill:#F3F7FF,stroke:#4F7FD9,color:#102A56,stroke-width:1.5px;
+    classDef engine fill:#F7F0FF,stroke:#8B5CF6,color:#352063,stroke-width:1.5px;
+    classDef gov fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.5px;
+    classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.5px;
+    classDef audit fill:#F2F4F7,stroke:#667085,color:#182230,stroke-width:1.5px;
 
-    U["User task<br/>spec context<br/>feedback"]:::user --> R["Praxile runtime<br/>tools · tests · safety"]:::runtime
-    R --> T["Trajectory<br/>reward · evidence"]:::runtime
-    T --> P["Experience proposals<br/>scope · confidence · anti-scope"]:::review
-    P -->|accept| A["Repository assets<br/>memory · skill · rule · pattern"]:::exp
-    P -->|reject / edit| X["Review history"]:::review
-    A --> Q["Future retrieval<br/>explain · attribution"]:::exp
+    U["User Task<br/>feedback"]:::input
+    S["Spec Context<br/>spec.md · plan.md · tasks.md · constitution.md"]:::input
+
+    U --> I["Interfaces<br/>CLI · Terminal · Gateway"]:::interface
+    S --> I
+
+    I --> R["Runtime Harness<br/>task analyzer · model router · tools · tests · safety · workspace"]:::runtime
+    R --> T["Trajectory Ledger<br/>actions · observations · diffs · commands · artifacts"]:::runtime
+    T --> E["Experience Engine<br/>reward · evidence · episodes · patterns"]:::engine
+    E --> G["Governance Layer<br/>silent-failure signals · proposal gate · human review"]:::gov
+    G --> A["Repository Assets<br/>memory · skill · rule · eval · pattern · boundary"]:::asset
+    A --> Q["Future Retrieval<br/>explain · attribution · consolidation"]:::asset
     Q --> R
 
-    M["Model roles<br/>coding · extraction · judging"]:::model -. assist .-> R
-    M -. assist .-> T
+    G --> O["Audit & Provenance<br/>graph · redaction · CI gates · rollback"]:::audit
+    A --> O
+    T --> O
 ```
 
-***
+Praxile is intentionally layered:
+
+1. **Spec and task input** describe intent and boundaries.
+2. **Runtime harness** executes through controlled tools, tests, safety rules, and optional workspace isolation.
+3. **Trajectory ledger** records what actually happened.
+4. **Experience engine** turns the run into reward, evidence, episodes, and patterns.
+5. **Governance layer** filters weak or risky learning through silent-failure detection, proposal gates, and human review.
+6. **Repository assets** become durable only after approval.
+7. **Audit and provenance** make the experience chain explainable and reversible.
+
+---
 
 ## Core loop
 
 ```mermaid
 flowchart LR
     classDef step fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.3px;
-    classDef review fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
+    classDef gate fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
     classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.3px;
+    classDef weak fill:#FFF1F3,stroke:#E31B54,color:#7A271A,stroke-width:1.3px;
 
-    A["Run"]:::step --> B["Trajectory"]:::step --> C["Reward"]:::step --> D["Evidence"]:::step --> E["Proposal"]:::step --> F["Review"]:::review
-    F -->|accept| G["Local asset"]:::asset
-    F -->|reject| H["No durable change"]:::review
-    G --> I["Retrieve next time"]:::asset --> A
+    A["Run"]:::step --> B["Trajectory"]:::step --> C["Reward Report"]:::step --> D["Evidence"]:::step --> E["Episode"]:::step --> F["Pattern"]:::step --> G["Proposal"]:::step
+    G --> H["Proposal Gate"]:::gate
+    H -->|pass| I["Human Review"]:::gate
+    H -->|suppress| W["Weak Candidate<br/>run summary only"]:::weak
+    I -->|accept| J["Active Asset"]:::asset
+    I -->|edit / reject| K["Review Signal"]:::gate
+    J --> L["Future Retrieval"]:::asset
+    K --> M["Feedback / Counterexample"]:::step
+    L --> A
+    M --> F
 ```
 
-***
+The core rule is simple:
+
+> A run may produce learning signals, but only approved proposals become durable repository knowledge.
+
+---
+
+## Feature highlights
+
+- **Repository-local experience**  
+  Memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.
+
+- **Spec-aware execution**  
+  Optional spec, plan, task, and constitution context can shape reward, silent-failure signals, and proposal gating.
+
+- **Evidence-backed proposals**  
+  Durable changes start as proposals with source runs, evidence summaries, confidence, applicability scope, anti-scope, and rollback paths.
+
+- **Silent-failure detection**  
+  Praxile flags runs that look successful but may be weakly verified, over-broad, under-specified, or poorly attributed.
+
+- **Reward and attribution**  
+  Task success, regression safety, process safety, cost, experience value, user feedback, and asset attribution are tracked separately.
+
+- **Experience graph and audit chain**  
+  Praxile builds a rebuildable local provenance graph from specs, runs, proposals, assets, feedback, and future retrieval.
+
+- **Safety and rollback**  
+  Sensitive path protection, dangerous command blocking, backups, architecture gates, workspace isolation, and proposal rollback are part of the loop.
+
+---
+
+## Experience graph
+
+Praxile is not just a collection of Markdown files. It builds a local provenance graph that explains where experience came from and how it was used.
+
+```mermaid
+flowchart TB
+    classDef spec fill:#EEF4FF,stroke:#5B8DEF,color:#16325C,stroke-width:1.3px;
+    classDef run fill:#F6F8FA,stroke:#7B8794,color:#1F2937,stroke-width:1.3px;
+    classDef proposal fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
+    classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.3px;
+    classDef feedback fill:#F7F0FF,stroke:#8B5CF6,color:#352063,stroke-width:1.3px;
+
+    S["Spec / Constitution"]:::spec -->|derived_from_spec| R1["Run"]:::run
+    R1 -->|produced| E["Evidence / Episode"]:::run
+    E -->|supports_proposal| P["Proposal"]:::proposal
+    R1 -->|generated_from_run| P
+    P -->|approved_by| A["Asset"]:::asset
+    A -->|retrieved_in_run| R2["Future Run"]:::run
+    A -->|helped_run| R2
+    A -->|misled_run| R3["Failed / Risky Run"]:::run
+    F["Feedback"]:::feedback -->|adjusts_confidence| A
+    A -->|supersedes| A2["Older Asset"]:::asset
+    P -->|rejected_as| X["Rejected Signal"]:::proposal
+```
+
+This graph is explanatory infrastructure. It helps answer:
+
+```text
+Where did this asset come from?
+Which run generated this proposal?
+Which evidence supported it?
+Was it approved, rejected, deprecated, or superseded?
+Was it retrieved in later runs?
+Did it help, mislead, or become stale?
+```
+
+---
 
 ## Installation
 
@@ -221,7 +231,7 @@ python -m pip install -e ".[browser]"  # browser evidence capture
 python -m playwright install chromium
 ```
 
-***
+---
 
 ## Try it without a model
 
@@ -233,7 +243,7 @@ praxile demo --fast --accept-first --show-files
 
 The demo runs locally and does not require a model endpoint. It creates a tiny project, records a trajectory, builds a reward report, generates proposals, accepts one low-risk memory inside the demo project, and shows how the next run would retrieve it.
 
-***
+---
 
 ## Quick start
 
@@ -255,56 +265,46 @@ praxile doctor --online
 praxile run "Fix the failing parser test" --test-command "python -m pytest"
 ```
 
-### 3. Review what Praxile learned
+### 3. Run with spec context
+
+```bash
+praxile run "Implement search API" \
+  --spec docs/specs/search.md \
+  --test-command "python -m pytest"
+```
+
+### 4. Review and explain
 
 ```bash
 praxile review --interactive
 praxile explain latest
+praxile spec verify latest
 ```
 
-### 4. Accept or reject proposals
+### 5. Accept or reject proposals
 
 ```bash
 praxile accept <PROPOSAL_ID>
 praxile reject <PROPOSAL_ID> --reason "too broad"
 ```
 
-***
-
-## Spec-aware workflow
-
-Attach spec context when a task has explicit intent, non-goals, acceptance criteria, or success metrics:
-
-```bash
-praxile run "Implement search API"   --spec docs/specs/search.md   --test-command "python -m pytest"
-```
-
-Then verify the result against the attached spec:
-
-```bash
-praxile spec verify latest
-```
-
-A task can pass tests but still produce weak or blocked experience proposals if it violates scope, skips acceptance criteria, or changes architecture without a gate.
-
-***
+---
 
 ## Experience model
 
-Praxile experience is not only Markdown and not only a graph.
-
-| Layer            | Purpose                                                  |
-| ---------------- | -------------------------------------------------------- |
-| Markdown / JSON  | Human-readable durable assets and structured run records |
-| SQLite           | Asset metadata, lifecycle status, usage, and provenance  |
-| FTS              | Keyword retrieval                                        |
-| Vector index     | Optional semantic retrieval                              |
-| Proposal history | Review, acceptance, rejection, rollback                  |
-| Audit chain      | Explain where an asset came from and how it was used     |
+| Layer | Purpose |
+|---|---|
+| Markdown / JSON | Human-readable durable assets and structured run records |
+| SQLite | Asset metadata, lifecycle status, usage, and provenance |
+| FTS | Keyword retrieval |
+| Vector index | Optional semantic retrieval |
+| Experience graph | Rebuildable provenance and impact relationships |
+| Proposal history | Review, acceptance, rejection, rollback |
+| Audit chain | Exportable governance evidence with redaction modes |
 
 Approved assets are active by default. Deprecated, superseded, and archived assets stay auditable but are excluded from normal retrieval.
 
-***
+---
 
 ## Common commands
 
@@ -314,20 +314,21 @@ praxile setup                   Configure providers and model roles
 praxile demo --fast             Run a local governed-experience demo
 praxile run "..."               Execute an agent task
 praxile run "..." --dry-run     Analyze and record without editing files
+praxile run "..." --spec ...    Run with spec context
 praxile review --interactive    Review pending proposals
 praxile explain latest          Explain retrieval, reward, and proposals
-praxile feedback latest ...     Add explicit feedback
 praxile spec check              Check optional spec quality signals
 praxile spec verify latest      Verify a run against spec context
-praxile consolidate --all       Propose cleanup for stale or overlapping assets
+praxile graph explain <ASSET>   Explain asset provenance and usage
 praxile audit check             Run a governance gate
+praxile consolidate --all       Propose cleanup for stale or overlapping assets
 praxile rollback <ID>           Roll back task edits or accepted proposals
 praxile doctor --online         Validate config, routes, and local state
 ```
 
 For the full CLI reference, see [Getting Started](docs/GETTING_STARTED.md).
 
-***
+---
 
 ## Local state
 
@@ -355,7 +356,7 @@ Praxile writes repository-local state under `.praxile/`:
 
 Do not put raw secrets in `.praxile/config.json`. Use environment variables through `api_key_env` and channel `token_env` settings.
 
-***
+---
 
 ## Interop boundary
 
@@ -367,33 +368,36 @@ Praxile can detect optional external-agent capabilities and can use OpenAI-compa
 - External-compatible sidecars are exports.
 - Future external sync should go through explicit adapter commands and auditable proposals.
 
-***
+---
 
 ## Current status
 
 Praxile is **Alpha** software.
 
-Implemented core loop:
+Implemented core capabilities:
 
 - init / setup / doctor;
 - local demo;
 - run / trajectory logging;
 - reward report;
 - evidence and proposal generation;
+- proposal gate;
 - review / accept / reject;
 - repository-local assets;
 - retrieval and explain;
+- spec-aware context;
+- silent-failure signals;
+- experience graph and audit exports;
 - rollback.
 
-Experimental or evolving:
+Evolving capabilities:
 
-- spec-aware workflow;
-- experience indexing and provenance graph;
-- audit exports;
 - isolated workspaces;
 - terminal and local gateway;
 - channel configuration;
-- semantic judges.
+- semantic judges;
+- CI governance gates;
+- advanced consolidation.
 
 Not included in the first release:
 
@@ -404,13 +408,14 @@ Not included in the first release:
 - unrestricted shell execution;
 - autonomous acceptance of durable experience.
 
-***
+---
 
 ## Documentation
 
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
 - [Audit Governance](docs/audit-governance.md)
@@ -418,7 +423,7 @@ Not included in the first release:
 - [Testing Guide](docs/contributing-testing.md)
 - [Security Policy](SECURITY.md)
 
-***
+---
 
 ## Contributing
 
@@ -428,6 +433,7 @@ Good first areas:
 
 - proposal quality and deduplication;
 - spec-aware experience;
+- silent-failure detection;
 - retrieval quality;
 - semantic judge evaluation;
 - explainability;
@@ -435,7 +441,7 @@ Good first areas:
 
 Please read `CONTRIBUTING.md` and `SECURITY.md` before submitting changes.
 
-***
+---
 
 ## License
 
