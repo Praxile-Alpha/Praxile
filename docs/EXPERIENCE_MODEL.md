@@ -1,97 +1,67 @@
 # Praxile Experience Model
 
-Praxile is Markdown-first for review, JSON-backed for run records, SQLite-indexed for retrieval, and proposal-governed for durable memory.
+Praxile is **Markdown-first** for human review, **JSON-backed** for structured run records, **SQLite-indexed** for fast retrieval, and **Proposal-governed** for durable memory.
 
-## Storage Layers
+## 1. Storage Layers
 
 | Layer | Purpose |
 |---|---|
-| Markdown | Human review, git diffs, accepted memory, skills, rules, boundaries, and checklists |
-| JSON | Trajectories, evidence, episodes, reward reports, proposals, feedback, and checkpoints |
-| SQLite | Asset metadata, lifecycle, usage, proposal index, trajectory index, FTS, retrieval ranking, and rebuildable experience graph |
-| FTS | Local keyword retrieval over approved experience assets |
-| Vector | Optional similarity retrieval; `local_hash` is lightweight fallback, `sentence_transformers` is semantic |
+| **Markdown** | Human review, Git diffs, accepted memory, skills, rules, boundaries, and checklists. |
+| **JSON** | Trajectories, evidence, episodes, reward reports, proposals, feedback, and checkpoints. |
+| **SQLite** | Asset metadata, lifecycle, usage, proposal index, trajectory index, FTS, retrieval ranking, and the rebuildable Experience Graph. |
+| **FTS** | Local keyword retrieval over approved experience assets. |
+| **Vector** | Optional similarity retrieval; `local_hash` is the lightweight fallback, `sentence_transformers` is for semantic search. |
 
-## Experience Lifecycle
+## 2. Experience Lifecycle
+
+The core learning loop turns ephemeral execution into durable, governed assets:
 
 ```text
-trajectory -> evidence -> episode -> proposal -> review -> accepted asset -> future retrieval -> outcome feedback
+Task Execution -> Trajectory -> Evidence -> Episode -> Proposal -> Review -> Accepted Asset -> Future Retrieval
 ```
 
-Every durable asset should carry or imply:
+Every durable asset carries (or implies):
+- **Source Task**: The original trajectory that spawned the lesson.
+- **Evidence Summary**: Concrete facts that justify the lesson.
+- **Confidence**: How certain the agent is about the rule.
+- **Applicability Scope**: When this rule should trigger.
+- **Anti-Scope**: When this rule should *not* trigger.
+- **Target Files / Rollback Path**: The exact changes to `.praxile/`.
+- **Lifecycle Status**: Active, Deprecated, Superseded, or Archived.
 
-- source task or source episode
-- evidence summary
-- confidence
-- applicability scope
-- anti-scope
-- target files or rollback path
-- lifecycle status
+The **Proposal Gate** automatically suppresses weak candidates (e.g., low confidence, no evidence) before they reach the pending inbox, keeping the review process noise-free.
 
-The proposal gate suppresses weak candidates before they reach the pending inbox. Rejected proposals and harmful asset feedback remain part of the learning signal.
+## 3. Experience Graph
 
-## Experience Graph MVP
+Praxile builds a local SQLite relationship index from Markdown and JSON files. The graph is rebuildable, project-local, and acts as the relational backbone for governance.
 
-Praxile keeps Markdown and JSON files as the source of truth, then builds a local SQLite relationship index from them. The graph is rebuildable and project-local; it is not a separate hidden memory store.
+**Nodes include:**
+- Runs, Proposals, Approved Assets, Attached Specs, and Recorded Executors.
 
-Nodes include:
+**Edges include:**
+- `derived_from_spec`, `generated_from_run`, `supports_proposal`, `contradicts_asset`, `participated_in_run`, `approved_by`, `retrieved_in_run`, `helped_run`, `misled_run`, `supersedes`, `deprecated_by`, `violates_spec`, `satisfies_spec`.
 
-- runs
-- proposals
-- approved assets
-- attached specs
-- recorded executors
-
-Edges include:
-
-- `derived_from_spec`
-- `generated_from_run`
-- `supports_proposal`
-- `contradicts_asset`
-- `participated_in_run`
-- `approved_by`
-- `retrieved_in_run`
-- `helped_run`
-- `misled_run`
-- `supersedes`
-- `deprecated_by`
-- `violates_spec`
-- `satisfies_spec`
-
-Useful commands:
-
+**Useful commands:**
 ```bash
 praxile graph status --rebuild
 praxile graph explain .praxile/memory/project.md --depth 2
 praxile graph trace prop_abc123
-praxile graph impact specs/feature.md
-praxile audit run latest --json
-praxile audit asset .praxile/memory/project.md --json
-praxile audit proposal prop_abc123 --output proposal-audit.json
-praxile audit bundle --json
-praxile audit check --strict --rebuild-graph
+praxile graph impact docs/specs/feature.md
 ```
 
-The graph exists to answer governance questions such as “why was this memory loaded?”, “which run generated this proposal?”, “which assets were created from this spec?”, and “which accepted asset may be misleading future runs?”.
+The graph answers governance questions such as:
+- *"Why was this memory loaded?"*
+- *"Which run generated this proposal?"*
+- *"Which accepted asset may be misleading future runs?"*
 
-Executor attribution is also part of the evidence chain. A trajectory records registered executors and per-action ownership; reward reports summarize attribution quality and parallel exploration issues; memory, failure-pattern, and harness-rule proposals can cite those facts. This keeps a failed read-only explorer, a primary coding decision, and a verification step from being collapsed into a single vague “agent did it” event.
+## 4. Spec Compliance & Attribution
 
-Audit exports package the same chain for humans, CI archives, or external governance systems. They are read-only reports; accepting, rejecting, archiving, or rolling back experience still goes through the normal proposal and lifecycle commands. The project-level bundle is intentionally a summary, not a portable memory sync format; it can be archived as release evidence without making another Praxile project load these assets automatically. `audit check` turns that summary into a CI-friendly pass/fail gate for constitution completeness, pending high-risk proposals, graph readiness, and optional strict release policy.
+**Spec Compliance:**
+Spec context anchors the run. After execution, `praxile spec verify latest` compares the trajectory, diff, actions, and reward against attached spec files. It checks acceptance criteria, non-goals, and constraints, writing a `spec_compliance` report back to the trajectory. This influences scoring and proposal gating.
 
-Audit JSON defaults to `--redaction standard`, which masks likely secret values while preserving lineage structure. Use `--redaction strict` for shareable team or CI artifacts when raw content excerpts are unnecessary, and reserve `--redaction none` for local debugging.
-
-## Spec Compliance
-
-Spec context is not a replacement for tests or review. After a run, `praxile spec verify latest` compares the trajectory, diff, actions, and reward notes against attached spec files. It checks acceptance criteria, non-goals, constraints, and success-metric coverage, then writes a `spec_compliance` report back to the trajectory for later proposal review. Normal `praxile run --spec ...` finishes now perform the same check automatically before reward and evolution, so compliance gaps influence both scoring and proposal gating.
-
-## Attribution Levels
-
-Retrieval attribution is intentionally staged:
-
-- `loaded_only`: the asset was retrieved and placed in context.
-- `referenced`: the run appears to reference the asset but outcome is not yet clear.
-- `weak_positive`: the asset was referenced in a successful run.
-- `strong_positive`: the asset was explicitly used in a successful run or marked helpful.
-- `neutral`: no useful positive or negative effect is known.
-- `weak_negative`: the asset was referenced in a failed run.
-- `harmful`: the asset was explicitly involved in a bad outcome or marked harmful.
+**Attribution Levels:**
+Retrieval attribution tracks the actual impact of loaded assets:
+- `loaded_only`: Retrieved and placed in context.
+- `referenced`: Referenced by the agent, but outcome unclear.
+- `strong_positive`: Explicitly used in a successful run.
+- `harmful`: Explicitly involved in a bad outcome or marked harmful by human feedback.

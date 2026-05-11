@@ -225,23 +225,9 @@ Use `praxile graph explain <REF>` to inspect why a memory, skill, rule, proposal
 
 ## Audit Exports
 
-Praxile exposes read-only audit commands for team and enterprise review:
+Praxile exposes read-only audit commands for team and enterprise review, including full pipeline CI checks using `praxile audit check --strict`. 
 
-```bash
-praxile audit run latest --json
-praxile audit asset .praxile/memory/project.md --output runbook-audit.json
-praxile audit proposal prop_abc123 --rebuild-graph
-praxile audit bundle --output praxile-governance-bundle.json
-praxile audit check --strict --rebuild-graph
-```
-
-Audit reports are structured JSON exports over the same local source of truth. `audit run` links task analysis, plan, actions, executors, reward, spec compliance, loaded assets, and generated proposals. `audit asset` links source run, lifecycle status, usage outcomes, related proposals, and graph relationships. `audit proposal` links source task, evidence, proposal gate, review status, applied changes, and target assets. The commands do not accept, reject, edit, or sync experience assets.
-
-Audit exports use `--redaction standard` by default. Standard mode masks likely secret values in keys, command outputs, observations, and proposal content excerpts. `--redaction strict` also removes raw content/observation/diff excerpts for shareable governance bundles. `--redaction none` is intended only for local debugging because it can include raw command output.
-
-`audit bundle` is the first P3-style governance surface: it creates a project-level read-only bundle with recent runs, proposal counts, pending high-risk review items, asset lifecycle counts, graph status, and release-review recommendations. It is intended for CI artifacts, release checklists, or team review, not for cross-project memory synchronization.
-
-`audit check` is the CI gate over the same bundle. By default it fails on incomplete experience constitution or high-risk/p0 pending proposals and warns on ordinary pending proposals or missing graph rows. `--strict` also requires zero pending proposals, a built graph, and a clean latest run. This gives teams a release-time control point without granting Praxile any new write authority.
+For full details on the audit features, redaction modes, and release pipelines, see [Governance](GOVERNANCE.md).
 
 ## Workspace Isolation
 
@@ -436,18 +422,6 @@ Judge output is stored as structured evidence in trajectories, usage rows, patte
 
 ## Safety Model
 
-Praxile's safety layer is project-local and conservative:
+Praxile's safety layer is project-local and conservative. It enforces path restrictions, blocks sensitive files and dangerous commands, and uses an explicit proposal-based governance model.
 
-- path access must remain inside the selected project root;
-- sensitive files are blocked by default, including `.env`, `.env.*`, private keys, `.pem`, `.key`, `.p12`, `.pfx`, `.aws`, `.ssh`, secrets, and credential-like filenames;
-- writes anywhere under `.praxile/` are blocked through normal agent file actions;
-- dangerous command patterns are blocked, including `rm -rf`, `sudo`, `su`, `dd if=`, `mkfs`, recursive chmod/chown, `git reset`, `git clean`, shutdown/reboot, and pipe-to-shell installers;
-- compound shell commands, command substitution, most pipes, and unapproved command prefixes are blocked in safe mode; `shell.allow_shell_features=true` can opt into shell execution only with reviewed prefixes for each command segment, project-local redirection targets, and the same dangerous-pattern blocklist;
-- allowed commands default to test/lint/build/status operations such as `python -m pytest`, `npm test`, `npm run lint`, `npm run build`, `cargo test`, `go test`, `git status`, and `git diff`;
-- file edits are backed up before write, capped by backup retention settings, and can be restored with `praxile rollback <TASK_ID>`;
-- accepted proposals store before/after snapshots and can be rolled back with `praxile rollback <PROPOSAL_ID>`;
-- state files and JSONL append paths use cross-platform file locks; multi-file proposal accepts keep a recovery journal and restore incomplete commits on the next store initialization;
-- configured external-agent lock files and environment flags block normal project writes to prevent concurrent agent edits;
-- durable memory, skill, eval, routing, frozen-boundary, architecture-gate, and harness-rule updates require proposal approval.
-
-Safety blocks are recorded in the trajectory and can generate failure-pattern or harness-rule proposals. A safety block should not be worked around by broadening permissions casually; it should become either an explicit config change or a rejected action.
+For full details, see the [Security Model](SECURITY_MODEL.md).
