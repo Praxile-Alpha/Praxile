@@ -97,7 +97,7 @@ def test_audit_run_asset_and_proposal_json(tmp_path: Path, capsys):
 
     assert main(["--project", str(tmp_path), "audit", "run", "task_audit", "--json", "--redaction", "none"]) == 0
     raw_run_stdout = capsys.readouterr().out
-    assert "sk-testsecret1234567890" in raw_run_stdout
+    assert "REDACTION_TEST_VALUE" in raw_run_stdout
     raw_run_report = json.loads(raw_run_stdout)
     assert raw_run_report["redaction"]["profile"] == "none"
     assert raw_run_report["redaction"]["applied"] is False
