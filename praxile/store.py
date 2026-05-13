@@ -64,6 +64,7 @@ class ExperienceStore:
             self.paths.feedback,
             self.paths.state / "experience" / "failures",
             self.paths.state / "experience" / "patterns",
+            self.paths.state / "experience" / "reflect",
             self.paths.state / "experience" / "artifacts",
             self.paths.state / "experience" / "proposals" / "pending",
             self.paths.state / "experience" / "proposals" / "accepted",

@@ -41,7 +41,7 @@ It sits around coding-agent work: it records environment interaction, builds a t
 
 Praxile is **not** another general-purpose coding agent, **not** a hidden global memory, and **not** a Spec Kit replacement.
 
-It is designed for teams and developers who want AI coding workflows to become more reusable over time without losing control over what the project remembers.
+It is designed for developers and teams who want AI coding workflows to become more reusable over time without losing control over what the project remembers.
 
 > Spec-driven development governs what the agent should build before execution. Praxile governs what the project should learn after execution.
 
@@ -61,6 +61,7 @@ But the harder problem is deciding **what should become long-term project knowle
 | Project rules | Buried in prompts | Stored as repository-local governed assets |
 | Spec alignment | Checked informally | Spec context can influence reward and proposal quality |
 | Silent failures | Hard to detect | Risk signals flag runs that look successful but are weakly verified |
+| Experience decay | Rarely maintained | Reflect finds duplicates, stale assets, harmful assets, and recurring risks |
 | Explainability | Difficult to inspect | `praxile explain latest` shows retrieval, reward, and proposals |
 | Governance | Manual and scattered | Audit, rollback, lifecycle status, and provenance graph |
 
@@ -77,6 +78,7 @@ flowchart LR
     classDef gov fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.5px;
     classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.5px;
     classDef audit fill:#F2F4F7,stroke:#667085,color:#182230,stroke-width:1.5px;
+    classDef reflect fill:#ECFDF3,stroke:#12B76A,color:#054F31,stroke-width:1.5px;
 
     U["User Task<br/>feedback"]:::input
     S["Spec Context<br/>spec.md · plan.md · tasks.md · constitution.md"]:::input
@@ -92,24 +94,31 @@ flowchart LR
     A --> Q["Future Retrieval<br/>explain · attribution · consolidation"]:::asset
     Q --> R
 
-    G --> O["Audit & Provenance<br/>graph · redaction · CI gates · rollback"]:::audit
+    A --> F["Praxile Reflect<br/>offline refinement · cleanup · promotion"]:::reflect
+    T --> F
+    G --> F
+    F -->|reviewable proposals| G
+
+    T --> O["Audit & Provenance<br/>graph · redaction · CI gates · rollback"]:::audit
+    G --> O
     A --> O
-    T --> O
+    F --> O
 ```
 
 Praxile is intentionally layered:
 
-1. **Spec and task input** describe intent and boundaries.
+1. **Spec and task input** describe intent, constraints, and acceptance criteria.
 2. **Runtime harness** executes through controlled tools, tests, safety rules, and optional workspace isolation.
 3. **Trajectory ledger** records what actually happened.
 4. **Experience engine** turns the run into reward, evidence, episodes, and patterns.
 5. **Governance layer** filters weak or risky learning through silent-failure detection, proposal gates, and human review.
 6. **Repository assets** become durable only after approval.
-7. **Audit and provenance** make the experience chain explainable and reversible.
+7. **Praxile Reflect** periodically analyzes accumulated experience and generates reviewable cleanup/refinement proposals.
+8. **Audit and provenance** make the experience chain explainable, exportable, and reversible.
 
 ---
 
-## Core loop
+## Core governed experience loop
 
 ```mermaid
 flowchart LR
@@ -117,6 +126,7 @@ flowchart LR
     classDef gate fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
     classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.3px;
     classDef weak fill:#FFF1F3,stroke:#E31B54,color:#7A271A,stroke-width:1.3px;
+    classDef reflect fill:#ECFDF3,stroke:#12B76A,color:#054F31,stroke-width:1.3px;
 
     A["Run"]:::step --> B["Trajectory"]:::step --> C["Reward Report"]:::step --> D["Evidence"]:::step --> E["Episode"]:::step --> F["Pattern"]:::step --> G["Proposal"]:::step
     G --> H["Proposal Gate"]:::gate
@@ -125,9 +135,11 @@ flowchart LR
     I -->|accept| J["Active Asset"]:::asset
     I -->|edit / reject| K["Review Signal"]:::gate
     J --> L["Future Retrieval"]:::asset
-    K --> M["Feedback / Counterexample"]:::step
     L --> A
-    M --> F
+
+    J --> R["Reflect<br/>duplicates · stale · harmful · high-value"]:::reflect
+    K --> R
+    R -->|governance proposals| H
 ```
 
 The core rule is simple:
@@ -147,17 +159,66 @@ The core rule is simple:
 - **Evidence-backed proposals**  
   Durable changes start as proposals with source runs, evidence summaries, confidence, applicability scope, anti-scope, and rollback paths.
 
+- **Proposal gate and human review**  
+  Weak, under-scoped, low-evidence, or risky learning candidates can be suppressed before they become review burden.
+
 - **Silent-failure detection**  
   Praxile flags runs that look successful but may be weakly verified, over-broad, under-specified, or poorly attributed.
+
+- **Praxile Reflect**  
+  Offline, proposal-governed experience refinement: detect duplicates, stale assets, harmful assets, repeated silent failures, rejected-proposal themes, and high-value patterns.
 
 - **Reward and attribution**  
   Task success, regression safety, process safety, cost, experience value, user feedback, and asset attribution are tracked separately.
 
 - **Experience graph and audit chain**  
-  Praxile builds a rebuildable local provenance graph from specs, runs, proposals, assets, feedback, and future retrieval.
+  Praxile builds a rebuildable local provenance graph from specs, runs, proposals, assets, feedback, reflect reports, and future retrieval.
 
 - **Safety and rollback**  
   Sensitive path protection, dangerous command blocking, backups, architecture gates, workspace isolation, and proposal rollback are part of the loop.
+
+---
+
+## Praxile Reflect
+
+Praxile Reflect is the offline governance pass over accumulated repository experience.
+
+It is inspired by the idea of periodically reviewing long-running agent memory, but it deliberately avoids automatic memory rewrites.
+
+```text
+Past Runs + Assets + Feedback + Silent-Failure Signals + Provenance Graph
+  -> Reflect
+  -> Findings
+  -> Reviewable Governance Proposals
+  -> Human Review
+  -> Asset Merge / Deprecate / Rewrite / Promote
+```
+
+Reflect can find:
+
+- duplicate or overlapping assets;
+- stale or unused memories, skills, rules, and patterns;
+- assets with negative outcomes or harmful feedback;
+- repeated silent-failure signals;
+- repeated rejected-proposal themes;
+- high-value patterns worth promoting into skills, rules, or checklists.
+
+Common commands:
+
+```bash
+praxile reflect --summary
+praxile reflect --since 7d
+praxile reflect --duplicates --stale --silent-failures
+praxile reflect --harmful --rejected-proposals --high-value-patterns
+praxile reflect --asset .praxile/memory/project.md
+praxile reflect --report markdown --output reflect.md
+praxile reflect --write-proposals
+praxile reflect --ci
+```
+
+Boundary:
+
+> Reflect does not rewrite memory directly. It proposes governed experience updates.
 
 ---
 
@@ -172,6 +233,7 @@ flowchart TB
     classDef proposal fill:#FFF7E8,stroke:#D8942A,color:#4A3200,stroke-width:1.3px;
     classDef asset fill:#EFFAF0,stroke:#45A66A,color:#12351F,stroke-width:1.3px;
     classDef feedback fill:#F7F0FF,stroke:#8B5CF6,color:#352063,stroke-width:1.3px;
+    classDef reflect fill:#ECFDF3,stroke:#12B76A,color:#054F31,stroke-width:1.3px;
 
     S["Spec / Constitution"]:::spec -->|derived_from_spec| R1["Run"]:::run
     R1 -->|produced| E["Evidence / Episode"]:::run
@@ -184,9 +246,12 @@ flowchart TB
     F["Feedback"]:::feedback -->|adjusts_confidence| A
     A -->|supersedes| A2["Older Asset"]:::asset
     P -->|rejected_as| X["Rejected Signal"]:::proposal
+    RF["Reflect Finding"]:::reflect -->|recommends| P2["Governance Proposal"]:::proposal
+    RF -->|analyzes| A
+    RF -->|analyzes| R1
 ```
 
-This graph is explanatory infrastructure. It helps answer:
+This graph helps answer:
 
 ```text
 Where did this asset come from?
@@ -195,6 +260,7 @@ Which evidence supported it?
 Was it approved, rejected, deprecated, or superseded?
 Was it retrieved in later runs?
 Did it help, mislead, or become stale?
+Did Reflect recommend cleanup or promotion?
 ```
 
 ---
@@ -268,9 +334,7 @@ praxile run "Fix the failing parser test" --test-command "python -m pytest"
 ### 3. Run with spec context
 
 ```bash
-praxile run "Implement search API" \
-  --spec docs/specs/search.md \
-  --test-command "python -m pytest"
+praxile run "Implement search API"   --spec docs/specs/search.md   --test-command "python -m pytest"
 ```
 
 ### 4. Review and explain
@@ -281,7 +345,14 @@ praxile explain latest
 praxile spec verify latest
 ```
 
-### 5. Accept or reject proposals
+### 5. Refine accumulated experience
+
+```bash
+praxile reflect --summary
+praxile reflect --since 7d --duplicates --stale --silent-failures
+```
+
+### 6. Accept or reject proposals
 
 ```bash
 praxile accept <PROPOSAL_ID>
@@ -300,6 +371,7 @@ praxile reject <PROPOSAL_ID> --reason "too broad"
 | Vector index | Optional semantic retrieval |
 | Experience graph | Rebuildable provenance and impact relationships |
 | Proposal history | Review, acceptance, rejection, rollback |
+| Reflect reports | Offline experience cleanup and refinement findings |
 | Audit chain | Exportable governance evidence with redaction modes |
 
 Approved assets are active by default. Deprecated, superseded, and archived assets stay auditable but are excluded from normal retrieval.
@@ -319,6 +391,9 @@ praxile review --interactive    Review pending proposals
 praxile explain latest          Explain retrieval, reward, and proposals
 praxile spec check              Check optional spec quality signals
 praxile spec verify latest      Verify a run against spec context
+praxile reflect --summary       Analyze accumulated experience
+praxile reflect --write-proposals
+                                  Generate reviewable governance proposals
 praxile graph explain <ASSET>   Explain asset provenance and usage
 praxile audit check             Run a governance gate
 praxile consolidate --all       Propose cleanup for stale or overlapping assets
@@ -349,6 +424,7 @@ Praxile writes repository-local state under `.praxile/`:
     patterns/
     proposals/
     feedback/
+    reflect/
   backups/
   db/
   logs/
@@ -360,7 +436,7 @@ Do not put raw secrets in `.praxile/config.json`. Use environment variables thro
 
 ## Interop boundary
 
-Praxile can detect optional external-agent capabilities and can use OpenAI-compatible endpoints, but it is not a Hermes or OpenClaw plugin.
+Praxile can detect optional external-agent capabilities and can use OpenAI-compatible endpoints, but it is not a Hermes, OpenClaw, or Memori plugin.
 
 - `.praxile/memory` is not written into external global memory.
 - `.praxile/skills` are not installed into external skill stores.
@@ -388,6 +464,7 @@ Implemented core capabilities:
 - spec-aware context;
 - silent-failure signals;
 - experience graph and audit exports;
+- Praxile Reflect;
 - rollback.
 
 Evolving capabilities:
@@ -397,7 +474,7 @@ Evolving capabilities:
 - channel configuration;
 - semantic judges;
 - CI governance gates;
-- advanced consolidation.
+- advanced consolidation and reflect policies.
 
 Not included in the first release:
 
@@ -417,11 +494,12 @@ Not included in the first release:
 - [Architecture](docs/ARCHITECTURE.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
+- [Praxile Reflect](docs/REFLECT.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
 - [Audit Governance](docs/audit-governance.md)
 - [Install And Interop](docs/INSTALL_AND_INTEROP.md)
 - [Testing Guide](docs/contributing-testing.md)
-- [Security Policy](SECURITY.md)
+- [Security Policy](docs/SECURITY_MODEL.md)
 
 ---
 
@@ -434,6 +512,7 @@ Good first areas:
 - proposal quality and deduplication;
 - spec-aware experience;
 - silent-failure detection;
+- Praxile Reflect analyzers;
 - retrieval quality;
 - semantic judge evaluation;
 - explainability;

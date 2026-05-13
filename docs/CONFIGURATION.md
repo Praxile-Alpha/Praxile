@@ -412,6 +412,10 @@ Run feedback updates `user_feedback_reward` and `final_reward`. Proposal feedbac
 
 `evolution.consolidation_min_duplicates`, `evolution.consolidation_stale_days`, and `evolution.consolidation_low_value_max_confidence` tune `praxile consolidate --all`. Consolidation remains proposal-only: it can propose `asset_merge`, `asset_deprecate`, `asset_rewrite`, and `asset_archive` governance updates plus cleanup review notes for duplicate, stale, conflicting, or low-value assets, but never deletes experience assets automatically.
 
+`reflect.stale_days`, `reflect.duplicate_min_assets`, `reflect.silent_failure_min_count`, `reflect.rejected_theme_min_count`, `reflect.high_value_positive_min`, and `reflect.max_findings` tune `praxile reflect`. Reflect is a broader offline governance pass than consolidate: it analyzes runs, assets, proposals, feedback, silent-failure signals, and graph status, then emits findings and optional pending proposals. It never rewrites durable assets directly.
+
+`reflect.ci.default_since`, `reflect.ci.artifact_dir`, `reflect.ci.max_findings`, `reflect.ci.max_high_severity`, `reflect.ci.max_generated_proposals`, and `reflect.ci.write_github_step_summary` tune `praxile reflect --ci`. CI mode runs all Reflect analyzers by default, writes JSON and Markdown artifacts, appends a GitHub Step Summary when available, and returns a non-zero exit code only when the configured thresholds are exceeded.
+
 `evolution.rejection_suppression_threshold=2` means repeated rejected proposals with the same type and similar concrete trigger terms suppress matching low-confidence future proposals. This keeps user rejection feedback from becoming a forgotten audit note.
 
 ## Model Transport

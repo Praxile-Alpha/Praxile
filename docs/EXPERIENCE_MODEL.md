@@ -54,7 +54,13 @@ The graph answers governance questions such as:
 - *"Which run generated this proposal?"*
 - *"Which accepted asset may be misleading future runs?"*
 
-## 4. Spec Compliance & Attribution
+## 4. Reflective Governance
+
+`praxile reflect` adds an offline governance pass over accumulated experience. It reads trajectories, assets, proposals, feedback, silent-failure signals, and graph status, then emits findings for duplicate assets, stale assets, harmful assets, rejected proposal themes, repeated silent failures, and high-value patterns.
+
+Reflect does not rewrite memory directly. With `--write-proposals`, it only creates pending governance proposals for human review, such as `asset_merge`, `asset_deprecate`, `harness_rule_create`, `proposal_gate_policy_update`, and `pattern_promote`.
+
+## 5. Spec Compliance & Attribution
 
 **Spec Compliance:**
 Spec context anchors the run. After execution, `praxile spec verify latest` compares the trajectory, diff, actions, and reward against attached spec files. It checks acceptance criteria, non-goals, and constraints, writing a `spec_compliance` report back to the trajectory. This influences scoring and proposal gating.

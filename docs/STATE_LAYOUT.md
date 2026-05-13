@@ -20,6 +20,7 @@
   experience/
     trajectories/
     failures/
+    reflect/
     artifacts/
     proposals/
       pending/
@@ -51,6 +52,8 @@ Experience assets are lifecycle-managed. Praxile loads only `active` assets duri
 Skills additionally keep `metadata.json` for status/version and `versions/` for accepted snapshots, so rollbacks and history remain clear.
 
 `experience/artifacts/` stores runtime evidence such as optional browser screenshots. These artifacts support review, but they do not replace human UX acceptance.
+
+`experience/reflect/` stores source reports for `praxile reflect --write-proposals`. Reflect reports explain offline governance findings and the pending proposals they generated; they are not active retrieval assets. CI mode stores JSON and Markdown artifacts under `experience/reflect/ci/` by default.
 
 `workspaces/` stores optional per-task isolated workspaces created by `praxile run --workspace-mode copy` or `--workspace-mode git-worktree`. Isolated runs import their trajectory and proposals back into the source project and write patch artifacts under `experience/artifacts/workspaces/`; source project files are not changed automatically.
 

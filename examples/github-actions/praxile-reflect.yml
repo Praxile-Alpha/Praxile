@@ -1,0 +1,36 @@
+name: Praxile Reflect
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+jobs:
+  reflect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Praxile
+        run: python -m pip install "git+https://github.com/Praxile-Alpha/Praxile.git"
+
+      - name: Run Reflect governance
+        run: |
+          praxile init --no-detect
+          praxile reflect --ci --since 7d --max-high-severity 0
+          praxile audit bundle --include-reflect --redaction strict --output .praxile/experience/reflect/ci/audit-bundle.json
+
+      - name: Upload Reflect artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: praxile-reflect
+          path: |
+            .praxile/experience/reflect/ci/*.json
+            .praxile/experience/reflect/ci/*.md

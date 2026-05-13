@@ -82,6 +82,8 @@ Praxile audit commands are read-only governance surfaces over the local `.praxil
 - `praxile audit proposal prop_abc123 --json`: Explains evidence, review state, target files, and applied changes.
 - `praxile audit asset .praxile/memory/project.md --json`: Explains where an asset came from and how it has been used.
 - `praxile audit bundle --redaction strict --output bundle.json`: Summarizes recent runs, pending proposals, and graph status.
+- `praxile audit bundle --include-reflect --redaction strict --output bundle.json`: Adds latest Reflect governance reports to release evidence.
+- `praxile reflect --ci`: Runs scheduled Reflect governance, writes artifacts, and returns a policy exit code.
 
 ### CI Governance Gate (`audit check`)
 Use `audit check` as a release-time gate to ensure your team is managing AI experience properly:
@@ -96,5 +98,6 @@ praxile audit check --strict --rebuild-graph --redaction strict
 2. Run `praxile spec verify latest` to check compliance against attached specs.
 3. Review pending proposals with `praxile review --interactive`.
 4. Rebuild relationship evidence with `praxile graph status --rebuild`.
-5. Run `praxile audit check --strict --redaction strict` in CI.
-6. Archive `praxile audit bundle --redaction strict` as release evidence.
+5. Run `praxile reflect --ci` for experience-quality drift.
+6. Run `praxile audit check --strict --redaction strict` in CI.
+7. Archive `praxile audit bundle --include-reflect --redaction strict` as release evidence when Reflect governance was run.

@@ -36,6 +36,14 @@ from .interop import format_interop_policy, interop_policy
 from .memory import MemorySystem
 from .model import ModelRouter
 from .project_map import build_project_map
+from .reflect import (
+    ReflectEngine,
+    ReflectScope,
+    build_reflect_ci_check,
+    format_reflect_ci_markdown,
+    format_reflect_markdown,
+    format_reflect_summary,
+)
 from .reward import RewardEngine
 from .runtime import AgentRuntime
 from .security import SafetyPolicy
@@ -262,6 +270,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit_bundle.add_argument("--output", default=None, help="Write full JSON audit bundle to this path")
     p_audit_bundle.add_argument("--rebuild-graph", action="store_true", help="Rebuild experience graph before bundling")
     p_audit_bundle.add_argument("--limit-runs", type=int, default=20, help="Maximum recent runs to include")
+    p_audit_bundle.add_argument("--include-reflect", action="store_true", help="Include latest reflective governance reports")
+    p_audit_bundle.add_argument("--reflect-limit", type=int, default=5, help="Maximum reflect reports to include")
     p_audit_bundle.add_argument("--redaction", choices=["standard", "strict", "none"], default="standard", help="Redaction profile for audit JSON")
     p_audit_bundle.set_defaults(func=cmd_audit_bundle)
     p_audit_check = audit_sub.add_parser("check", help="Run a CI-friendly governance audit gate")
@@ -342,6 +352,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_consolidate.add_argument("--summary", action="store_true", help="Print governance counts without creating a proposal")
     p_consolidate.add_argument("--stale-days", type=int, default=None, help="Age threshold for --stale")
     p_consolidate.set_defaults(func=cmd_consolidate)
+
+    p_reflect = sub.add_parser("reflect", help="Analyze accumulated experience and propose governed cleanup/refinement")
+    p_reflect.add_argument("--since", default=None, help="Limit run/proposal/feedback signals, e.g. 7d, 30d, or 2026-05-01")
+    p_reflect.add_argument("--asset", default=None, help="Analyze one project-local asset path")
+    p_reflect.add_argument("--duplicates", action="store_true", help="Find duplicate or overlapping experience assets")
+    p_reflect.add_argument("--stale", action="store_true", help="Find stale or unused experience assets")
+    p_reflect.add_argument("--harmful", action="store_true", help="Find assets with negative outcomes or harmful feedback")
+    p_reflect.add_argument("--silent-failures", action="store_true", help="Find repeated silent failure signals")
+    p_reflect.add_argument("--rejected-proposals", action="store_true", help="Find repeated rejection themes")
+    p_reflect.add_argument("--high-value-patterns", action="store_true", help="Find high-value patterns worth promotion")
+    p_reflect.add_argument("--summary", action="store_true", help="Print the default human summary")
+    p_reflect.add_argument("--write-proposals", action="store_true", help="Write gated reflect proposals to the pending queue")
+    p_reflect.add_argument("--report", choices=["summary", "markdown", "json"], default="summary", help="Report format")
+    p_reflect.add_argument("--output", default=None, help="Write the selected report to this path")
+    p_reflect.add_argument("--stale-days", type=int, default=None, help="Age threshold for stale asset findings")
+    p_reflect.add_argument("--ci", action="store_true", help="CI mode: run all reflect analyzers, write artifacts, and return a policy exit code")
+    p_reflect.add_argument("--ci-output-dir", default=None, help="Directory for CI JSON/Markdown artifacts")
+    p_reflect.add_argument("--max-findings", type=int, default=None, help="CI failure threshold for total findings")
+    p_reflect.add_argument("--max-high-severity", type=int, default=None, help="CI failure threshold for high-severity findings")
+    p_reflect.add_argument("--max-generated-proposals", type=int, default=None, help="CI failure threshold for generated proposal candidates")
+    p_reflect.add_argument("--github-step-summary", action="store_true", help="Append Reflect CI Markdown to $GITHUB_STEP_SUMMARY when available")
+    p_reflect.add_argument("--no-github-step-summary", action="store_true", help="Do not append Reflect CI Markdown to $GITHUB_STEP_SUMMARY")
+    p_reflect.set_defaults(func=cmd_reflect)
 
     p_models = sub.add_parser("models", help="List model providers and routes")
     p_models.add_argument("--stats", action="store_true", help="Show model routing performance aggregated from trajectories")
@@ -1595,6 +1628,8 @@ def cmd_audit_bundle(args: argparse.Namespace, project_root: Path) -> int:
         limit_runs=args.limit_runs,
         rebuild_graph=args.rebuild_graph,
         redaction=args.redaction,
+        include_reflect=args.include_reflect,
+        reflect_limit=args.reflect_limit,
     )
     return emit_audit_report(report, args)
 
@@ -2030,6 +2065,127 @@ def cmd_consolidate(args: argparse.Namespace, project_root: Path) -> int:
         print(f"- {proposal['proposal_id']} [{proposal['type']}] {proposal['title']}")
     print("Review with: praxile review --pending")
     return 0
+
+
+def cmd_reflect(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    ci_mode = bool(getattr(args, "ci", False))
+    modes = [
+        name
+        for name in ["duplicates", "stale", "harmful", "silent_failures", "rejected_proposals", "high_value_patterns"]
+        if getattr(args, name, False)
+    ]
+    if ci_mode and not modes:
+        modes = ["duplicates", "stale", "harmful", "silent_failures", "rejected_proposals", "high_value_patterns"]
+    since = args.since
+    if ci_mode and not since:
+        since = config.get("reflect", "ci", "default_since", default=None)
+    scope = ReflectScope(
+        since=since,
+        asset=args.asset,
+        modes=frozenset(modes),
+        stale_days=args.stale_days,
+    )
+    report = ReflectEngine(config, store).run(scope, write_proposals=bool(args.write_proposals))
+    if ci_mode:
+        report["ci"] = build_reflect_ci_check(
+            report,
+            max_findings=_cli_or_config_int(args, "max_findings", config.get("reflect", "ci", "max_findings", default=None)),
+            max_high_severity=_cli_or_config_int(
+                args,
+                "max_high_severity",
+                config.get("reflect", "ci", "max_high_severity", default=0),
+            ),
+            max_generated_proposals=_cli_or_config_int(
+                args,
+                "max_generated_proposals",
+                config.get("reflect", "ci", "max_generated_proposals", default=None),
+            ),
+        )
+        _write_reflect_ci_artifacts(config, report, args)
+    report_format = "summary" if getattr(args, "summary", False) else args.report
+    if report_format == "json":
+        rendered = json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True)
+    elif report_format == "markdown":
+        rendered = format_reflect_markdown(report)
+    else:
+        rendered = format_reflect_summary(report)
+    if args.output:
+        output_path = Path(args.output).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered.rstrip() + "\n", encoding="utf-8")
+        print(f"Wrote reflect report: {output_path}")
+    print(rendered)
+    if ci_mode:
+        ci = report.get("ci") if isinstance(report.get("ci"), dict) else {}
+        return int(ci.get("exit_code", 1))
+    return 0
+
+
+def _cli_or_config_int(args: argparse.Namespace, name: str, fallback: Any) -> int | None:
+    value = getattr(args, name, None)
+    if value is None:
+        value = fallback
+    if value is None:
+        return None
+    return int(value)
+
+
+def _write_reflect_ci_artifacts(config: Config, report: dict[str, Any], args: argparse.Namespace) -> None:
+    output_dir_value = args.ci_output_dir or config.get(
+        "reflect",
+        "ci",
+        "artifact_dir",
+        default=".praxile/experience/reflect/ci",
+    )
+    output_dir = _project_output_path(config.paths.root, output_dir_value)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    reflect_id = str(report.get("reflect_id") or "reflect")
+    json_path = output_dir / f"{reflect_id}.json"
+    markdown_path = output_dir / f"{reflect_id}.md"
+    latest_json_path = output_dir / "latest.json"
+    latest_markdown_path = output_dir / "latest.md"
+    report["ci_artifacts"] = {
+        "json": str(json_path.relative_to(config.paths.root)) if _is_relative_to(json_path, config.paths.root) else str(json_path),
+        "markdown": str(markdown_path.relative_to(config.paths.root)) if _is_relative_to(markdown_path, config.paths.root) else str(markdown_path),
+        "latest_json": str(latest_json_path.relative_to(config.paths.root)) if _is_relative_to(latest_json_path, config.paths.root) else str(latest_json_path),
+        "latest_markdown": str(latest_markdown_path.relative_to(config.paths.root)) if _is_relative_to(latest_markdown_path, config.paths.root) else str(latest_markdown_path),
+    }
+    markdown = format_reflect_ci_markdown(report)
+    write_json(json_path, report)
+    write_json(latest_json_path, report)
+    markdown_path.write_text(markdown, encoding="utf-8")
+    latest_markdown_path.write_text(markdown, encoding="utf-8")
+    if _should_write_github_step_summary(config, args):
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with Path(summary_path).expanduser().open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+                handle.write(markdown)
+
+
+def _should_write_github_step_summary(config: Config, args: argparse.Namespace) -> bool:
+    if getattr(args, "no_github_step_summary", False):
+        return False
+    if getattr(args, "github_step_summary", False):
+        return True
+    return bool(config.get("reflect", "ci", "write_github_step_summary", default=True))
+
+
+def _project_output_path(project_root: Path, value: Any) -> Path:
+    path = Path(str(value)).expanduser()
+    if not path.is_absolute():
+        path = project_root / path
+    return path
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve(strict=False).relative_to(parent.resolve(strict=False))
+        return True
+    except ValueError:
+        return False
 
 
 def cmd_models(args: argparse.Namespace, project_root: Path) -> int:

@@ -139,6 +139,22 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "consolidation_stale_days": 90,
             "consolidation_low_value_max_confidence": 0.4,
         },
+        "reflect": {
+            "stale_days": 90,
+            "duplicate_min_assets": 2,
+            "silent_failure_min_count": 2,
+            "rejected_theme_min_count": 2,
+            "high_value_positive_min": 3,
+            "max_findings": 50,
+            "ci": {
+                "default_since": "7d",
+                "artifact_dir": ".praxile/experience/reflect/ci",
+                "max_findings": None,
+                "max_high_severity": 0,
+                "max_generated_proposals": None,
+                "write_github_step_summary": True,
+            },
+        },
         "proposal_gate": {
             "enabled": True,
             "min_confidence": 0.55,
@@ -499,6 +515,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "gateway.max_threads",
         "evolution.consolidation_min_duplicates",
         "evolution.consolidation_stale_days",
+        "reflect.stale_days",
+        "reflect.duplicate_min_assets",
+        "reflect.silent_failure_min_count",
+        "reflect.rejected_theme_min_count",
+        "reflect.high_value_positive_min",
+        "reflect.max_findings",
         "retrieval.stale_usage_days",
         "search.timeout_seconds",
         "cost_control.max_cloud_calls_per_run",
@@ -542,6 +564,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.pattern_mining.enabled",
         "semantic_judges.counterexample_checker.enabled",
         "workspace.keep_after_run",
+        "reflect.ci.write_github_step_summary",
     ]:
         expect(path, bool)
     for path in [
@@ -622,6 +645,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "channels",
         "executors",
         "proposal_gate",
+        "reflect",
+        "reflect.ci",
         "semantic_judges",
         "semantic_judges.feedback_classifier",
         "semantic_judges.attribution_judge",
@@ -646,6 +671,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "gateway.host",
         "gateway.token_env",
         "workspace.default_mode",
+        "reflect.ci.default_since",
+        "reflect.ci.artifact_dir",
     ]:
         expect(path, str)
     for path in [
@@ -685,12 +712,28 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reward.scope.broad_edit_top_level_threshold",
         "evolution.consolidation_min_duplicates",
         "evolution.consolidation_stale_days",
+        "reflect.stale_days",
+        "reflect.duplicate_min_assets",
+        "reflect.silent_failure_min_count",
+        "reflect.rejected_theme_min_count",
+        "reflect.high_value_positive_min",
+        "reflect.max_findings",
         "retrieval.stale_usage_days",
         "search.timeout_seconds",
     ]:
         value = value_at(path)
         if isinstance(value, int) and value <= 0:
             errors.append(f"{path}: must be positive")
+    for path in [
+        "reflect.ci.max_findings",
+        "reflect.ci.max_high_severity",
+        "reflect.ci.max_generated_proposals",
+    ]:
+        value = value_at(path)
+        if value is not None and not isinstance(value, int):
+            errors.append(f"{path}: expected int or null, got {type(value).__name__}")
+        if isinstance(value, int) and value < 0:
+            errors.append(f"{path}: must be >= 0")
     min_experience = value_at("reward.min_experience_value_for_proposals")
     if isinstance(min_experience, (int, float)) and float(min_experience) < 0:
         errors.append("reward.min_experience_value_for_proposals: must be non-negative")

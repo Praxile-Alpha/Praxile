@@ -118,6 +118,22 @@
     "consolidation_stale_days": 90,
     "consolidation_low_value_max_confidence": 0.4
   },
+  "reflect": {
+    "stale_days": 90,
+    "duplicate_min_assets": 2,
+    "silent_failure_min_count": 2,
+    "rejected_theme_min_count": 2,
+    "high_value_positive_min": 3,
+    "max_findings": 50,
+    "ci": {
+      "default_since": "7d",
+      "artifact_dir": ".praxile/experience/reflect/ci",
+      "max_findings": null,
+      "max_high_severity": 0,
+      "max_generated_proposals": null,
+      "write_github_step_summary": true
+    }
+  },
   "proposal_gate": {
     "enabled": true,
     "min_confidence": 0.55

@@ -18,3 +18,4 @@ Each example is intentionally tiny so contributors can inspect the resulting `.p
 - `react/`: UI-sensitive frontend project with Node test/build scripts.
 - `go/`: Go module with `go test ./...`.
 - `rust/`: Rust crate with `cargo test`.
+- `github-actions/praxile-reflect.yml`: Scheduled Reflect governance workflow template.

@@ -194,6 +194,8 @@ def build_project_audit_bundle(
     limit_runs: int = 20,
     rebuild_graph: bool = False,
     redaction: str = "standard",
+    include_reflect: bool = False,
+    reflect_limit: int = 5,
 ) -> dict[str, Any]:
     if rebuild_graph:
         store.rebuild_experience_graph()
@@ -202,6 +204,7 @@ def build_project_audit_bundle(
     proposals = store.list_proposals(status=None, limit=10000)
     assets = _project_assets(store)
     graph_status = store.graph_status()
+    reflect_reports = _latest_reflect_reports(config, limit=reflect_limit) if include_reflect else []
     pending = [item for item in proposals if item.get("status") == "pending"]
     high_risk_pending = [
         item
@@ -249,6 +252,11 @@ def build_project_audit_bundle(
         },
         "graph_chain": {
             "status": graph_status,
+        },
+        "reflect_chain": {
+            "included": bool(include_reflect),
+            "count": len(reflect_reports),
+            "reports": reflect_reports,
         },
         "governance_summary": {
             "ready_for_release_review": not high_risk_pending,
@@ -438,6 +446,10 @@ def format_audit_report(report: dict[str, Any]) -> str:
         assets = report["asset_chain"]
         if isinstance(assets, dict):
             lines.append(f"- assets: {assets.get('count')}")
+    if report.get("reflect_chain"):
+        reflect = report["reflect_chain"]
+        if isinstance(reflect, dict) and reflect.get("included"):
+            lines.append(f"- reflect_reports: {reflect.get('count', 0)}")
     if report.get("governance_summary"):
         summary = report["governance_summary"]
         if isinstance(summary, dict):
@@ -775,6 +787,37 @@ def _project_assets(store: ExperienceStore) -> list[dict[str, Any]]:
             if path:
                 assets[path] = item
     return sorted(assets.values(), key=lambda item: str(item.get("path") or ""))
+
+
+def _latest_reflect_reports(config: Config, *, limit: int = 5) -> list[dict[str, Any]]:
+    root = config.paths.state / "experience" / "reflect"
+    if not root.exists():
+        return []
+    paths = sorted(root.glob("*.json"), key=lambda path: path.stat().st_mtime_ns, reverse=True)
+    reports: list[dict[str, Any]] = []
+    safe_limit = max(0, int(5 if limit is None else limit))
+    for path in paths[:safe_limit]:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            reports.append({"path": _root_relative(config, path), "read_error": str(exc)})
+            continue
+        reports.append(_compact_reflect_report(config, path, data))
+    return reports
+
+
+def _compact_reflect_report(config: Config, path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    return {
+        "path": _root_relative(config, path),
+        "reflect_id": report.get("reflect_id"),
+        "created_at": report.get("created_at"),
+        "scope": report.get("scope") or {},
+        "finding_counts": summary.get("finding_counts") or {},
+        "proposal_counts": summary.get("proposal_counts") or {},
+        "written_proposal_paths": report.get("written_proposal_paths") or [],
+        "no_assets_modified": report.get("no_assets_modified", True),
+    }
 
 
 def _count_by(items: list[dict[str, Any]], key: str) -> dict[str, int]:
