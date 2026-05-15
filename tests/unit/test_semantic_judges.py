@@ -6,7 +6,15 @@ from praxile.config import Config
 from praxile.feedback import FeedbackSemanticClassifier
 from praxile.hypothesis import CounterexampleChecker
 from praxile.patterns import PatternMiner
-from praxile.semantic_judges import AttributionJudge, CounterexampleSemanticChecker, PatternSemanticJudge
+from praxile.semantic_judges import (
+    AttributionJudge,
+    CounterexampleSemanticChecker,
+    DuplicationJudge,
+    FeedbackClassifierJudge,
+    PatternMinerJudge,
+    PatternSemanticJudge,
+    RiskDetectorJudge,
+)
 from praxile.store import ExperienceStore
 
 
@@ -225,3 +233,45 @@ def test_counterexample_semantic_checker_can_override_same_signature(tmp_path: P
 
     assert validated[0]["counterexamples"] == []
     assert validated[0]["recommended_action"] == "accept"
+
+
+def test_risk_detector_judge_flags_governance_sensitive_proposal(tmp_path: Path):
+    config = Config.load(tmp_path)
+    enable_semantics(config)
+    proposal = {
+        "proposal_id": "prop_risk",
+        "type": "harness_rule",
+        "risk_level": "medium",
+        "confidence": 0.42,
+        "target_files": ["rules/harness-rules/architecture-gate-before-edits.md"],
+    }
+
+    result = RiskDetectorJudge(config).evaluate(proposal, {"silent_failure_signals": [{"type": "no_tests_but_completed"}]})
+
+    assert result["active"] is True
+    assert result["severity"] == "high"
+    assert result["requires_human_review"] is True
+    assert result["recommended_action"] == "inspect"
+
+
+def test_rule_based_pattern_feedback_and_duplication_judges(tmp_path: Path):
+    config = Config.load(tmp_path)
+    enable_semantics(config)
+    trajectory = {
+        "actions": [
+            {"action_type": "run_command", "status": "failure", "input": {"command": "python -m pytest"}},
+            {"action_type": "run_command", "status": "success", "input": {"command": "python -m pytest"}},
+        ]
+    }
+
+    pattern = PatternMinerJudge(config).evaluate(trajectory, {"type": "failure_pattern"})
+    feedback = FeedbackClassifierJudge(config).evaluate("这个建议太泛了，不要这么记")
+    duplication = DuplicationJudge(config).evaluate(
+        {"type": "memory_update", "title": "Parser retry", "target_files": [".praxile/memory/parser.md"]},
+        [{"type": "memory", "title": "Parser retry", "path": ".praxile/memory/parser.md"}],
+    )
+
+    assert pattern["active"] is True
+    assert pattern["score"] > 0.5
+    assert feedback["sentiment"] == "negative"
+    assert duplication["duplicate"] is True

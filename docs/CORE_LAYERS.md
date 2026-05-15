@@ -82,6 +82,12 @@ They are loaded by Praxile, not by external frameworks. Runtime loads only activ
 
 Memory remains repository scoped. External/global export requires a future explicit proposal.
 
+## Retrieval And Recovery
+
+`praxile search` and `ExperienceStore.retrieve` expose the same governed retrieval path used by runtime context loading. The store supports SQLite/FTS by default and optional vector/hybrid retrieval when enabled in config.
+
+`praxile.snapshot.SnapshotManager` stores project-local `.praxile/` snapshots. Proposal acceptance creates a pre-apply snapshot, and `praxile rollback <SNAPSHOT_ID>` restores governed state while preserving the snapshot archive.
+
 ## Experience Constitution
 
 `.praxile/constitution.md` defines the repo-local governance rules for experience assets. The proposal gate checks durable updates for source evidence, scope, anti-scope, confidence, and rollback information before a proposal can be accepted as project experience.
@@ -100,9 +106,11 @@ Memory remains repository scoped. External/global export requires a future expli
 - `POST /channels/bind`;
 - `POST /channels/unbind`;
 
+It also exposes the chat-first console API under `/api/*`, including sessions, runs, model roles, proposals, assets, reflect, graph, and audit status. See [Web Console](WEB_CONSOLE.md).
+
 The gateway is local-first and optional. It is a programmatic frontend to Praxile, not a dependency.
 
-The same gateway serves a local web console at `/`. The console submits tasks and proposal decisions through the API; it does not write durable experience assets directly.
+The same gateway serves a local chat-first web console at `/`. The console submits tasks and proposal decisions through the API; it does not write durable experience assets directly.
 
 ## Terminal
 

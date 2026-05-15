@@ -39,6 +39,8 @@
 
 It sits around coding-agent work: it records environment interaction, builds a trajectory, computes reward and risk signals, extracts evidence, generates reviewable proposals, and writes durable repository knowledge only after human approval.
 
+Praxile includes a **Chat-first Web Console** that provides a familiar AI agent workspace seamlessly integrated with deep governance, spec-aware execution, and reflective auditing.
+
 Praxile is **not** another general-purpose coding agent, **not** a hidden global memory, and **not** a Spec Kit replacement.
 
 It is designed for developers and teams who want AI coding workflows to become more reusable over time without losing control over what the project remembers.
@@ -150,32 +152,26 @@ The core rule is simple:
 
 ## Feature highlights
 
+- **Chat-First Web Console**  
+  A zero-dependency local workspace (`praxile gateway serve`) offering a 3-pane layout: Chat Execution, Run Details, and Governance Context.
 - **Repository-local experience**  
   Memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.
-
 - **Spec-aware execution**  
   Optional spec, plan, task, and constitution context can shape reward, silent-failure signals, and proposal gating.
-
 - **Evidence-backed proposals**  
   Durable changes start as proposals with source runs, evidence summaries, confidence, applicability scope, anti-scope, and rollback paths.
-
 - **Proposal gate and human review**  
   Weak, under-scoped, low-evidence, or risky learning candidates can be suppressed before they become review burden.
-
 - **Silent-failure detection**  
   Praxile flags runs that look successful but may be weakly verified, over-broad, under-specified, or poorly attributed.
-
 - **Praxile Reflect**  
   Offline, proposal-governed experience refinement: detect duplicates, stale assets, harmful assets, repeated silent failures, rejected-proposal themes, and high-value patterns.
-
 - **Reward and attribution**  
   Task success, regression safety, process safety, cost, experience value, user feedback, and asset attribution are tracked separately.
-
 - **Experience graph and audit chain**  
   Praxile builds a rebuildable local provenance graph from specs, runs, proposals, assets, feedback, reflect reports, and future retrieval.
-
 - **Safety and rollback**  
-  Sensitive path protection, dangerous command blocking, backups, architecture gates, workspace isolation, and proposal rollback are part of the loop.
+  Sensitive path protection, dangerous command blocking, project-local `.praxile/rules/safety-policy.json`, backups, architecture gates, workspace isolation, and proposal rollback are part of the loop.
 
 ---
 
@@ -337,7 +333,16 @@ praxile run "Fix the failing parser test" --test-command "python -m pytest"
 praxile run "Implement search API"   --spec docs/specs/search.md   --test-command "python -m pytest"
 ```
 
-### 4. Review and explain
+### 4. Use the Web Console (Recommended)
+
+Start the built-in, chat-first web console to interact with your agent and review governance visually:
+
+```bash
+praxile gateway serve --host 127.0.0.1 --port 8765
+```
+Open `http://127.0.0.1:8765/` in your browser.
+
+### 5. Review and explain
 
 ```bash
 praxile review --interactive
@@ -458,7 +463,10 @@ Implemented core capabilities:
 - reward report;
 - evidence and proposal generation;
 - proposal gate;
+- `propose`, `search`, index maintenance, and pre-apply snapshots;
+- generic JSONL external trace import and JSON eval suite runner;
 - review / accept / reject;
+- chat-first local web console with Reflect, Graph, Audit, Spec, and Safety panels;
 - repository-local assets;
 - retrieval and explain;
 - spec-aware context;
@@ -494,9 +502,11 @@ Not included in the first release:
 - [Architecture](docs/ARCHITECTURE.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
+- [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)
+- [Web Console](docs/WEB_CONSOLE.md)
 - [Praxile Reflect](docs/REFLECT.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
-- [Audit Governance](docs/audit-governance.md)
+- [Governance](docs/GOVERNANCE.md)
 - [Install And Interop](docs/INSTALL_AND_INTEROP.md)
 - [Testing Guide](docs/contributing-testing.md)
 - [Security Policy](docs/SECURITY_MODEL.md)

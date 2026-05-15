@@ -100,6 +100,11 @@ def default_config(project_root: Path) -> dict[str, Any]:
                 "timeout_seconds": 12,
                 "max_tokens": 900,
             },
+            "risk_detector": {
+                "enabled": True,
+                "high_risk_score": 0.75,
+                "medium_risk_score": 0.45,
+            },
         },
         "search": {
             "backend": "auto",
@@ -135,6 +140,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "llm_model_role": "proposal_composer",
             "llm_timeout_seconds": 20,
             "llm_max_tokens": 1800,
+            "llm_max_proposals": 3,
             "consolidation_min_duplicates": 2,
             "consolidation_stale_days": 90,
             "consolidation_low_value_max_confidence": 0.4,
@@ -219,6 +225,8 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "dangerous_command_patterns": DANGEROUS_COMMAND_PATTERNS,
             "allowed_command_prefixes": DEFAULT_ALLOWED_COMMAND_PREFIXES,
             "protected_paths": [PRAXILE_DIR],
+            "policy_files": ["rules/safety-policy.json"],
+            "policy_rules": [],
             "backup_max_files": 500,
             "backup_max_bytes": 200_000_000,
         },
@@ -337,6 +345,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "max_threads": 16,
             "token_env": "PRAXILE_GATEWAY_TOKEN",
             "channels_enabled": False,
+            "multi_repo_roots": [],
         },
         "channels": {
             "version": 1,
@@ -428,6 +437,10 @@ class ProjectPaths:
     def checkpoints(self) -> Path:
         return self.state / "checkpoints"
 
+    @property
+    def snapshots(self) -> Path:
+        return self.state / "snapshots"
+
 
 class Config:
     def __init__(self, data: dict[str, Any], paths: ProjectPaths):
@@ -513,6 +526,9 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "memory.project_memory_soft_limit_bytes",
         "trace.retention_days",
         "gateway.max_threads",
+        "evolution.llm_timeout_seconds",
+        "evolution.llm_max_tokens",
+        "evolution.llm_max_proposals",
         "evolution.consolidation_min_duplicates",
         "evolution.consolidation_stale_days",
         "reflect.stale_days",
@@ -617,6 +633,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reward.llm_judge.max_cost_per_run",
         "semantic_judges.attribution_judge.only_for_loaded_assets_with_score_above",
         "semantic_judges.pattern_mining.only_after_heuristic_score",
+        "semantic_judges.risk_detector.high_risk_score",
+        "semantic_judges.risk_detector.medium_risk_score",
     ]:
         expect(path, (int, float))
     for path in [
@@ -632,9 +650,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "safety.sensitive_globs",
         "safety.dangerous_command_patterns",
         "safety.allowed_command_prefixes",
+        "safety.policy_files",
+        "safety.policy_rules",
         "cost_control.prefer_ollama_for",
         "cost_control.use_cloud_for",
         "workspace.copy_excludes",
+        "gateway.multi_repo_roots",
     ]:
         expect(path, list)
     for path in [
@@ -652,6 +673,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.attribution_judge",
         "semantic_judges.pattern_mining",
         "semantic_judges.counterexample_checker",
+        "semantic_judges.risk_detector",
     ]:
         expect(path, dict)
     for path in [

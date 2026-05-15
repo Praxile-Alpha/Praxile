@@ -60,6 +60,8 @@ The graph answers governance questions such as:
 
 Reflect does not rewrite memory directly. With `--write-proposals`, it only creates pending governance proposals for human review, such as `asset_merge`, `asset_deprecate`, `harness_rule_create`, `proposal_gate_policy_update`, and `pattern_promote`.
 
+Runtime evolution can also use optional LLM-assisted proposal composition when `evolution.llm_assisted_proposals=true`. This uses the `proposal_composer` role by default, parses structured JSON, rejects unsupported proposal types or unsafe target paths, records the attempt on the trajectory, and still sends every accepted item through the normal proposal gate and human approval flow.
+
 ## 5. Spec Compliance & Attribution
 
 **Spec Compliance:**

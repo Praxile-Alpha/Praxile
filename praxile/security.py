@@ -4,10 +4,13 @@ import fnmatch
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 from .config import Config
 from .constants import PRAXILE_DIR
 from .interop import external_agent_conflict
+from .json_utils import RobustJSONError, parse_jsonc_object
 from .utils import path_is_relative_to
 
 
@@ -22,17 +25,63 @@ class SafetyPolicy:
     def __init__(self, config: Config):
         self.config = config
         self.root = config.paths.root.resolve()
+        self.state_root = config.paths.state.resolve()
         self.sensitive_globs = config.get("safety", "sensitive_globs", default=[])
         self.dangerous_patterns = [p.lower() for p in config.get("safety", "dangerous_command_patterns", default=[])]
         self.allowed_prefixes = config.get("safety", "allowed_command_prefixes", default=[])
         configured_protected = list(config.get("safety", "protected_paths", default=[]) or [])
         self.protected_paths = sorted({PRAXILE_DIR, *configured_protected})
+        self.policy_rules: list[dict[str, Any]] = []
+        self.policy_file_status: list[dict[str, Any]] = []
+        self.policy_errors: list[str] = []
+        self._load_policy_rules()
+
+    def policy_status(self) -> dict[str, Any]:
+        return {
+            "policy_files": self.policy_file_status,
+            "rules_count": len(self.policy_rules),
+            "errors": list(self.policy_errors),
+        }
+
+    def check_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any] | None = None,
+        *,
+        context: dict[str, Any] | None = None,
+    ) -> SafetyDecision:
+        args = args or {}
+        policy_decision = self._check_policy_rules(tool_name, args, context=context)
+        if not policy_decision.allowed:
+            return policy_decision
+        if tool_name == "run_command":
+            return self.check_command(str(args.get("command", "")))
+        if tool_name == "edit_file":
+            return self.check_path(str(args.get("path", "")), write=True)
+        if tool_name in {"read_file", "list_dir"}:
+            return self.check_path(str(args.get("path", ".")), write=False)
+        if tool_name == "read_files":
+            paths = args.get("paths", [])
+            if not isinstance(paths, list):
+                return SafetyDecision(False, "paths must be a list", "low")
+            for path in paths:
+                decision = self.check_path(str(path), write=False)
+                if not decision.allowed:
+                    return decision
+            return SafetyDecision(True)
+        if tool_name in {"browser_open", "browser_screenshot"}:
+            return self._check_browser_url(str(args.get("url", "")))
+        return SafetyDecision(True)
 
     def check_path(self, path: str | Path, *, write: bool = False) -> SafetyDecision:
         candidate = (self.root / path).resolve() if not Path(path).is_absolute() else Path(path).resolve()
         if not path_is_relative_to(candidate, self.root):
             return SafetyDecision(False, f"path escapes project root: {path}", "high")
         rel = candidate.relative_to(self.root).as_posix()
+        policy_tool = "edit_file" if write else "read_file"
+        policy_decision = self._check_policy_rules(policy_tool, {"path": rel})
+        if not policy_decision.allowed:
+            return policy_decision
         for pattern in self.sensitive_globs:
             if self._matches_path_pattern(rel, candidate.name, pattern):
                 return SafetyDecision(False, f"protected sensitive file: {rel}", "high")
@@ -66,6 +115,9 @@ class SafetyPolicy:
         lower = normalized.lower()
         if not normalized:
             return SafetyDecision(False, "empty command", "low")
+        policy_decision = self._check_policy_rules("run_command", {"command": normalized})
+        if not policy_decision.allowed:
+            return policy_decision
         for pattern in self.dangerous_patterns:
             if pattern in lower:
                 return SafetyDecision(False, f"dangerous command pattern blocked: {pattern}", "high")
@@ -199,3 +251,216 @@ class SafetyPolicy:
     def _matches_allowed_prefix(self, command: str) -> bool:
         normalized = " ".join(command.strip().split())
         return any(normalized == prefix or normalized.startswith(prefix + " ") for prefix in self.allowed_prefixes)
+
+    def _load_policy_rules(self) -> None:
+        inline_rules = self.config.get("safety", "policy_rules", default=[]) or []
+        self._extend_policy_rules(inline_rules, source="config:safety.policy_rules")
+        for raw_path in self.config.get("safety", "policy_files", default=[]) or []:
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                self.policy_errors.append("safety.policy_files contains a non-string path")
+                continue
+            policy_path = self._resolve_policy_file(raw_path)
+            status = {
+                "path": raw_path,
+                "resolved_path": str(policy_path) if policy_path else None,
+                "loaded": False,
+                "rules_count": 0,
+                "error": None,
+            }
+            if policy_path is None:
+                status["error"] = "policy files must resolve inside .praxile/"
+                self.policy_errors.append(f"{raw_path}: {status['error']}")
+                self.policy_file_status.append(status)
+                continue
+            if not policy_path.exists():
+                status["error"] = "missing"
+                self.policy_file_status.append(status)
+                continue
+            try:
+                payload = parse_jsonc_object(policy_path.read_text(encoding="utf-8"))
+            except (OSError, RobustJSONError) as exc:
+                status["error"] = str(exc)
+                self.policy_errors.append(f"{raw_path}: {exc}")
+                self.policy_file_status.append(status)
+                continue
+            before = len(self.policy_rules)
+            self._extend_policy_rules(payload.get("rules", payload), source=raw_path)
+            status["loaded"] = True
+            status["rules_count"] = len(self.policy_rules) - before
+            self.policy_file_status.append(status)
+
+    def _extend_policy_rules(self, rules: Any, *, source: str) -> None:
+        if isinstance(rules, dict):
+            rules = [rules]
+        if not isinstance(rules, list):
+            self.policy_errors.append(f"{source}: expected a list of safety rules")
+            return
+        for index, raw_rule in enumerate(rules):
+            if not isinstance(raw_rule, dict):
+                self.policy_errors.append(f"{source}#{index + 1}: expected object")
+                continue
+            rule = self._normalize_policy_rule(raw_rule, source=source, index=index)
+            if rule:
+                self.policy_rules.append(rule)
+
+    def _normalize_policy_rule(self, raw_rule: dict[str, Any], *, source: str, index: int) -> dict[str, Any] | None:
+        if raw_rule.get("enabled", True) is False:
+            return None
+        action = str(raw_rule.get("action", "deny")).lower()
+        if action not in {"deny", "block"}:
+            return None
+        tools_raw = raw_rule.get("tools", raw_rule.get("tool", "*"))
+        if isinstance(tools_raw, str):
+            tools = [tools_raw]
+        elif isinstance(tools_raw, list):
+            tools = [str(item) for item in tools_raw if isinstance(item, str) and item.strip()]
+        else:
+            tools = ["*"]
+        match = raw_rule.get("match", {})
+        if not isinstance(match, dict):
+            self.policy_errors.append(f"{source}#{index + 1}: match must be an object")
+            return None
+        rule_id = str(raw_rule.get("id") or f"{source}#{index + 1}")
+        return {
+            "id": rule_id,
+            "source": source,
+            "tools": tools or ["*"],
+            "match": match,
+            "message": str(raw_rule.get("message") or raw_rule.get("reason") or f"blocked by safety policy rule {rule_id}"),
+            "risk_level": str(raw_rule.get("risk_level") or "medium"),
+        }
+
+    def _resolve_policy_file(self, raw_path: str) -> Path | None:
+        candidate = Path(raw_path)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+        else:
+            normalized = raw_path.replace("\\", "/")
+            if normalized == PRAXILE_DIR or normalized.startswith(f"{PRAXILE_DIR}/"):
+                resolved = (self.root / normalized).resolve()
+            else:
+                resolved = (self.state_root / normalized).resolve()
+        if not path_is_relative_to(resolved, self.state_root):
+            return None
+        return resolved
+
+    def _check_policy_rules(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        context: dict[str, Any] | None = None,
+    ) -> SafetyDecision:
+        context = context or {}
+        for rule in self.policy_rules:
+            if not self._policy_tool_matches(tool_name, rule["tools"]):
+                continue
+            if not self._policy_match(rule["match"], args, context):
+                continue
+            return SafetyDecision(False, rule["message"], rule["risk_level"])
+        return SafetyDecision(True)
+
+    def _policy_tool_matches(self, tool_name: str, patterns: list[str]) -> bool:
+        return any(pattern == "*" or fnmatch.fnmatch(tool_name, pattern) for pattern in patterns)
+
+    def _policy_match(self, match: dict[str, Any], args: dict[str, Any], context: dict[str, Any]) -> bool:
+        if not match:
+            return True
+        checks = 0
+        command = " ".join(str(args.get("command", "")).strip().split())
+        if "command_contains" in match:
+            checks += 1
+            values = _string_list(match.get("command_contains"))
+            if not any(value.lower() in command.lower() for value in values):
+                return False
+        if "command_prefix" in match:
+            checks += 1
+            values = _string_list(match.get("command_prefix"))
+            if not any(command == value or command.startswith(value + " ") for value in values):
+                return False
+        if "path_glob" in match:
+            checks += 1
+            values = _string_list(match.get("path_glob"))
+            paths = self._paths_from_args(args)
+            if not any(self._matches_path_pattern(path, Path(path).name, pattern) for path in paths for pattern in values):
+                return False
+        if "path_contains" in match:
+            checks += 1
+            values = [value.lower() for value in _string_list(match.get("path_contains"))]
+            paths = [path.lower() for path in self._paths_from_args(args)]
+            if not any(value in path for path in paths for value in values):
+                return False
+        if "url_host" in match:
+            checks += 1
+            values = set(_string_list(match.get("url_host")))
+            parsed = urlparse(str(args.get("url", "")))
+            if parsed.hostname not in values:
+                return False
+        if "arg_contains" in match:
+            checks += 1
+            spec = match.get("arg_contains")
+            if not isinstance(spec, dict):
+                return False
+            for key, raw_values in spec.items():
+                values = [value.lower() for value in _string_list(raw_values)]
+                haystack = str(args.get(str(key), "")).lower()
+                if not any(value in haystack for value in values):
+                    return False
+        if "context_equals" in match:
+            checks += 1
+            spec = match.get("context_equals")
+            if not isinstance(spec, dict):
+                return False
+            for key, expected in spec.items():
+                if context.get(str(key)) != expected:
+                    return False
+        return checks > 0 or bool(match.get("always", False))
+
+    def _paths_from_args(self, args: dict[str, Any]) -> list[str]:
+        raw_paths = args.get("paths") if "paths" in args else args.get("path")
+        if raw_paths is None:
+            return []
+        if isinstance(raw_paths, list):
+            values = [str(item) for item in raw_paths]
+        else:
+            values = [str(raw_paths)]
+        normalized: list[str] = []
+        for value in values:
+            candidate = Path(value)
+            try:
+                if candidate.is_absolute():
+                    resolved = candidate.resolve()
+                    if path_is_relative_to(resolved, self.root):
+                        normalized.append(resolved.relative_to(self.root).as_posix())
+                    else:
+                        normalized.append(value.replace("\\", "/"))
+                else:
+                    rel = value.replace("\\", "/")
+                    while rel.startswith("./"):
+                        rel = rel[2:]
+                    normalized.append(rel)
+            except OSError:
+                normalized.append(value.replace("\\", "/"))
+        return normalized
+
+    def _check_browser_url(self, url: str) -> SafetyDecision:
+        policy_decision = self._check_policy_rules("browser_open", {"url": url})
+        if not policy_decision.allowed:
+            return policy_decision
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return SafetyDecision(False, f"browser URL must be absolute http(s): {url}", "medium")
+        allowed_hosts = self.config.get("browser", "allowed_hosts", default=["localhost", "127.0.0.1", "::1"])
+        if allowed_hosts and parsed.hostname not in allowed_hosts:
+            return SafetyDecision(False, f"browser host not allowed: {parsed.hostname}", "medium")
+        return SafetyDecision(True)
+
+
+def _string_list(raw: Any) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        return [raw]
+    if isinstance(raw, list):
+        return [str(item) for item in raw if item is not None]
+    return [str(raw)]

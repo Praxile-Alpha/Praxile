@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from typing import Any
 
 from .action_schema import ActionSchemaRegistry
@@ -55,6 +56,7 @@ class AgentRuntime:
         resume: str | None = None,
         spec_files: list[str] | None = None,
         parallel_readonly_explore: bool | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         try:
             self.store.initialize(self.config)
@@ -150,6 +152,7 @@ class AgentRuntime:
                             "spec_files": spec_files or [],
                             "parallel_readonly_explore": parallel_readonly_explore,
                         },
+                        cancel_requested=cancel_requested,
                     )
                     result_summary = "Architecture gate triggered; shadow-mode planning was recorded without landing edits."
             else:
@@ -171,6 +174,7 @@ class AgentRuntime:
                         "spec_files": spec_files or [],
                         "parallel_readonly_explore": parallel_readonly_explore,
                     },
+                    cancel_requested=cancel_requested,
                 )
 
             return self._finish_run(logger, result_status, result_summary, test_commands=test_commands, dry_run=dry_run)
@@ -243,7 +247,21 @@ class AgentRuntime:
         test_commands: list[str] | None,
         dry_run: bool,
     ) -> dict[str, Any]:
-        test_results = [] if dry_run else self.tests.run(test_commands) if test_commands else []
+        cancelled = "cancelled" in str(result_summary or "").lower()
+        test_results = [] if dry_run or cancelled else self.tests.run(test_commands) if test_commands else []
+        if cancelled and test_commands:
+            logger.add_action(
+                action_type="cancelled_skip_tests",
+                input_data={"commands": test_commands},
+                observation={
+                    "status": "needs_human",
+                    "output": "Cancelled run skipped verification commands.",
+                    "data": {"cancelled": True, "commands": test_commands},
+                    "risk_level": "low",
+                },
+                status="needs_human",
+                executor=self._verification_executor(),
+            )
         if dry_run and test_commands:
             logger.add_action(
                 action_type="dry_run_skip_tests",
@@ -636,6 +654,7 @@ class AgentRuntime:
         dry_run: bool = False,
         messages: list[dict[str, str]] | None = None,
         checkpoint_context: dict[str, Any] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> tuple[str, str]:
         messages = messages or self._initial_messages(task, logger, retrieved)
         invalid_action_count = 0
@@ -646,6 +665,21 @@ class AgentRuntime:
         )
         try:
             for _ in range(max_steps):
+                if cancel_requested and cancel_requested():
+                    logger.add_action(
+                        action_type="gateway_cancelled",
+                        input_data={"source": "web_console"},
+                        observation={
+                            "status": "needs_human",
+                            "output": "Run cancelled by Web Console stop request before the next model/tool step.",
+                            "data": {"cancelled": True},
+                            "risk_level": "low",
+                        },
+                        status="needs_human",
+                        executor=self._primary_executor(),
+                    )
+                    self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+                    return "needs_human", "Run cancelled by Web Console stop request."
                 messages = self._compress_messages_if_needed(messages, logger)
                 self._trace(
                     "model_request",
@@ -757,6 +791,21 @@ class AgentRuntime:
 
                 action_type = action.get("type")
                 invalid_action_count = 0
+                if cancel_requested and cancel_requested():
+                    logger.add_action(
+                        action_type="gateway_cancelled",
+                        input_data={"source": "web_console", "pending_action": action_type},
+                        observation={
+                            "status": "needs_human",
+                            "output": "Run cancelled by Web Console stop request before executing the pending action.",
+                            "data": {"cancelled": True, "pending_action": action},
+                            "risk_level": "low",
+                        },
+                        status="needs_human",
+                        executor=self._primary_executor(),
+                    )
+                    self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+                    return "needs_human", "Run cancelled by Web Console stop request."
                 if dry_run and action_type in {"edit_file", "run_command"}:
                     observation = {
                         "status": "blocked",

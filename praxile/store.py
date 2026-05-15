@@ -14,6 +14,7 @@ from .config import Config, ProjectPaths
 from .constants import PRAXILE_DIR
 from .feedback import feedback_reward
 from .interop import PRAXILE_TRAJECTORY_SCHEMA, EXTERNAL_COMPAT_TRAJECTORY_FORMAT
+from .snapshot import SnapshotManager
 from .utils import append_jsonl, file_lock, path_is_relative_to, read_json, shorten, stable_hash, utc_now, write_json
 from .vector import cosine_similarity, embed_text, vector_settings
 
@@ -60,6 +61,7 @@ class ExperienceStore:
             self.paths.state,
             self.paths.state / "memory",
             self.paths.state / "skills",
+            self.paths.state / "experience" / "chat" / "sessions",
             self.paths.state / "experience" / "trajectories",
             self.paths.feedback,
             self.paths.state / "experience" / "failures",
@@ -113,6 +115,11 @@ class ExperienceStore:
         if force or not harness_rule_path.exists():
             self._write_template("rules/harness-rules/default.md", harness_rule_path)
             seeded_assets.append(harness_rule_path)
+
+        safety_policy_path = self.paths.state / "rules" / "safety-policy.json"
+        if force or not safety_policy_path.exists():
+            self._write_template("rules/safety-policy.json", safety_policy_path)
+            seeded_assets.append(safety_policy_path)
 
         self._init_db()
         if force:
@@ -1651,6 +1658,16 @@ class ExperienceStore:
 
     def apply_proposal(self, proposal: dict[str, Any]) -> dict[str, Any]:
         with file_lock(self.paths.state / "proposal-apply.lock"):
+            if not proposal.get("pre_apply_snapshot_id"):
+                snapshot = SnapshotManager(self.paths.state).create_snapshot(
+                    reason=f"before applying proposal {proposal.get('proposal_id')}",
+                    source={
+                        "type": "proposal",
+                        "proposal_id": proposal.get("proposal_id"),
+                        "source_task_id": proposal.get("source_task_id"),
+                    },
+                )
+                proposal["pre_apply_snapshot_id"] = snapshot["snapshot_id"]
             return self._apply_proposal_locked(proposal)
 
     def _apply_proposal_locked(self, proposal: dict[str, Any]) -> dict[str, Any]:

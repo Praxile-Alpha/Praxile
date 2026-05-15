@@ -151,9 +151,10 @@ Praxile keeps operational knobs in `.praxile/config.json`:
   },
   "evolution": {
     "llm_assisted_proposals": false,
-    "llm_model_role": "evolution_model",
+    "llm_model_role": "proposal_composer",
     "llm_timeout_seconds": 20,
     "llm_max_tokens": 1800,
+    "llm_max_proposals": 3,
     "consolidation_min_duplicates": 2,
     "consolidation_stale_days": 90,
     "consolidation_low_value_max_confidence": 0.4,
@@ -363,9 +364,9 @@ Project map caching stores a short-lived summary in `.praxile/cache/project_map.
 
 `model_roles` is the preferred model routing layer. Use `coding_agent` for strong code/action calls, `evidence_extraction` and `experience_reflection` for low-cost local learning work, `reward_judge` for optional quality judging, `proposal_composer` for reviewable proposal text, `review_recommendation` for cheap classification, `cheap_reasoner` as an optional local fallback, `feedback_classifier` for natural-language feedback routing, `attribution_judge` for asset usage attribution, `counterexample_checker` for pattern validation, `pattern_mining` for cross-run candidate discovery, `project_pattern_composer` for high-quality pattern cards, and `embedding` for retrieval vectors. Each non-embedding role can declare `fallback` entries. Legacy `routing.*_model` keys are still accepted and are useful for older configs and CLI overrides.
 
-`semantic_judges.enabled=false` keeps self-evolution purely heuristic. Turn it on to add local cheap-model semantic judgement after heuristic candidate recall. Feedback classification is only used for complex feedback by default, attribution only judges relevant loaded assets, pattern mining only judges pairs above `only_after_heuristic_score`, and counterexample checking only validates likely conflicts. All outputs must be structured JSON; unavailable judges fall back to deterministic rules.
+`semantic_judges.enabled=false` keeps self-evolution purely heuristic. Turn it on to add local cheap-model semantic judgement after heuristic candidate recall. Feedback classification is only used for complex feedback by default, attribution only judges relevant loaded assets, pattern mining only judges pairs above `only_after_heuristic_score`, counterexample checking only validates likely conflicts, and `risk_detector` adds a rule-based proposal risk score for governance-sensitive changes. All model-assisted outputs must be structured JSON; unavailable judges fall back to deterministic rules.
 
-`evolution.llm_assisted_proposals=false` keeps experience proposal generation deterministic. Set it to `true` to let `model_roles.proposal_composer` or the legacy `evolution_model` route propose additional memories, skills, evals, failure patterns, harness rules, or routing notes. Those proposals must cite evidence, include confidence plus scope/anti-scope, target only safe `.praxile/` asset paths, and remain pending until accepted.
+`evolution.llm_assisted_proposals=false` keeps experience proposal generation deterministic. Set it to `true` to let `model_roles.proposal_composer` or the legacy `evolution_model` route propose additional memories, skills, evals, failure patterns, harness rules, or routing notes. `llm_timeout_seconds`, `llm_max_tokens`, and `llm_max_proposals` bound that call. Praxile records the attempt under `trajectory.llm_assisted_proposals`, including route, provider/model when available, parse errors, rejected items, and accepted count. Those proposals must cite evidence, include confidence plus scope/anti-scope, target only safe `.praxile/` asset paths, and remain pending until accepted.
 
 `proposal_gate.enabled=true` checks every durable experience proposal against the project constitution before it can be accepted. Weak proposals are suppressed when they lack source task evidence, applicability scope, anti-scope, rollback/target information, or the configured minimum confidence. Suppressed items stay visible in run explanations as rejected learning candidates, not hidden edits.
 
@@ -382,6 +383,8 @@ Project map caching stores a short-lived summary in `.praxile/cache/project_map.
 `executors.parallel_readonly_exploration_enabled=true` runs a safe concurrent batch of read-only project exploration before model action planning. Each batch worker is recorded as a separate `readonly_worker` executor in the trajectory. Reward reports expose `objective_signals.executor_attribution`, including attribution quality, top-level action ownership, worker counts, and failed or blocked exploration observations, so future audit, graph, and proposal review can distinguish primary agent actions from parallel read-only exploration evidence.
 
 `interop_guardrails` protects repositories used by multiple agent runtimes. If one of the configured lock files or environment flags is present, Praxile refuses normal project writes until the signal is removed or the guard is explicitly disabled.
+
+`safety.policy_files` points to JSON/JSONC rule files under `.praxile/` (default: `rules/safety-policy.json`). These project-local rules are evaluated before tool calls and can deny `run_command`, `edit_file`, read actions, browser actions, or any matching action by tool name. Rules must include an `id`, `tool` or `tools`, `message`, optional `risk_level`, and a `match` object such as `command_contains`, `command_prefix`, `path_glob`, `path_contains`, `url_host`, `arg_contains`, or `context_equals`. They are deny-only in the current release; normal experience updates still go through proposal review.
 
 `shell.allow_shell_features=false` keeps pipes, redirects, variable expansion, and command chaining blocked in the normal safe mode. Setting it to `true` allows shell execution only when each executable segment matches a reviewed prefix in `safety.allowed_command_prefixes`; dangerous command patterns and command substitution remain blocked, and redirection targets must stay inside the project.
 
@@ -479,7 +482,8 @@ The generated config uses this structure:
     "port": 8765,
     "max_threads": 16,
     "token_env": "PRAXILE_GATEWAY_TOKEN",
-    "channels_enabled": true
+    "channels_enabled": true,
+    "multi_repo_roots": []
   },
   "channels": {
     "version": 1,
@@ -528,4 +532,4 @@ The generated config uses this structure:
 
 The current release implements channel configuration, binding management, gateway introspection, and local route metadata. It does not yet run production Telegram/Discord bot listeners. That listener layer can be added on top of the same config without changing `.praxile/` state semantics.
 
-The built-in local HTTP gateway uses a bounded worker pool. Tune `gateway.max_threads` when running local API clients with higher concurrency.
+The built-in local HTTP gateway uses a bounded worker pool. Tune `gateway.max_threads` when running local API clients with higher concurrency. The same gateway serves the chat-first Web Console and `/api/*` routes for sessions, runs, model roles, tool catalog, safety policy checks, proposals, assets, Reflect reports/runs, graph status/explain/rebuild, audit checks/bundles, and Spec check/verify.

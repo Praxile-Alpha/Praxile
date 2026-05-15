@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .adapters import GenericJSONLAdapter
 from .audit import (
     audit_json,
     build_asset_audit,
@@ -28,6 +29,7 @@ from .channels import ChannelSystem
 from .consolidation import ConsolidationEngine
 from .config import Config, ProjectPaths, find_project_root
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
+from .eval import EvalRunner, EvalSuite
 from .evolution import EvolutionEngine
 from .feedback import FeedbackSemanticClassifier, build_feedback, extract_feedback_intents
 from .gateway import serve_gateway
@@ -47,6 +49,7 @@ from .reflect import (
 from .reward import RewardEngine
 from .runtime import AgentRuntime
 from .security import SafetyPolicy
+from .snapshot import SnapshotManager
 from .skills import SkillSystem
 from .specs import check_spec_file, format_spec_check, format_spec_compliance, verify_spec_compliance
 from .store import ExperienceStore
@@ -342,6 +345,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_index_rebuild = index_sub.add_parser("rebuild", help="Rebuild the experience index from .praxile assets")
     p_index_rebuild.set_defaults(func=cmd_index_rebuild)
 
+    p_search = sub.add_parser("search", help="Search governed project experience")
+    p_search.add_argument("query")
+    p_search.add_argument("--kind", action="append", default=[], help="Limit to asset kind/type, e.g. memory, skill, rule")
+    p_search.add_argument("--limit", type=int, default=6)
+    p_search.add_argument("--json", action="store_true", help="Print raw JSON results")
+    p_search.set_defaults(func=cmd_search)
+
+    p_propose = sub.add_parser("propose", help="Generate pending experience proposals from an existing trajectory")
+    p_propose.add_argument("trajectory_id", help="Trajectory/task id, or latest")
+    p_propose.add_argument("--dry-run", action="store_true", help="Preview proposals without writing them")
+    p_propose.set_defaults(func=cmd_propose)
+
     p_consolidate = sub.add_parser("consolidate", help="Generate proposal-only experience consolidation suggestions")
     p_consolidate.add_argument("--duplicates", action="store_true", help="Inspect duplicate or overlapping assets")
     p_consolidate.add_argument("--stale", action="store_true", help="Inspect old unused assets")
@@ -435,6 +450,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_rollback.add_argument("id", help="Task ID or accepted proposal ID")
     p_rollback.set_defaults(func=cmd_rollback)
 
+    p_snapshot = sub.add_parser("snapshot", help="Create and list .praxile state snapshots")
+    snapshot_sub = p_snapshot.add_subparsers(dest="snapshot_command", required=True)
+    p_snapshot_create = snapshot_sub.add_parser("create", help="Create a .praxile state snapshot")
+    p_snapshot_create.add_argument("--reason", default="", help="Human-readable snapshot reason")
+    p_snapshot_create.set_defaults(func=cmd_snapshot_create)
+    p_snapshot_list = snapshot_sub.add_parser("list", help="List .praxile state snapshots")
+    p_snapshot_list.set_defaults(func=cmd_snapshot_list)
+
     p_memory = sub.add_parser("memory", help="Memory commands")
     memory_sub = p_memory.add_subparsers(dest="memory_command", required=True)
     p_memory_list = memory_sub.add_parser("list", help="List memory files")
@@ -506,7 +529,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_interop = sub.add_parser("interop", help="Explain optional framework adapter boundaries")
+    interop_sub = p_interop.add_subparsers(dest="interop_command")
+    p_interop_import = interop_sub.add_parser("import-jsonl", help="Import a generic external agent JSONL trace")
+    p_interop_import.add_argument("path", help="Path to a JSONL trace")
+    p_interop_import.add_argument("--generate-proposals", action="store_true", help="Generate experience proposals from the imported trajectory")
+    p_interop_import.add_argument("--write-proposals", action="store_true", help="Write generated proposals to the pending queue")
+    p_interop_import.add_argument("--json", action="store_true", help="Emit machine-readable import summary")
+    p_interop_import.set_defaults(func=cmd_interop_import_jsonl)
     p_interop.set_defaults(func=cmd_interop)
+
+    p_eval = sub.add_parser("eval", help="Run Praxile JSON eval suites")
+    eval_sub = p_eval.add_subparsers(dest="eval_command", required=True)
+    p_eval_run = eval_sub.add_parser("run", help="Run an eval suite")
+    p_eval_run.add_argument("suite", help="Path to eval suite JSON")
+    p_eval_run.add_argument("--output", default=None, help="Write JSON report to this path")
+    p_eval_run.add_argument("--json", action="store_true", help="Emit full JSON report")
+    p_eval_run.set_defaults(func=cmd_eval_run)
     return parser
 
 
@@ -2035,6 +2073,64 @@ def cmd_index_rebuild(args: argparse.Namespace, project_root: Path) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    kinds = [str(item) for item in getattr(args, "kind", []) or []] or None
+    results = store.retrieve(args.query, kinds=kinds, limit=max(1, int(args.limit or 6)))
+    if getattr(args, "json", False):
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return 0
+    if not results:
+        print("No matching experience assets found.")
+        return 0
+    for item in results:
+        score = item.get("final_score", item.get("score", ""))
+        mode = item.get("retrieval_mode") or "keyword"
+        print(f"{item.get('path')}  kind={item.get('kind') or item.get('type')}  score={score}  mode={mode}")
+        why = item.get("why_loaded") or item.get("reason")
+        if why:
+            print(f"  {shorten(str(why), 220)}")
+    return 0
+
+
+def cmd_propose(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    trajectory = store.latest_trajectory() if args.trajectory_id == "latest" else store.get_trajectory(args.trajectory_id)
+    if not trajectory:
+        print(f"No trajectory found: {args.trajectory_id}", file=sys.stderr)
+        return 1
+    proposals = EvolutionEngine(config, router=ModelRouter(config)).generate(trajectory)
+    trajectory["experience_candidates"] = [
+        {
+            "proposal_id": proposal["proposal_id"],
+            "type": proposal["type"],
+            "title": proposal["title"],
+            "risk_level": proposal["risk_level"],
+            "priority": proposal.get("priority"),
+            "confidence": proposal.get("confidence"),
+            "confidence_level": proposal.get("confidence_level"),
+            "evidence_summary": proposal.get("evidence_summary"),
+            "proposal_gate": proposal.get("proposal_gate"),
+            "target_files": proposal.get("target_files", []),
+        }
+        for proposal in proposals
+    ]
+    store.update_trajectory(trajectory)
+    if getattr(args, "dry_run", False):
+        print(f"Generated {len(proposals)} proposal candidate(s) from {trajectory.get('task_id')} (dry run).")
+        for proposal in proposals:
+            print(f"- {proposal['proposal_id']} {proposal['type']} {proposal['risk_level']} {proposal['title']}")
+        return 0
+    for proposal in proposals:
+        store.write_proposal(proposal)
+    print(f"Wrote {len(proposals)} pending proposal(s) from {trajectory.get('task_id')}.")
+    if proposals:
+        print(f"Review with: praxile review --source-run {trajectory.get('task_id')}")
+    return 0
+
+
 def cmd_consolidate(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
@@ -2398,6 +2494,19 @@ def cmd_channel_env(args: argparse.Namespace, project_root: Path) -> int:
 def cmd_rollback(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
+    snapshots = SnapshotManager(config.paths.state)
+    if snapshots.has_snapshot(args.id):
+        result = snapshots.rollback(args.id)
+        store.initialize(config)
+        store.reindex_all()
+        append_jsonl(
+            config.paths.logs / "rollback.jsonl",
+            {"event": "snapshot_rollback", "snapshot_id": args.id, "result": result, "created_at": utc_now()},
+        )
+        print(f"Rolled back snapshot {result['snapshot_id']}")
+        for item in result.get("restored", []):
+            print(f"- restored {item}")
+        return 0
     proposal = store.find_proposal(args.id, status="accepted")
     if proposal:
         rolled = store.rollback_proposal(args.id)
@@ -2424,6 +2533,29 @@ def cmd_rollback(args: argparse.Namespace, project_root: Path) -> int:
             print(f"- {item['path']} ({item['mode']})")
     else:
         print("No edit backups were found for this task.")
+    return 0
+
+
+def cmd_snapshot_create(args: argparse.Namespace, project_root: Path) -> int:
+    config = Config.load(project_root)
+    config.paths.state.mkdir(parents=True, exist_ok=True)
+    snapshot = SnapshotManager(config.paths.state).create_snapshot(
+        reason=str(getattr(args, "reason", "") or "manual snapshot"),
+        source={"type": "manual_cli"},
+    )
+    print(f"Created snapshot {snapshot['snapshot_id']}")
+    print(snapshot["path"])
+    return 0
+
+
+def cmd_snapshot_list(args: argparse.Namespace, project_root: Path) -> int:
+    config = Config.load(project_root)
+    snapshots = SnapshotManager(config.paths.state).list_snapshots()
+    if not snapshots:
+        print("No snapshots.")
+        return 0
+    for item in snapshots:
+        print(f"{item['snapshot_id']}  {item.get('created_at') or ''}  {item.get('reason') or ''}")
     return 0
 
 
@@ -2840,6 +2972,61 @@ def cmd_interop(args: argparse.Namespace, project_root: Path) -> int:
     store.initialize(config)
     print(format_interop_policy(interop_policy(config)))
     return 0
+
+
+def cmd_interop_import_jsonl(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    imported = GenericJSONLAdapter().import_file(Path(args.path).expanduser().resolve())
+    trajectory = imported["trajectory"]
+    proposals: list[dict[str, Any]] = []
+    if args.generate_proposals or args.write_proposals:
+        proposals = EvolutionEngine(config).generate(trajectory)
+        trajectory["experience_candidates"] = proposals
+    store.record_trajectory(trajectory)
+    written = 0
+    if args.write_proposals:
+        for proposal in proposals:
+            store.write_proposal(proposal)
+            written += 1
+    summary = {
+        "task_id": trajectory.get("task_id"),
+        "rows": imported.get("rows"),
+        "source_path": imported.get("source_path"),
+        "generated_proposals": len(proposals),
+        "written_proposals": written,
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        print(f"Imported external JSONL trajectory: {summary['task_id']}")
+        print(f"Rows: {summary['rows']}")
+        print(f"Generated proposals: {summary['generated_proposals']}")
+        print(f"Written proposals: {summary['written_proposals']}")
+    return 0
+
+
+def cmd_eval_run(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    suite = EvalSuite.load(Path(args.suite).expanduser().resolve())
+    runner = EvalRunner(config, store)
+    report = runner.run(suite)
+    output_path = Path(args.output).expanduser().resolve() if args.output else None
+    saved = runner.save_report(report, output_path)
+    report["report_path"] = str(saved)
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print(f"Eval suite: {report['suite']}")
+        print(f"Run: {report['eval_run_id']}")
+        print(f"Cases: {report['case_count']}")
+        print(f"Average score: {report['average_score']}")
+        print(f"Status: {'passed' if report['passed'] else 'failed'}")
+        for case in report["cases"]:
+            print(f"- {case['name']}: score={case['score']} {'passed' if case['passed'] else 'failed'}")
+        print(f"Report: {saved}")
+    return 0 if report["passed"] else 1
 
 
 def print_index_status(status: dict[str, object]) -> None:

@@ -33,7 +33,7 @@ browser = ["playwright>=1.45"]
 praxile = "praxile.cli:main"
 
 [tool.setuptools.package-data]
-praxile = ["py.typed", "README.md", "docs/*.md", "templates/**/*.md", "examples/**/*.json"]
+praxile = ["py.typed", "README.md", "docs/*.md", "templates/**/*.md", "templates/**/*.json", "examples/**/*.json"]
 
 [tool.setuptools.packages.find]
 include = ["praxile", "praxile.*"]

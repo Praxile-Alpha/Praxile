@@ -274,6 +274,179 @@ class CounterexampleSemanticChecker:
             return {"active": False, "role": role, "error": f"{exc.__class__.__name__}: {exc}"}
 
 
+class RiskDetectorJudge:
+    """Rule-based semantic risk detector for proposal governance."""
+
+    def __init__(self, config: Config):
+        self.config = config
+
+    def evaluate(self, proposal: dict[str, Any], trajectory: dict[str, Any] | None = None) -> dict[str, Any]:
+        if not semantic_judge_enabled(self.config, "risk_detector"):
+            return {"active": False, "reason": "semantic risk detector disabled"}
+        trajectory = trajectory or {}
+        score = _base_risk_score(proposal)
+        reasons: list[str] = []
+        proposal_type = str(proposal.get("type") or "")
+        target_files = [str(item) for item in proposal.get("target_files") or []]
+        changes = proposal.get("changes") if isinstance(proposal.get("changes"), list) else []
+        change_paths = [str(item.get("path")) for item in changes if isinstance(item, dict) and item.get("path")]
+        paths = list(dict.fromkeys([*target_files, *change_paths]))
+
+        if proposal_type in {"architecture_gate", "frozen_boundary", "routing", "harness_rule"}:
+            score += 0.18
+            reasons.append(f"proposal_type `{proposal_type}` changes future runtime or architecture governance")
+        if proposal_type in {"asset_deprecate", "asset_archive", "asset_supersede"}:
+            score += 0.12
+            reasons.append("proposal changes active experience asset lifecycle")
+        if any(_path_is_sensitive(path) for path in paths):
+            score += 0.20
+            reasons.append("proposal targets sensitive or high-leverage paths")
+        if len(paths) >= 4:
+            score += 0.10
+            reasons.append("proposal affects several files")
+        confidence = _score(proposal.get("confidence"), default=0.5)
+        if confidence < 0.5:
+            score += 0.12
+            reasons.append("proposal confidence is low")
+        if (trajectory.get("silent_failure_signals") or []) and proposal_type not in {"harness_rule", "failure_pattern"}:
+            score += 0.10
+            reasons.append("source run contains silent-failure signals")
+        score = round(max(0.0, min(1.0, score)), 4)
+        high = _float_config(self.config.get("semantic_judges", "risk_detector", "high_risk_score", default=0.75), 0.75)
+        medium = _float_config(self.config.get("semantic_judges", "risk_detector", "medium_risk_score", default=0.45), 0.45)
+        if score >= high:
+            severity = "high"
+            recommended = "inspect"
+        elif score >= medium:
+            severity = "medium"
+            recommended = "inspect_or_edit"
+        else:
+            severity = "low"
+            recommended = "accept"
+        return {
+            "active": True,
+            "judge": "risk_detector",
+            "score": score,
+            "severity": severity,
+            "recommended_action": recommended,
+            "requires_human_review": severity in {"medium", "high"},
+            "reasons": reasons or ["No high-risk proposal signals matched."],
+        }
+
+
+class PatternMinerJudge:
+    """Rule/statistics judge for repeated trajectory command and repair patterns."""
+
+    def __init__(self, config: Config):
+        self.config = config
+
+    def evaluate(self, trajectory: dict[str, Any], proposal: dict[str, Any] | None = None) -> dict[str, Any]:
+        if not semantic_judges_enabled(self.config):
+            return {"active": False, "reason": "semantic judges disabled"}
+        actions = trajectory.get("actions") if isinstance(trajectory.get("actions"), list) else []
+        commands: list[str] = []
+        failed_actions = 0
+        edited_paths: list[str] = []
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            if action.get("status") in {"failure", "failed", "blocked"}:
+                failed_actions += 1
+            input_data = action.get("input") if isinstance(action.get("input"), dict) else {}
+            command = input_data.get("command")
+            if command:
+                commands.append(str(command))
+            path = input_data.get("path")
+            if path:
+                edited_paths.append(str(path))
+        repeated_commands = sorted(command for command in set(commands) if commands.count(command) > 1)
+        repeated_dirs = sorted({Path(path).parts[0] for path in edited_paths if Path(path).parts})
+        score = 0.2
+        reasons: list[str] = []
+        if repeated_commands:
+            score += 0.35
+            reasons.append(f"repeated command(s): {', '.join(repeated_commands[:3])}")
+        if failed_actions:
+            score += 0.20
+            reasons.append(f"{failed_actions} failed or blocked action(s)")
+        if len(repeated_dirs) >= 2:
+            score += 0.15
+            reasons.append("edits touched multiple top-level areas")
+        if proposal and proposal.get("type") in {"failure_pattern", "harness_rule", "skill_create"}:
+            score += 0.10
+            reasons.append(f"proposal type `{proposal.get('type')}` is pattern-bearing")
+        score = round(max(0.0, min(1.0, score)), 4)
+        return {
+            "active": True,
+            "judge": "pattern_miner",
+            "score": score,
+            "patterns": {
+                "repeated_commands": repeated_commands,
+                "failed_actions": failed_actions,
+                "edited_top_level_dirs": repeated_dirs,
+            },
+            "reasons": reasons or ["No strong repeated command or repair pattern found."],
+        }
+
+
+class FeedbackClassifierJudge:
+    """Rule-first feedback judge used when model-based classification is unnecessary."""
+
+    def __init__(self, config: Config):
+        self.config = config
+
+    def evaluate(self, text: str) -> dict[str, Any]:
+        if not semantic_judges_enabled(self.config):
+            return {"active": False, "reason": "semantic judges disabled", "events": []}
+        sentiment = _classify_feedback_sentiment(text)
+        return {
+            "active": True,
+            "judge": "feedback_classifier",
+            "sentiment": sentiment,
+            "events": [
+                {
+                    "target_type": "run",
+                    "sentiment": sentiment,
+                    "feedback_type": "run_satisfaction" if sentiment == "positive" else "run_failure" if sentiment == "negative" else "general_feedback",
+                    "raw_text": text,
+                    "requires_confirmation": sentiment == "negative",
+                }
+            ],
+        }
+
+
+class DuplicationJudge:
+    """Simple proposal duplication judge based on title/type/target overlap."""
+
+    def __init__(self, config: Config):
+        self.config = config
+
+    def evaluate(self, proposal: dict[str, Any], existing: list[dict[str, Any]]) -> dict[str, Any]:
+        if not semantic_judges_enabled(self.config):
+            return {"active": False, "reason": "semantic judges disabled"}
+        proposal_type = str(proposal.get("type") or "")
+        title = str(proposal.get("title") or "").lower()
+        targets = {str(item) for item in proposal.get("target_files") or []}
+        matches: list[dict[str, Any]] = []
+        for asset in existing:
+            asset_type = str(asset.get("type") or asset.get("kind") or "")
+            asset_title = str(asset.get("title") or "").lower()
+            asset_path = str(asset.get("path") or "")
+            type_match = proposal_type and proposal_type in {asset_type, _proposal_type_for_asset(asset_type)}
+            title_match = title and (title in asset_title or asset_title in title)
+            target_match = bool(targets and asset_path in targets)
+            if type_match and (title_match or target_match):
+                matches.append({"path": asset_path, "title": asset.get("title"), "type": asset_type})
+        score = 1.0 if matches else 0.0
+        return {
+            "active": True,
+            "judge": "duplication",
+            "score": score,
+            "duplicate": bool(matches),
+            "matches": matches[:5],
+        }
+
+
 def _messages(system: str, user: str) -> list[dict[str, str]]:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
@@ -284,6 +457,59 @@ def _asset_path(asset: dict[str, Any]) -> str:
 
 def _score_value(item: dict[str, Any]) -> float:
     return _score(item.get("final_score", item.get("score")), default=0.0)
+
+
+def _base_risk_score(proposal: dict[str, Any]) -> float:
+    level = str(proposal.get("risk_level") or "low").lower()
+    if level == "high":
+        return 0.65
+    if level == "medium":
+        return 0.38
+    return 0.18
+
+
+def _path_is_sensitive(path: str) -> bool:
+    normalized = path.replace("\\", "/").lower()
+    markers = [
+        ".praxile/config",
+        "rules/frozen-boundaries",
+        "rules/architecture-gates",
+        "rules/harness-rules",
+        "rules/safety-policy",
+        "auth",
+        "session",
+        "permission",
+        "migration",
+        "schema",
+        ".env",
+        "secret",
+        "credential",
+    ]
+    return any(marker in normalized for marker in markers)
+
+
+def _classify_feedback_sentiment(text: str) -> str:
+    lower = text.lower()
+    negative = {"wrong", "bad", "harmful", "misleading", "too generic", "不对", "错了", "误导", "太泛", "没价值"}
+    positive = {"good", "great", "helpful", "works", "useful", "干得好", "不错", "准确", "有用", "很好"}
+    if any(term in lower for term in negative):
+        return "negative"
+    if any(term in lower for term in positive):
+        return "positive"
+    return "neutral"
+
+
+def _proposal_type_for_asset(asset_type: str) -> str:
+    mapping = {
+        "memory": "memory_update",
+        "skill": "skill_create",
+        "eval_checklist": "eval_case",
+        "eval_case": "eval_case",
+        "failure_pattern": "failure_pattern",
+        "harness_rule": "harness_rule",
+        "project_pattern": "project_pattern",
+    }
+    return mapping.get(asset_type, asset_type)
 
 
 def _score(value: Any, *, default: float) -> float:

@@ -78,6 +78,11 @@
       "role": "counterexample_checker",
       "timeout_seconds": 12,
       "max_tokens": 900
+    },
+    "risk_detector": {
+      "enabled": true,
+      "high_risk_score": 0.75,
+      "medium_risk_score": 0.45
     }
   },
   "search": {
@@ -114,6 +119,7 @@
     "llm_model_role": "proposal_composer",
     "llm_timeout_seconds": 20,
     "llm_max_tokens": 1800,
+    "llm_max_proposals": 3,
     "consolidation_min_duplicates": 2,
     "consolidation_stale_days": 90,
     "consolidation_low_value_max_confidence": 0.4
@@ -266,6 +272,10 @@
     "protected_paths": [
       ".praxile"
     ],
+    "policy_files": [
+      "rules/safety-policy.json"
+    ],
+    "policy_rules": [],
     "backup_max_files": 500,
     "backup_max_bytes": 200000000
   },
@@ -615,7 +625,8 @@
     "port": 8765,
     "max_threads": 16,
     "token_env": "PRAXILE_GATEWAY_TOKEN",
-    "channels_enabled": false
+    "channels_enabled": false,
+    "multi_repo_roots": []
   },
   "channels": {
     "version": 1,

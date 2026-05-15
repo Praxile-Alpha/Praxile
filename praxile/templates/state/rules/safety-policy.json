@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "description": "Project-local safety policy. Rules are checked before Praxile tool calls and can only deny/block.",
+  "rules": [
+    {
+      "id": "deny-root-deleting-shell",
+      "tool": "run_command",
+      "action": "deny",
+      "risk_level": "high",
+      "message": "Dangerous root/system deletion command blocked by project safety policy.",
+      "match": {
+        "command_contains": [
+          "rm -rf /",
+          "rm -fr /",
+          "sudo rm",
+          "diskutil erase"
+        ]
+      }
+    },
+    {
+      "id": "deny-direct-harness-state-edits",
+      "tool": "edit_file",
+      "action": "deny",
+      "risk_level": "high",
+      "message": "Direct writes to Praxile state are blocked. Use proposals and review/accept instead.",
+      "match": {
+        "path_glob": [
+          ".praxile/**"
+        ]
+      }
+    }
+  ]
+}

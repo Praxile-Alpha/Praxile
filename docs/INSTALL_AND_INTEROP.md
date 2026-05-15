@@ -157,13 +157,14 @@ praxile doctor
 praxile run "Fix a small bug" --test-command "python -m pytest"
 ```
 
-OpenClaw-specific memory, skills, trajectory formats, or runtime hooks should require a named adapter, for example a future:
+OpenClaw-specific memory, skills, trajectory formats, or runtime hooks should require a named adapter. The Alpha release includes a minimal generic JSONL import adapter for external agent traces:
 
 ```bash
-praxile attach openclaw
+praxile interop import-jsonl path/to/external-trace.jsonl --generate-proposals
+praxile interop import-jsonl path/to/external-trace.jsonl --write-proposals
 ```
 
-That command is not implemented in the MVP. Until then, OpenClaw interop should be described as endpoint/config compatibility, not native runtime integration.
+This imports the external trace as a Praxile trajectory and can optionally generate pending experience proposals. It does not sync external memory, install external skills, or let another framework own `.praxile/` state. Native Hermes/OpenClaw runtime adapters remain future work.
 
 ## Interop Contract
 

@@ -11,6 +11,7 @@ Praxile enforces the following guardrails by default:
 - **Dangerous Commands Blocked**: Dangerous shell patterns are blocked by default. This includes `rm -rf`, `sudo`, `su`, `dd if=`, `mkfs`, recursive `chmod`/`chown`, `git reset`, `git clean`, shutdown/reboot, and pipe-to-shell installers.
 - **Strict Shell Mode**: Compound shell commands, command substitution, most pipes, and unapproved command prefixes are blocked in safe mode. If `shell.allow_shell_features=true` is enabled, execution is still limited to reviewed prefixes and project-local redirection targets.
 - **Allowed Commands**: Allowed commands default to safe test/lint/build/status operations such as `python -m pytest`, `npm test`, `npm run lint`, `npm run build`, `cargo test`, `go test`, `git status`, and `git diff`.
+- **Project Safety Policy**: `.praxile/rules/safety-policy.json` adds repo-local deny rules that are checked before tool calls. The current schema supports matching on tool name, command text/prefix, path globs, URL hosts, arguments, and execution context. Gateway exposes `/api/safety/policy`, `/api/safety/check-command`, `/api/safety/check-path`, and `/api/safety/check-tool` for dry-run inspection.
 
 ## 2. Governed Experience & State Security
 

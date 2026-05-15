@@ -90,14 +90,14 @@ flowchart TB
 ```mermaid
 flowchart TB
     L1["Input Layer<br/>User Task · Spec · Feedback"]
-    L2["Interface Layer<br/>CLI · Terminal · Gateway"]
+    L2["Interface Layer<br/>CLI · Terminal · Gateway (Web Console)"]
     L3["Runtime Harness<br/>Task Analyzer · Model Router · Tools · Tests · Safety · Workspace"]
     L4["Trajectory Ledger<br/>Actions · Observations · Diffs · Commands · Artifacts"]
     L5["Experience Engine<br/>Reward · Evidence · Episodes · Patterns"]
     L6["Governance Layer<br/>Silent Failure · Proposal Gate · Human Review"]
     L7["Repository Assets<br/>Memory · Skills · Rules · Evals · Patterns · Boundaries"]
     L8["Provenance & Audit<br/>Graph · Redaction · CI Gate · Rollback"]
-    L9["Retrieval Layer<br/>FTS · Vector · Attribution · Consolidation"]
+    L9["Retrieval Layer<br/>FTS · Vector · Attribution · Consolidation · Reflect"]
 
     L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L9
     L4 --> L8

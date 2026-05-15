@@ -3,32 +3,20 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Protocol
 from typing import Any
 
 from .config import Config
 from .evidence import EvidenceExtractor
 from .episodes import EpisodeBuilder
 from .patterns import PatternMiner
-from .json_utils import RobustJSONError, parse_json_value
-from .model import ModelError, ModelUnavailable
+from .llm import LLMClient, LLMProposalParseError, build_proposal_generation_messages, parse_proposal_response
+from .model import ModelError, ModelRouter, ModelUnavailable
+from .semantic_judges import RiskDetectorJudge
 from .silent_failure import apply_silent_failure_to_proposals
-from .utils import new_id, slugify, unified_diff, utc_now
+from .utils import append_jsonl, new_id, slugify, unified_diff, utc_now
 
 
-class EvolutionRouter(Protocol):
-    def chat(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        purpose: str = "default",
-        private: bool = False,
-        high_risk: bool = False,
-        temperature: float = 0.2,
-        max_tokens: int = 4096,
-        timeout: int | None = None,
-    ) -> dict[str, Any]:
-        ...
+EvolutionRouter = Any
 
 
 class EvolutionEngine:
@@ -36,6 +24,14 @@ class EvolutionEngine:
         self.config = config
         self.paths = config.paths
         self.router = router
+
+    def _llm_router(self) -> EvolutionRouter | None:
+        if self.router is not None:
+            return self.router
+        if not self.config.get("evolution", "llm_assisted_proposals", default=False):
+            return None
+        self.router = ModelRouter(self.config)
+        return self.router
 
     def generate(self, trajectory: dict[str, Any]) -> list[dict[str, Any]]:
         # Phase 1: Extract Evidence
@@ -94,6 +90,7 @@ class EvolutionEngine:
         if routing:
             proposals.append(routing)
         proposals.extend(self._llm_assisted_proposals(trajectory))
+        self._apply_risk_detector_to_proposals(proposals, trajectory)
         self._apply_llm_judge_to_proposals(proposals, trajectory.get("llm_judge_reward", {}))
         apply_silent_failure_to_proposals(proposals, trajectory.get("silent_failure_signals") or [])
         filtered = self._filter_suppressed_proposals(proposals)
@@ -149,6 +146,41 @@ class EvolutionEngine:
                         "overgeneralization_risk": overgeneralization_risk,
                     }
                 )
+
+    def _apply_risk_detector_to_proposals(self, proposals: list[dict[str, Any]], trajectory: dict[str, Any]) -> None:
+        if not proposals:
+            trajectory["semantic_risk_judges"] = []
+            return
+        judge = RiskDetectorJudge(self.config)
+        results: list[dict[str, Any]] = []
+        for proposal in proposals:
+            result = judge.evaluate(proposal, trajectory)
+            if not result.get("active"):
+                continue
+            proposal["semantic_risk_judge"] = result
+            if result.get("requires_human_review"):
+                proposal["requires_human_review"] = True
+            if result.get("severity") == "high":
+                proposal["risk_level"] = "high"
+                proposal["recommended_action_override"] = "inspect"
+            results.append(
+                {
+                    "proposal_id": proposal.get("proposal_id"),
+                    "proposal_type": proposal.get("type"),
+                    **result,
+                }
+            )
+        trajectory["semantic_risk_judges"] = results
+        for result in results:
+            append_jsonl(
+                self.paths.logs / "semantic_judges.jsonl",
+                {
+                    "event": "risk_detector",
+                    "task_id": trajectory.get("task_id"),
+                    "created_at": utc_now(),
+                    "result": result,
+                },
+            )
 
     def _filter_suppressed_proposals(self, proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rejected = _recent_rejected_proposals(self.paths.proposals_rejected, limit=80)
@@ -975,98 +1007,122 @@ class EvolutionEngine:
         )
 
     def _llm_assisted_proposals(self, trajectory: dict[str, Any]) -> list[dict[str, Any]]:
+        state = {
+            "enabled": bool(self.config.get("evolution", "llm_assisted_proposals", default=False)),
+            "attempted": False,
+            "status": "disabled",
+            "model_role": str(self.config.get("evolution", "llm_model_role", default="proposal_composer")),
+            "generated": 0,
+            "accepted": 0,
+            "rejected": 0,
+            "errors": [],
+        }
+        trajectory["llm_assisted_proposals"] = state
         if not self.config.get("evolution", "llm_assisted_proposals", default=False):
             return []
-        if self.router is None:
+        router = self._llm_router()
+        if router is None:
+            state["status"] = "no_router"
             return []
-        messages = self._llm_evolution_messages(trajectory)
         analysis = trajectory.get("task_analysis", {})
         purpose = str(self.config.get("evolution", "llm_model_role", default="proposal_composer"))
+        client = LLMClient(
+            self.config,
+            model_role=purpose,
+            timeout=int(self.config.get("evolution", "llm_timeout_seconds", default=20)),
+            max_tokens=int(self.config.get("evolution", "llm_max_tokens", default=1800)),
+            router=router,
+        )
+        messages = self._llm_evolution_messages(trajectory)
+        state["attempted"] = True
+        state["status"] = "calling_model"
+        route = client.describe_route(
+            private=bool(analysis.get("privacy_sensitive")),
+            high_risk=bool(analysis.get("high_risk")),
+        )
+        if route is not None:
+            state["route"] = route
+        elif hasattr(router, "describe_route"):
+            try:
+                state["route"] = router.describe_route(
+                    purpose,
+                    private=bool(analysis.get("privacy_sensitive")),
+                    high_risk=bool(analysis.get("high_risk")),
+                )
+            except Exception as exc:  # pragma: no cover - optional protocol method
+                state["route_error"] = str(exc)
         try:
-            response = self.router.chat(
+            response = client.complete_messages(
                 messages,
-                purpose=purpose,
                 private=bool(analysis.get("privacy_sensitive")),
                 high_risk=bool(analysis.get("high_risk")),
                 temperature=0.1,
-                max_tokens=int(self.config.get("evolution", "llm_max_tokens", default=1800)),
-                timeout=int(self.config.get("evolution", "llm_timeout_seconds", default=20)),
             )
-            parsed = parse_json_value(response.get("content", ""))
-        except (RobustJSONError, ModelError, ModelUnavailable, KeyError, TypeError, ValueError):
-            return []
-
-        raw_items: list[Any]
-        if isinstance(parsed, dict) and isinstance(parsed.get("proposals"), list):
-            raw_items = parsed["proposals"]
-        elif isinstance(parsed, list):
-            raw_items = parsed
-        else:
+            raw_items = self._parse_proposals(str(response.get("content", "")))
+            state["provider"] = response.get("provider")
+            state["model"] = response.get("model")
+            if isinstance(response.get("route"), dict):
+                state["route"] = response["route"]
+        except (LLMProposalParseError, ModelError, ModelUnavailable, KeyError, TypeError, ValueError) as exc:
+            state["status"] = "failed"
+            state["errors"].append(str(exc))
             return []
 
         proposals: list[dict[str, Any]] = []
-        for item in raw_items[:3]:
-            proposal = self._llm_item_to_proposal(trajectory, item)
+        max_items = max(1, int(self.config.get("evolution", "llm_max_proposals", default=3) or 3))
+        state["generated"] = len(raw_items)
+        rejection_reasons: list[str] = []
+        for item in raw_items[:max_items]:
+            proposal, reason = self._llm_item_to_proposal_result(trajectory, item)
             if proposal:
+                proposal["llm_assisted"] = {
+                    "model_role": purpose,
+                    "provider": response.get("provider"),
+                    "model": response.get("model"),
+                    "route": response.get("route") if isinstance(response.get("route"), dict) else state.get("route"),
+                }
                 proposals.append(proposal)
+            elif reason:
+                rejection_reasons.append(reason)
+        state["accepted"] = len(proposals)
+        state["rejected"] = max(0, min(len(raw_items), max_items) - len(proposals))
+        if rejection_reasons:
+            state["rejection_reasons"] = rejection_reasons[:6]
+        state["status"] = "completed" if proposals else "no_valid_proposals"
         return proposals
 
     def _llm_evolution_messages(self, trajectory: dict[str, Any]) -> list[dict[str, str]]:
-        compact = {
-            "task_id": trajectory.get("task_id"),
-            "user_task": trajectory.get("user_task"),
-            "task_analysis": trajectory.get("task_analysis"),
-            "result": trajectory.get("result"),
-            "reward_report": trajectory.get("reward_report"),
-            "actions": [
-                {
-                    "step": action.get("step"),
-                    "action_type": action.get("action_type"),
-                    "status": action.get("status"),
-                    "executor": action.get("executor"),
-                    "output": str(action.get("observation", {}).get("output", ""))[:500],
-                }
-                for action in trajectory.get("actions", [])[:12]
-            ],
-            "executor_attribution": (
-                (trajectory.get("reward_report", {}).get("objective_signals", {}) or {}).get("executor_attribution")
-                if isinstance(trajectory.get("reward_report", {}).get("objective_signals", {}), dict)
-                else None
-            ),
-        }
-        system = (
-            "You propose optional Praxile experience assets from one trajectory. "
-            "Return JSON only: {\"proposals\":[...]}. Each proposal must include type, title, reason, risk_level, "
-            "evidence, confidence, applicability_scope, anti_scope, and changes. "
-            "Evidence must cite concrete trajectory signals. Do not propose secrets, hidden files, safety bypasses, "
-            "architecture gates, frozen boundaries, or direct config mutations. All output is pending user approval."
-        )
-        user = (
-            "Allowed types: memory_update, skill_create, eval_case, failure_pattern, harness_rule, routing.\n"
-            "Allowed change roots: memory/, skills/, evals/checklists/, evals/regression-cases/, "
-            "experience/failures/, rules/harness-rules/ except default.md.\n"
-            f"Trajectory JSON:\n{json.dumps(compact, ensure_ascii=False)}"
-        )
-        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        return build_proposal_generation_messages(trajectory)
+
+    def _parse_proposals(self, response: str) -> list[dict[str, Any]]:
+        return parse_proposal_response(response)
 
     def _llm_item_to_proposal(self, trajectory: dict[str, Any], item: Any) -> dict[str, Any] | None:
+        proposal, _reason = self._llm_item_to_proposal_result(trajectory, item)
+        return proposal
+
+    def _llm_item_to_proposal_result(self, trajectory: dict[str, Any], item: Any) -> tuple[dict[str, Any] | None, str | None]:
         if not isinstance(item, dict):
-            return None
+            return None, "proposal item is not an object"
         evidence = item.get("evidence")
         if not evidence or not isinstance(evidence, list) or not all(isinstance(value, str) and value.strip() for value in evidence):
-            return None
+            return None, "proposal evidence must be a non-empty string list"
         changes = item.get("changes")
+        if (not isinstance(changes, list) or not changes) and item.get("content") is not None:
+            changes = [_default_llm_change(item)]
         if not isinstance(changes, list) or not changes:
-            return None
+            return None, "proposal changes must be a non-empty list"
         normalized_changes: list[dict[str, str]] = []
         for change in changes[:3]:
             if not isinstance(change, dict):
-                return None
+                return None, "proposal change is not an object"
             operation = str(change.get("operation", "write"))
             path = str(change.get("path", ""))
             content = str(change.get("content", ""))
-            if operation not in {"write", "append"} or not self._llm_change_path_allowed(path):
-                return None
+            if operation not in {"write", "append"}:
+                return None, f"unsupported proposal change operation: {operation}"
+            if not self._llm_change_path_allowed(path):
+                return None, f"unsafe proposal change path: {path}"
             normalized_changes.append({"operation": operation, "path": path, "content": content})
         proposal_type = str(item.get("type", "memory_update"))
         if proposal_type not in {
@@ -1077,28 +1133,28 @@ class EvolutionEngine:
             "harness_rule",
             "routing",
         }:
-            return None
+            return None, f"unsupported proposal type: {proposal_type}"
         confidence = item.get("confidence", 0.5)
         try:
             confidence_value = max(0.0, min(1.0, float(confidence)))
         except (TypeError, ValueError):
-            return None
+            return None, "proposal confidence must be numeric"
         return self._proposal(
             source_task_id=trajectory["task_id"],
             proposal_type=proposal_type,
             title=str(item.get("title") or f"LLM-assisted {proposal_type}"),
-            reason=str(item.get("reason") or "LLM-assisted experience proposal with cited evidence."),
+            reason=str(item.get("reason") or item.get("rationale") or "LLM-assisted experience proposal with cited evidence."),
             risk_level=str(item.get("risk_level") or "low"),
             evidence=evidence,
             confidence=confidence_value,
             affected_files=_edited_paths(trajectory),
-            trigger_reason=str(item.get("trigger_reason") or item.get("reason") or "LLM-assisted proposal with cited evidence."),
+            trigger_reason=str(item.get("trigger_reason") or item.get("reason") or item.get("rationale") or "LLM-assisted proposal with cited evidence."),
             future_applicability=str(item.get("future_applicability") or item.get("applicability_scope") or "Only similar future tasks with matching evidence."),
             applicability_scope=str(item.get("applicability_scope") or "Only similar future tasks with matching evidence."),
             anti_scope=str(item.get("anti_scope") or "Do not apply outside the cited evidence and project scope."),
             generated_by="llm_assisted_evolution",
             changes=normalized_changes,
-        )
+        ), None
 
     def _llm_change_path_allowed(self, path: str) -> bool:
         if not path or path != path.strip():
@@ -1424,6 +1480,21 @@ def _recent_rejected_proposals(directory: Path, *, limit: int) -> list[dict[str,
         if isinstance(payload, dict):
             rows.append(payload)
     return rows
+
+
+def _default_llm_change(item: dict[str, Any]) -> dict[str, str]:
+    proposal_type = str(item.get("type") or "memory_update")
+    title = slugify(str(item.get("title") or proposal_type), max_length=48)
+    content = str(item.get("content") or "")
+    paths = {
+        "memory_update": f"memory/llm-{title}.md",
+        "skill_create": f"skills/{title}/SKILL.md",
+        "eval_case": f"evals/checklists/{title}.md",
+        "failure_pattern": f"experience/failures/{title}.md",
+        "harness_rule": f"rules/harness-rules/{title}.md",
+        "routing": f"rules/harness-rules/{title}.md",
+    }
+    return {"path": paths.get(proposal_type, f"memory/llm-{title}.md"), "operation": "write", "content": content}
 
 
 def _matching_rejections(proposal: dict[str, Any], rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:

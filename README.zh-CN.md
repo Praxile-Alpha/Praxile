@@ -39,6 +39,8 @@
 
 它围绕 Coding Agent 的工作过程运行：记录环境交互，构建 trajectory，计算 reward 与风险信号，提取 evidence，生成可审查 proposal，并且只在人工审批后写入长期仓库知识。
 
+Praxile 内置了一个**以聊天为先 (Chat-first) 的 Web Console**，不仅为你提供熟悉的 Agent 对话界面，还在侧边栏深度融合了经验治理、合规审计和 Spec 校验能力。
+
 Praxile **不是**另一个通用 Coding Agent，**不是**隐藏式全局记忆系统，也**不是** Spec Kit 的替代品。
 
 它面向希望长期使用 AI Coding Agent 的团队和开发者：让 Agent 工作流随着使用逐步积累可复用经验，同时不失去对“项目到底应该记住什么”的控制权。
@@ -150,32 +152,26 @@ flowchart LR
 
 ## 功能亮点
 
+- **以聊天为先的工作台 (Chat-First Web Console)**  
+  零外部依赖的本地工作台（`praxile gateway serve`），提供经典的三栏式布局：聊天区、执行明细与右侧治理上下文面板。
 - **仓库本地经验**  
   Memories、skills、rules、evals、failure patterns、project patterns、frozen boundaries、architecture gates 等都保存在 `.praxile/` 下。
-
 - **Spec-aware execution**  
   可选读取 spec、plan、task、constitution 上下文，并影响 reward、silent-failure signals 与 proposal gate。
-
 - **Evidence-backed proposals**  
   长期变更以 proposal 形式生成，包含 source run、evidence summary、confidence、applicability scope、anti-scope 和 rollback path。
-
 - **Proposal gate 与人工 review**  
   低证据、低置信、缺少范围约束或存在风险的学习候选可以在进入 review 前被抑制。
-
 - **Silent-failure detection**  
   识别看似成功但验证薄弱、范围过大、缺少 spec 或缺少归因的运行风险。
-
 - **Praxile Reflect**  
   离线、proposal-governed 的经验治理能力：识别重复经验、过期资产、有害资产、重复静默失败、被拒绝 proposal 模式和高价值 pattern。
-
 - **Reward and attribution**  
   区分任务成功、回归安全、过程安全、成本、经验价值、用户反馈和 asset attribution。
-
 - **Experience graph and audit chain**  
   从 spec、run、proposal、asset、feedback、reflect report 和 future retrieval 中构建可重建的本地来源关系图。
-
 - **Safety and rollback**  
-  内置敏感路径保护、危险命令阻断、备份、architecture gate、workspace isolation 和 proposal rollback。
+  内置敏感路径保护、危险命令阻断、项目本地 `.praxile/rules/safety-policy.json`、备份、architecture gate、workspace isolation 和 proposal rollback。
 
 ---
 
@@ -337,7 +333,16 @@ praxile run "Fix the failing parser test" --test-command "python -m pytest"
 praxile run "Implement search API"   --spec docs/specs/search.md   --test-command "python -m pytest"
 ```
 
-### 4. 审查与解释
+### 4. 使用 Web Console (强烈推荐)
+
+启动内置的可视化、Chat-first 控制台，更直观地与 Agent 对话并进行经验审核：
+
+```bash
+praxile gateway serve --host 127.0.0.1 --port 8765
+```
+然后在浏览器中打开 `http://127.0.0.1:8765/`。
+
+### 5. 审查与解释
 
 ```bash
 praxile review --interactive
@@ -458,7 +463,10 @@ Praxile 当前处于 **Alpha** 阶段。
 - reward report；
 - evidence 和 proposal generation；
 - proposal gate；
+- `propose`、`search`、index maintenance 与应用前 snapshot；
+- generic JSONL 外部轨迹导入与 JSON eval suite runner；
 - review / accept / reject；
+- chat-first 本地 Web Console，包含 Reflect、Graph、Audit、Spec 与 Safety 面板；
 - repository-local assets；
 - retrieval 和 explain；
 - spec-aware context；
@@ -494,9 +502,11 @@ Praxile 当前处于 **Alpha** 阶段。
 - [Architecture](docs/ARCHITECTURE.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
+- [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)
+- [Web Console](docs/WEB_CONSOLE.md)
 - [Praxile Reflect](docs/REFLECT.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
-- [Audit Governance](docs/audit-governance.md)
+- [Governance](docs/GOVERNANCE.md)
 - [Install And Interop](docs/INSTALL_AND_INTEROP.md)
 - [Testing Guide](docs/contributing-testing.md)
 - [Security Policy](docs/SECURITY_MODEL.md)

@@ -354,7 +354,7 @@ Every proposal carries provenance and scope to reduce experience pollution:
 }
 ```
 
-LLM-assisted evolution is optional and off by default. When enabled, it can only add pending proposals with concrete trajectory evidence, confidence, applicability scope, anti-scope, and safe `.praxile/` target paths. It cannot create architecture gates, frozen boundaries, config mutations, or safety bypasses.
+LLM-assisted evolution is optional and off by default. When enabled, Praxile routes the call through `evolution.llm_model_role` (default `proposal_composer`) or the legacy `evolution_model` route. It can only add pending proposals with concrete trajectory evidence, confidence, applicability scope, anti-scope, and safe `.praxile/` target paths. It cannot create architecture gates, frozen boundaries, config mutations, or safety bypasses. Each attempt is recorded on the trajectory under `llm_assisted_proposals`, including route/provider/model metadata, parse failures, rejected unsafe items, and accepted proposal count.
 
 Proposal review is intentionally written in human decision language. The CLI shows what each proposal means, the recommended action (`accept`, `inspect`, `reject_or_edit`, or `inspect_duplicate`), why that recommendation was chosen, affected future retrieval/runtime behavior, duplicate warnings, and the rollback command. `praxile review --recommended <ACTION>` lets a maintainer review by decision bucket instead of raw proposal type.
 

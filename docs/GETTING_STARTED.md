@@ -134,7 +134,21 @@ Interactive review explains each proposal with a recommended action, the reason,
 
 `praxile accept --all-low-risk` is a dry run by default. Add `--yes` to apply after reviewing the preview. Architecture gates, frozen boundaries, harness rules, and routing-policy proposals require explicit single-proposal review and are not batch-accepted by `--all-low-risk`.
 
-Use `--dry-run` when you want Praxile to analyze, retrieve context, and record a trajectory without modifying files or running shell commands. Use `praxile index status` to inspect experience index health and `praxile index rebuild` if the SQLite/FTS index becomes stale after manual `.praxile/` edits.
+Use `--dry-run` when you want Praxile to analyze, retrieve context, and record a trajectory without modifying files or running shell commands. Use `praxile propose <RUN_ID>` when you imported or edited a trajectory and want to regenerate pending experience proposals without rerunning the task.
+
+Use `praxile index status` to inspect experience index health and `praxile index rebuild` if the SQLite/FTS/vector index becomes stale after manual `.praxile/` edits. Use `praxile search "retry timeout backoff"` to search governed memory, skills, rules, evals, failure patterns, and project patterns from the terminal.
+
+Use `praxile interop import-jsonl external-trace.jsonl --generate-proposals` to import a generic external agent trace into Praxile's trajectory/proposal loop without making the external framework own `.praxile/` state. Use `--write-proposals` only when you want generated proposals added to the pending review queue.
+
+Use `praxile eval run eval_suites/basic.json --output eval-report.json` to run a JSON eval suite against Praxile proposal generation. Eval reports include per-case metrics, generated proposal summaries, and an average score; they do not accept or apply proposals.
+
+Praxile creates a `.praxile` snapshot before applying a proposal. You can also manage snapshots explicitly:
+
+```bash
+praxile snapshot create --reason "before reviewing proposal queue"
+praxile snapshot list
+praxile rollback <SNAPSHOT_ID>
+```
 
 Use `praxile models --stats` to summarize route performance from trajectories. Use `praxile consolidate` when accepted memories, skills, evals, or failure patterns start to overlap; it creates proposal-only governance updates such as `asset_merge` and `asset_deprecate`, plus cleanup review notes when needed. It does not delete or rewrite assets automatically. `praxile consolidate --all --summary` reports duplicate, stale, conflicting, and low-value governance counts without creating a proposal.
 
@@ -216,15 +230,20 @@ http://127.0.0.1:8765/
 
 The console can:
 
-- submit tasks;
-- show recent history;
-- review the latest task or proposal;
-- accept proposals;
-- list and bind Telegram/Discord channels.
+- submit tasks from a chat workspace;
+- create local chat sessions and link them to runs;
+- show recent runs, run detail, actions, reward, loaded assets, silent risks, and proposals;
+- review pending proposals and accept/reject/edit them with confirmation;
+- inspect model roles, providers, route stats, and route checks;
+- inspect the tool catalog and safety policy, and dry-check commands or paths;
+- inspect repository-local experience assets;
+- run Reflect, graph explain/rebuild, audit checks/bundles, and Spec check/verify from the browser.
 
 The web console uses the same local gateway API. It does not bypass approval or write directly to memory/skills.
 
 The browser console is intended for trusted localhost use. Praxile refuses non-localhost gateway binds such as `0.0.0.0` unless `--token` is provided. `--token` is best for API clients that can send `Authorization` or `X-Praxile-Token` headers.
+
+For the API surface and current web-console boundary, see [Web Console](WEB_CONSOLE.md).
 
 ## 7. Bind Channels
 

@@ -53,6 +53,19 @@ class ToolRegistry:
 
     def execute(self, action: dict[str, Any], *, task_id: str, step: int) -> dict[str, Any]:
         action_type = action.get("type")
+        if not isinstance(action_type, str) or not action_type:
+            return {"status": "failure", "output": "action type is required", "data": {}, "risk_level": "low"}
+        decision = self.safety.check_tool_call(action_type, action, context={"task_id": task_id, "step": step})
+        if not decision.allowed:
+            return {
+                "status": "blocked",
+                "output": decision.reason,
+                "data": {
+                    "tool": action_type,
+                    "safety_layer": "tool_call_policy",
+                },
+                "risk_level": decision.risk_level,
+            }
         if action_type == "batch":
             return self._run_async(self.execute_async(action, task_id=task_id, step=step))
         if action_type == "list_files":
