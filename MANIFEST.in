@@ -6,8 +6,11 @@ recursive-include praxile/docs *.md
 recursive-include praxile/templates *.md *.json
 recursive-include praxile/examples *.json
 recursive-include examples *.md *.json *.html *.jsx *.mjs *.go *.toml *.rs *.yml *.yaml
+recursive-include web *.md *.json *.html *.js *.jsx *.css
 prune .git
 prune .praxile
+prune web/node_modules
+prune web/dist
 prune __MACOSX
 prune .pytest_cache
 prune .mypy_cache

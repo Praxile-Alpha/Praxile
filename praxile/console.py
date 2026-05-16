@@ -234,6 +234,24 @@ _HTML = """<!doctype html>
       font-size: 12px;
       white-space: pre-wrap;
     }
+    .graph-canvas {
+      min-height: 340px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: auto;
+      margin: 10px 0;
+    }
+    .graph-canvas svg { width: 100%; min-width: 760px; height: auto; display: block; }
+    .proposal-form {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
     .composer {
       border-top: 1px solid var(--line);
       background: #fff;
@@ -446,6 +464,24 @@ _HTML = """<!doctype html>
         <section id="panel-proposals" class="panel">
           <h2>Proposal Inbox</h2>
           <div id="proposals-table"></div>
+          <h3>Structured Proposal Editor</h3>
+          <div class="proposal-form">
+            <div class="grid3">
+              <input id="proposal-title" placeholder="title">
+              <select id="proposal-risk">
+                <option value="low">low risk</option>
+                <option value="medium">medium risk</option>
+                <option value="high">high risk</option>
+              </select>
+              <input id="proposal-confidence" type="number" min="0" max="1" step="0.05" placeholder="confidence">
+            </div>
+            <textarea id="proposal-reason" placeholder="reason / rationale"></textarea>
+            <textarea id="proposal-evidence" placeholder="evidence, one item per line"></textarea>
+            <textarea id="proposal-changes" style="min-height:120px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" placeholder="changes JSON array"></textarea>
+            <div class="toolbar">
+              <button class="secondary" id="save-proposal-structured">Save Structured Edit</button>
+            </div>
+          </div>
           <h3>Proposal Detail</h3>
           <pre id="proposal-detail">Select a proposal.</pre>
           <h3>Edit Pending Proposal</h3>
@@ -499,9 +535,11 @@ _HTML = """<!doctype html>
           </div>
           <div class="toolbar" style="margin-bottom:10px">
             <button id="explain-graph">Explain</button>
+            <button class="secondary" id="view-graph">Visualize</button>
             <button class="secondary" id="graph-status">Status</button>
             <button class="secondary" id="rebuild-graph">Rebuild</button>
           </div>
+          <div id="graph-canvas" class="graph-canvas"></div>
           <pre id="graph-detail">No graph query loaded.</pre>
         </section>
 
@@ -614,6 +652,15 @@ _HTML = """<!doctype html>
           <h2>CI / PR Reports</h2>
           <div class="toolbar" style="margin-bottom:10px">
             <button class="secondary" id="load-ci">Load CI reports</button>
+            <button class="secondary" id="generate-ci">Generate latest report</button>
+            <button class="secondary" id="github-context">GitHub context</button>
+            <button class="secondary" id="publish-pr-comment">Publish PR comment</button>
+            <button class="secondary" id="import-gh-artifacts">Import Actions artifacts</button>
+          </div>
+          <div class="grid3" style="margin-bottom:10px">
+            <input id="github-repo" placeholder="owner/repo">
+            <input id="github-pr" type="number" min="1" placeholder="PR number">
+            <input id="github-run-id" placeholder="Actions run id">
           </div>
           <div id="ci-table"></div>
           <h3>Report Detail</h3>
@@ -681,7 +728,9 @@ _HTML = """<!doctype html>
     let currentSession = null;
     let latestRun = null;
     let currentProposalId = null;
+    let currentProposal = null;
     let currentAssetPath = null;
+    let currentCiReportId = null;
     let cachedRoles = [];
     let cachedProviders = [];
     let activeJobId = null;
@@ -900,9 +949,42 @@ _HTML = """<!doctype html>
     async function openProposal(id) {
       const proposal = await api(`/api/proposals/${encodeURIComponent(id)}`);
       currentProposalId = proposal.proposal_id || id;
+      currentProposal = proposal;
       $('proposal-detail').textContent = JSON.stringify(proposal, null, 2);
       $('proposal-editor').value = JSON.stringify(proposal, null, 2);
+      fillStructuredProposal(proposal);
       setPanel('proposals');
+    }
+    function fillStructuredProposal(proposal) {
+      $('proposal-title').value = proposal.title || '';
+      $('proposal-risk').value = proposal.risk_level || 'low';
+      $('proposal-confidence').value = proposal.confidence ?? '';
+      $('proposal-reason').value = proposal.reason || proposal.rationale || '';
+      $('proposal-evidence').value = (proposal.evidence || []).join('\\n');
+      $('proposal-changes').value = JSON.stringify(proposal.changes || [], null, 2);
+    }
+    async function saveStructuredProposalEdit() {
+      if (!currentProposalId || !currentProposal) throw new Error('Open a pending proposal first.');
+      let changes;
+      try { changes = JSON.parse($('proposal-changes').value || '[]'); }
+      catch (error) { throw new Error(`Invalid changes JSON: ${error.message}`); }
+      const confidence = Number($('proposal-confidence').value);
+      const proposal = {
+        ...currentProposal,
+        title: $('proposal-title').value.trim(),
+        risk_level: $('proposal-risk').value,
+        confidence: Number.isFinite(confidence) ? confidence : currentProposal.confidence,
+        reason: $('proposal-reason').value.trim(),
+        evidence: $('proposal-evidence').value.split('\\n').map(item => item.trim()).filter(Boolean),
+        changes
+      };
+      if (!confirm(`Save structured edits to proposal ${currentProposalId}?`)) return;
+      const updated = await api(`/api/proposals/${encodeURIComponent(currentProposalId)}/edit`, {method:'POST', body: JSON.stringify({confirm:true, proposal, reason:'web console structured edit'})});
+      currentProposal = updated;
+      $('proposal-detail').textContent = JSON.stringify(updated, null, 2);
+      $('proposal-editor').value = JSON.stringify(updated, null, 2);
+      fillStructuredProposal(updated);
+      await refresh();
     }
     async function saveProposalEdit() {
       if (!currentProposalId) throw new Error('Open a pending proposal first.');
@@ -1008,6 +1090,37 @@ _HTML = """<!doctype html>
         limit: String(Number($('graph-limit').value || 100))
       });
       $('graph-detail').textContent = JSON.stringify(await api(`/api/graph/explain?${params.toString()}`), null, 2);
+    }
+    async function visualizeGraph() {
+      const ref = $('graph-ref').value.trim();
+      if (!ref) throw new Error('graph ref is required');
+      const params = new URLSearchParams({
+        ref,
+        depth: String(Number($('graph-depth').value || 2)),
+        limit: String(Number($('graph-limit').value || 100))
+      });
+      const graph = await api(`/api/graph/view?${params.toString()}`);
+      $('graph-detail').textContent = JSON.stringify(graph, null, 2);
+      renderGraphCanvas(graph.view || {nodes:[], edges:[]});
+    }
+    function renderGraphCanvas(view) {
+      const nodes = view.nodes || [];
+      const nodeById = Object.fromEntries(nodes.map(node => [node.node_id, node]));
+      const edges = view.edges || [];
+      const width = view.width || 920;
+      const height = view.height || 360;
+      const edgeLines = edges.map(edge => {
+        const source = nodeById[edge.source];
+        const target = nodeById[edge.target];
+        if (!source || !target) return '';
+        const midX = (Number(source.x) + Number(target.x)) / 2;
+        const midY = (Number(source.y) + Number(target.y)) / 2;
+        return `<line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" stroke="#aab3bf" stroke-width="1.5" /><text x="${midX}" y="${midY - 4}" font-size="10" fill="#52606d">${esc(edge.label || '')}</text>`;
+      }).join('');
+      const nodeMarks = nodes.map(node => `<g><circle cx="${node.x}" cy="${node.y}" r="18" fill="${esc(node.color || '#64748b')}" /><text x="${Number(node.x) + 26}" y="${Number(node.y) - 2}" font-size="12" fill="#17202a">${esc(node.label || node.node_id)}</text><text x="${Number(node.x) + 26}" y="${Number(node.y) + 13}" font-size="10" fill="#697586">${esc(node.node_type || '')}</text></g>`).join('');
+      $('graph-canvas').innerHTML = nodes.length
+        ? `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Praxile experience graph">${edgeLines}${nodeMarks}</svg>`
+        : '<div class="item"><strong>No graph nodes</strong><span>Run rebuild or choose another ref.</span></div>';
     }
     async function auditCheck() {
       const body = {
@@ -1190,9 +1303,63 @@ _HTML = """<!doctype html>
       $('ci-detail').textContent = JSON.stringify(reports, null, 2);
       setPanel('ci');
     }
+    async function generateCiReport() {
+      if (!confirm('Generate a local CI/PR report artifact for the latest run?')) return;
+      const report = await api('/api/ci/reports', {
+        method:'POST',
+        body: JSON.stringify({confirm:true, run_id:'latest', redaction:'standard'})
+      });
+      $('ci-detail').textContent = JSON.stringify(report, null, 2);
+      await loadCiReports();
+      setPanel('ci');
+    }
     async function openCiReport(id) {
       const report = await api(`/api/ci/reports/${encodeURIComponent(id)}`);
+      currentCiReportId = id;
       $('ci-detail').textContent = JSON.stringify(report, null, 2);
+      setPanel('ci');
+    }
+    async function loadGitHubContext() {
+      const context = await api('/api/github/context');
+      $('github-repo').value = context.repository || $('github-repo').value;
+      $('github-pr').value = context.default_pr_number || $('github-pr').value;
+      $('github-run-id').value = context.actions_run_id || $('github-run-id').value;
+      $('ci-detail').textContent = JSON.stringify(context, null, 2);
+      setPanel('ci');
+    }
+    async function publishPrComment() {
+      const prNumber = Number($('github-pr').value || 0);
+      if (!currentCiReportId) currentCiReportId = 'latest';
+      if (!prNumber) throw new Error('PR number is required');
+      if (!confirm(`Publish Praxile report ${currentCiReportId} as a GitHub PR comment?`)) return;
+      const result = await api('/api/github/pr-comments', {
+        method:'POST',
+        body: JSON.stringify({
+          confirm:true,
+          report_id: currentCiReportId,
+          repository: $('github-repo').value.trim() || null,
+          pr_number: prNumber
+        })
+      });
+      $('ci-detail').textContent = JSON.stringify(result, null, 2);
+      await loadCiReports();
+      setPanel('ci');
+    }
+    async function importGitHubArtifacts() {
+      const runId = $('github-run-id').value.trim();
+      if (!runId) throw new Error('Actions run id is required');
+      if (!confirm(`Import GitHub Actions artifacts for run ${runId}?`)) return;
+      const result = await api('/api/github/actions/artifacts/import', {
+        method:'POST',
+        body: JSON.stringify({
+          confirm:true,
+          repository: $('github-repo').value.trim() || null,
+          run_id: runId,
+          max_artifacts: 10
+        })
+      });
+      $('ci-detail').textContent = JSON.stringify(result, null, 2);
+      await loadCiReports();
       setPanel('ci');
     }
     async function loadRepos() {
@@ -1273,9 +1440,11 @@ _HTML = """<!doctype html>
     $('run-reflect').onclick = () => runReflect().catch(error => $('reflect-detail').textContent = error.message);
     $('load-reflect').onclick = () => loadReflectReports().catch(error => $('reflect-detail').textContent = error.message);
     $('save-proposal-edit').onclick = () => saveProposalEdit().catch(error => alert(error.message));
+    $('save-proposal-structured').onclick = () => saveStructuredProposalEdit().catch(error => alert(error.message));
     $('graph-status').onclick = () => showGraphStatus().catch(error => $('graph-detail').textContent = error.message);
     $('rebuild-graph').onclick = () => rebuildGraph().catch(error => $('graph-detail').textContent = error.message);
     $('explain-graph').onclick = () => explainGraph().catch(error => $('graph-detail').textContent = error.message);
+    $('view-graph').onclick = () => visualizeGraph().catch(error => $('graph-detail').textContent = error.message);
     $('audit-check').onclick = () => auditCheck().catch(error => $('audit-detail').textContent = error.message);
     $('audit-bundle').onclick = () => auditBundle().catch(error => $('audit-detail').textContent = error.message);
     $('spec-list').onclick = () => specList().catch(error => $('spec-detail').textContent = error.message);
@@ -1292,6 +1461,10 @@ _HTML = """<!doctype html>
     $('asset-reactivate').onclick = () => assetLifecycle('reactivate').catch(error => alert(error.message));
     $('bind-channel').onclick = () => bindChannel().catch(error => $('channels-detail').textContent = error.message);
     $('load-ci').onclick = () => loadCiReports().catch(error => $('ci-detail').textContent = error.message);
+    $('generate-ci').onclick = () => generateCiReport().catch(error => $('ci-detail').textContent = error.message);
+    $('github-context').onclick = () => loadGitHubContext().catch(error => $('ci-detail').textContent = error.message);
+    $('publish-pr-comment').onclick = () => publishPrComment().catch(error => $('ci-detail').textContent = error.message);
+    $('import-gh-artifacts').onclick = () => importGitHubArtifacts().catch(error => $('ci-detail').textContent = error.message);
     $('load-repos').onclick = () => loadRepos().catch(error => $('repos-detail').textContent = error.message);
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => setPanel(btn.dataset.panel));
     refresh().catch(error => {

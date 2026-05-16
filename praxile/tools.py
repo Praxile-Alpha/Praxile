@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from .config import Config
@@ -33,6 +34,7 @@ class ToolRegistry:
         self.shell = shell or ShellEnv(config, self.safety)
         self.tests = tests or TestEnv(config, self.shell)
         self.browser = browser or BrowserEnv(config)
+        self.cancel_requested: Callable[[], bool] | None = None
 
     def describe(self) -> list[dict[str, Any]]:
         return [
@@ -99,7 +101,7 @@ class ToolRegistry:
                 step=step,
             ).to_dict()
         if action_type == "run_command":
-            return self.shell.run(str(action.get("command", ""))).to_dict()
+            return self.shell.run(str(action.get("command", "")), cancel_requested=self.cancel_requested).to_dict()
         if action_type == "browser_open":
             return self.browser.open(str(action.get("url", ""))).to_dict()
         if action_type == "browser_screenshot":

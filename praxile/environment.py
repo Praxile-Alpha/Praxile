@@ -5,8 +5,10 @@ import signal
 import shlex
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from .config import Config
@@ -370,7 +372,13 @@ class ShellEnv:
         self.root = config.paths.root
         self.safety = safety
 
-    def run(self, command: str, *, timeout: int | None = None) -> Observation:
+    def run(
+        self,
+        command: str,
+        *,
+        timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> Observation:
         timeout = int(timeout or self.config.get("runtime", "shell_timeout_seconds", default=120))
         decision = self.safety.check_command(command)
         if not decision.allowed:
@@ -390,11 +398,25 @@ class ShellEnv:
                 shell=use_shell,
                 cwd=str(self.root),
                 timeout=timeout,
+                cancel_requested=cancel_requested,
             )
         except FileNotFoundError as exc:
             return Observation("failure", f"command executable not found: {exc}", {"command": command})
         except subprocess.TimeoutExpired as exc:
             return Observation("failure", f"command timed out after {timeout}s: {exc}", {"command": command})
+        except CommandCancelled as exc:
+            return Observation(
+                "cancelled",
+                str(exc),
+                {
+                    "command": command,
+                    "cancelled": True,
+                    "returncode": exc.returncode,
+                    "stdout": shorten(exc.stdout, 5000),
+                    "stderr": shorten(exc.stderr, 5000),
+                },
+                risk_level="low",
+            )
         output = (result.stdout or "") + (("\n" + result.stderr) if result.stderr else "")
         return Observation(
             "success" if result.returncode == 0 else "failure",
@@ -409,6 +431,7 @@ def _run_subprocess_isolated(
     shell: bool,
     cwd: str,
     timeout: int,
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     kwargs: dict[str, Any] = {
         "shell": shell,
@@ -423,8 +446,26 @@ def _run_subprocess_isolated(
     else:
         kwargs["start_new_session"] = True
     process = subprocess.Popen(run_args, **kwargs)
+    deadline = time.monotonic() + timeout
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
+        while True:
+            if cancel_requested and cancel_requested():
+                _kill_process_tree(process)
+                try:
+                    stdout, stderr = process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    _kill_process_tree(process)
+                    stdout, stderr = "", ""
+                    _close_process_pipes(process)
+                raise CommandCancelled(run_args, stdout=stdout or "", stderr=stderr or "", returncode=process.returncode)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(run_args, timeout)
+            try:
+                stdout, stderr = process.communicate(timeout=min(0.2, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
     except subprocess.TimeoutExpired as exc:
         _kill_process_tree(process)
         try:
@@ -440,6 +481,15 @@ def _run_subprocess_isolated(
             _close_process_pipes(process)
         raise subprocess.TimeoutExpired(run_args, timeout, output=stdout, stderr=stderr) from exc
     return subprocess.CompletedProcess(run_args, process.returncode, stdout, stderr)
+
+
+class CommandCancelled(RuntimeError):
+    def __init__(self, cmd: str | list[str], *, stdout: str = "", stderr: str = "", returncode: int | None = None):
+        super().__init__("command cancelled by Praxile stop request")
+        self.cmd = cmd
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
 
 
 def _kill_process_tree(process: subprocess.Popen[str]) -> None:
@@ -488,12 +538,26 @@ class TestEnv:
             return list(configured)
         return inspect_project(self.root).test_commands
 
-    def run(self, commands: list[str] | None = None) -> list[dict[str, Any]]:
+    def run(
+        self,
+        commands: list[str] | None = None,
+        *,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> list[dict[str, Any]]:
         selected = commands if commands is not None else self.detect_commands()
         results: list[dict[str, Any]] = []
         for command in selected:
+            if cancel_requested and cancel_requested():
+                results.append(
+                    Observation(
+                        "cancelled",
+                        "verification cancelled by Praxile stop request",
+                        {"command": command, "cancelled": True},
+                    ).to_dict()
+                )
+                break
             timeout = int(self.config.get("runtime", "test_timeout_seconds", default=180))
-            observation = self.shell.run(command, timeout=timeout)
+            observation = self.shell.run(command, timeout=timeout, cancel_requested=cancel_requested)
             results.append(observation.to_dict())
         return results
 

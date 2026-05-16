@@ -12,7 +12,7 @@ from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
 from .interop import interop_policy
 from .json_utils import RobustJSONError, parse_json_object
-from .model import ModelRouter, ModelUnavailable
+from .model import ModelRequestCancelled, ModelRouter, ModelUnavailable
 from .reward import RewardEngine
 from .security import SafetyPolicy
 from .semantic_judges import AttributionJudge
@@ -23,6 +23,9 @@ from .task_analyzer import TaskAnalyzer
 from .tools import ToolRegistry
 from .trajectory import TrajectoryLogger
 from .utils import append_jsonl, shorten, utc_now
+
+
+ProgressCallback = Callable[[str, str, Any], None]
 
 
 class AgentRuntime:
@@ -57,8 +60,11 @@ class AgentRuntime:
         spec_files: list[str] | None = None,
         parallel_readonly_explore: bool | None = None,
         cancel_requested: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         try:
+            self.tools.cancel_requested = cancel_requested
+            self._emit_progress(progress_callback, "initializing", "Initializing Praxile runtime.")
             self.store.initialize(self.config)
             if resume:
                 return self._resume_run(
@@ -69,20 +75,27 @@ class AgentRuntime:
                     dry_run=dry_run,
                 )
 
+            self._emit_progress(progress_callback, "snapshot", "Capturing project snapshot.")
             snapshot = self.project.snapshot(refresh=True)
             snapshot["interop"] = interop_policy(self.config)
             logger = TrajectoryLogger(task, snapshot)
             self._register_base_executors(logger)
             logger.data["dry_run"] = dry_run
+            self._emit_progress(progress_callback, "spec", "Loading spec context.")
             logger.set_spec_context(build_spec_context(self.config.paths.root, spec_files))
+            self._emit_progress(progress_callback, "retrieve", "Retrieving project experience.")
             retrieved = self.store.retrieve(task, limit=8)
             logger.set_loaded_context(retrieved)
             self.store.record_asset_usage(logger.task_id, retrieved, used_in_prompt=True)
+            self._emit_progress(progress_callback, "analyze", "Analyzing task risk and intent.")
             analysis = self.analyzer.analyze(task, retrieved)
             logger.set_task_analysis(analysis)
+            self._emit_progress(progress_callback, "plan", "Recording initial plan.", {"plan": analysis.get("plan")})
             logger.set_plan(analysis["plan"])
             if self._parallel_readonly_enabled(parallel_readonly_explore):
+                self._emit_progress(progress_callback, "explore", "Running parallel read-only exploration.")
                 self._run_parallel_readonly_exploration(task, logger)
+            self._emit_progress(progress_callback, "route", "Selecting model route.")
             route = self.router.describe_route(
                 "coding_agent",
                 private=analysis["privacy_sensitive"],
@@ -112,6 +125,7 @@ class AgentRuntime:
             )
 
             if analysis["architecture_gate_required"]:
+                self._emit_progress(progress_callback, "architecture_gate", "Architecture gate triggered; implementation is paused.")
                 gate_summary = self._architecture_gate_summary(task, analysis, retrieved)
                 logger.add_action(
                     action_type="architecture_gate",
@@ -153,6 +167,7 @@ class AgentRuntime:
                             "parallel_readonly_explore": parallel_readonly_explore,
                         },
                         cancel_requested=cancel_requested,
+                        progress_callback=progress_callback,
                     )
                     result_summary = "Architecture gate triggered; shadow-mode planning was recorded without landing edits."
             else:
@@ -175,9 +190,18 @@ class AgentRuntime:
                         "parallel_readonly_explore": parallel_readonly_explore,
                     },
                     cancel_requested=cancel_requested,
+                    progress_callback=progress_callback,
                 )
 
-            return self._finish_run(logger, result_status, result_summary, test_commands=test_commands, dry_run=dry_run)
+            return self._finish_run(
+                logger,
+                result_status,
+                result_summary,
+                test_commands=test_commands,
+                dry_run=dry_run,
+                cancel_requested=cancel_requested,
+                progress_callback=progress_callback,
+            )
         finally:
             self.tools.close()
 
@@ -246,9 +270,12 @@ class AgentRuntime:
         *,
         test_commands: list[str] | None,
         dry_run: bool,
+        cancel_requested: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         cancelled = "cancelled" in str(result_summary or "").lower()
-        test_results = [] if dry_run or cancelled else self.tests.run(test_commands) if test_commands else []
+        self._emit_progress(progress_callback, "verify", "Running verification commands." if test_commands and not dry_run and not cancelled else "Preparing verification summary.")
+        test_results = [] if dry_run or cancelled else self.tests.run(test_commands, cancel_requested=cancel_requested) if test_commands else []
         if cancelled and test_commands:
             logger.add_action(
                 action_type="cancelled_skip_tests",
@@ -284,16 +311,21 @@ class AgentRuntime:
                 executor=self._verification_executor(),
             )
 
+        self._emit_progress(progress_callback, "diff", "Collecting git diff summary.")
         logger.set_diff_summary(self.git.diff_summary())
         trajectory = logger.finish(status=result_status, summary=result_summary)
         if (trajectory.get("spec_context") or {}).get("spec_files"):
+            self._emit_progress(progress_callback, "spec_verify", "Verifying run against spec context.")
             trajectory["spec_compliance"] = verify_spec_compliance(self.config.paths.root, trajectory)
+        self._emit_progress(progress_callback, "silent_failure", "Checking silent failure signals.")
         trajectory["silent_failure_signals"] = detect_silent_failure_signals(trajectory, test_results)
+        self._emit_progress(progress_callback, "reward", "Building reward report.")
         llm_judge = self._llm_judge_reward(trajectory)
         if llm_judge:
             trajectory["llm_judge_reward"] = llm_judge
         report = self.reward.build_report(trajectory, test_results)
         trajectory["reward_report"] = report
+        self._emit_progress(progress_callback, "evolve", "Generating experience proposals.")
         proposals = self.evolution.generate(trajectory)
         trajectory["experience_candidates"] = [
             {
@@ -312,6 +344,7 @@ class AgentRuntime:
         ]
         trajectory["evolution_summary"] = self._evolution_summary(trajectory, proposals)
         referenced_paths = self._referenced_asset_paths(trajectory)
+        self._emit_progress(progress_callback, "attribution", "Judging loaded experience attribution.")
         attribution_results = AttributionJudge(self.config, self.router).judge_loaded_assets(
             trajectory,
             self._usage_outcome(trajectory),
@@ -320,6 +353,7 @@ class AgentRuntime:
         if attribution_results:
             trajectory["semantic_attributions"] = attribution_results
             self._attach_semantic_attributions(trajectory, attribution_results)
+        self._emit_progress(progress_callback, "persist", "Persisting trajectory and proposals.")
         self.store.record_trajectory(trajectory)
         self.store.update_asset_usage_outcome(
             logger.task_id,
@@ -332,6 +366,12 @@ class AgentRuntime:
             self.store.write_proposal(proposal)
         self.store.delete_checkpoint(logger.task_id)
         self._trace("task_finished", task_id=logger.task_id, status=result_status, proposals=len(proposals))
+        self._emit_progress(
+            progress_callback,
+            "finished",
+            "Run finished.",
+            {"task_id": logger.task_id, "status": result_status, "proposals": len(proposals)},
+        )
         return trajectory
 
     def _llm_judge_reward(self, trajectory: dict[str, Any]) -> dict[str, Any] | None:
@@ -655,6 +695,7 @@ class AgentRuntime:
         messages: list[dict[str, str]] | None = None,
         checkpoint_context: dict[str, Any] | None = None,
         cancel_requested: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> tuple[str, str]:
         messages = messages or self._initial_messages(task, logger, retrieved)
         invalid_action_count = 0
@@ -666,6 +707,7 @@ class AgentRuntime:
         try:
             for _ in range(max_steps):
                 if cancel_requested and cancel_requested():
+                    self._emit_progress(progress_callback, "cancelled", "Cancellation requested before the next runtime step.")
                     logger.add_action(
                         action_type="gateway_cancelled",
                         input_data={"source": "web_console"},
@@ -681,6 +723,12 @@ class AgentRuntime:
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
                 messages = self._compress_messages_if_needed(messages, logger)
+                self._emit_progress(
+                    progress_callback,
+                    "model_request",
+                    "Requesting next action from model.",
+                    {"step": len(logger.data["actions"]) + 1},
+                )
                 self._trace(
                     "model_request",
                     task_id=logger.task_id,
@@ -694,6 +742,13 @@ class AgentRuntime:
                     private=private,
                     high_risk=high_risk,
                     max_tokens=6000,
+                    cancel_requested=cancel_requested,
+                )
+                self._emit_progress(
+                    progress_callback,
+                    "model_response",
+                    "Model returned an action candidate.",
+                    {"step": len(logger.data["actions"]) + 1, "latency_ms": response.get("latency_ms")},
                 )
                 self._trace(
                     "model_response",
@@ -792,6 +847,7 @@ class AgentRuntime:
                 action_type = action.get("type")
                 invalid_action_count = 0
                 if cancel_requested and cancel_requested():
+                    self._emit_progress(progress_callback, "cancelled", "Cancellation requested before executing the pending action.", {"pending_action": action_type})
                     logger.add_action(
                         action_type="gateway_cancelled",
                         input_data={"source": "web_console", "pending_action": action_type},
@@ -814,6 +870,12 @@ class AgentRuntime:
                         "risk_level": "low",
                     }
                 else:
+                    self._emit_progress(
+                        progress_callback,
+                        "tool_start",
+                        f"Executing tool action `{action_type}`.",
+                        {"step": len(logger.data["actions"]) + 1, "action_type": action_type},
+                    )
                     observation = self.tools.execute(action, task_id=logger.task_id, step=len(logger.data["actions"]) + 1)
                 logger.add_action(
                     action_type=action_type or "unknown",
@@ -830,6 +892,17 @@ class AgentRuntime:
                     status=observation.get("status"),
                     risk_level=observation.get("risk_level"),
                     output=shorten(observation.get("output", ""), 1000),
+                )
+                self._emit_progress(
+                    progress_callback,
+                    "tool_finish",
+                    f"Tool action `{action_type}` finished with {observation.get('status')}.",
+                    {
+                        "step": len(logger.data["actions"]),
+                        "action_type": action_type,
+                        "status": observation.get("status"),
+                        "risk_level": observation.get("risk_level"),
+                    },
                 )
                 self._refresh_snapshot_after_action(logger, action_type, observation)
                 artifact = observation.get("data", {}).get("artifact")
@@ -849,9 +922,36 @@ class AgentRuntime:
                     status = action.get("status", "completed")
                     if status not in {"completed", "needs_human", "failed"}:
                         status = "completed"
+                    self._emit_progress(progress_callback, "finish_action", "Model emitted finish action.", {"status": status})
                     return status, action.get("summary", "Task finished.")
+            self._emit_progress(progress_callback, "needs_human", f"Stopped after max_steps={max_steps}; review trajectory and diff.")
             return "needs_human", f"Stopped after max_steps={max_steps}; review trajectory and diff."
+        except ModelRequestCancelled as exc:
+            self._emit_progress(progress_callback, "cancelled", "Model request was cancelled by stop request.")
+            logger.add_action(
+                action_type="gateway_cancelled",
+                input_data={"source": "web_console", "during": "model_request"},
+                observation={
+                    "status": "cancelled",
+                    "output": f"Run cancelled while waiting for model response. Details: {exc}",
+                    "data": {"cancelled": True},
+                    "risk_level": "low",
+                },
+                status="cancelled",
+                executor=self._primary_executor(),
+            )
+            logger.add_model_performance(
+                {
+                    "purpose": "coding",
+                    "status": "cancelled",
+                    "failure_pattern": "model_request_cancelled",
+                    "details": str(exc),
+                }
+            )
+            self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+            return "cancelled", "Run cancelled while waiting for model response."
         except ModelUnavailable as exc:
+            self._emit_progress(progress_callback, "model_unavailable", "Model route unavailable; task needs human review.")
             output = (
                 "Model unavailable. No code edits were attempted. Configure an OpenAI-compatible endpoint "
                 "or local model in .praxile/config.json to enable autonomous edits.\n\n"
@@ -984,6 +1084,20 @@ class AgentRuntime:
             path=str(path.relative_to(self.config.paths.root)),
             actions=action_count,
         )
+
+    def _emit_progress(
+        self,
+        callback: ProgressCallback | None,
+        stage: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        if not callback:
+            return
+        try:
+            callback(stage, message, data or {})
+        except Exception:
+            return
 
     def _trace(self, event: str, **data: Any) -> None:
         if not self.config.get("trace", "enabled", default=True):

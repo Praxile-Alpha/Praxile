@@ -15,6 +15,7 @@ DIR_NAMES = {
     "__pycache__",
     "dist",
     "build",
+    "node_modules",
     "praxile.egg-info",
 }
 FILE_NAMES = {".DS_Store"}

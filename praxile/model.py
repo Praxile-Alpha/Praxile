@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from .config import Config
-from .http_transport import HTTPResponseDecodeError, HTTPTransport, HTTPTransportError, make_transport
+from .http_transport import HTTPResponseDecodeError, HTTPTransport, HTTPTransportCancelled, HTTPTransportError, make_transport
 
 
 class ModelError(RuntimeError):
@@ -14,6 +15,10 @@ class ModelError(RuntimeError):
 
 
 class ModelUnavailable(ModelError):
+    pass
+
+
+class ModelRequestCancelled(ModelUnavailable):
     pass
 
 
@@ -155,9 +160,12 @@ class OpenAICompatibleProvider:
                 headers=headers,
                 payload=body,
                 timeout=_timeout_seconds(request.get("timeout"), self.timeout_seconds),
+                cancel_requested=request.get("cancel_requested"),
             )
         except HTTPResponseDecodeError as exc:
             raise ModelError(f"Model returned invalid JSON envelope: {exc}") from exc
+        except HTTPTransportCancelled as exc:
+            raise ModelRequestCancelled(str(exc)) from exc
         except HTTPTransportError as exc:
             raise ModelUnavailable(str(exc)) from exc
         try:
@@ -220,9 +228,12 @@ class AnthropicProvider:
                 headers=headers,
                 payload=body,
                 timeout=_timeout_seconds(request.get("timeout"), self.timeout_seconds),
+                cancel_requested=request.get("cancel_requested"),
             )
         except HTTPResponseDecodeError as exc:
             raise ModelError(f"Model returned invalid JSON envelope: {exc}") from exc
+        except HTTPTransportCancelled as exc:
+            raise ModelRequestCancelled(str(exc)) from exc
         except HTTPTransportError as exc:
             raise ModelUnavailable(str(exc)) from exc
         content_blocks = payload.get("content", [])
@@ -463,6 +474,7 @@ class ModelRouter:
         temperature: float = 0.2,
         max_tokens: int = 4096,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         primary_route = self.describe_route(purpose, private=private, high_risk=high_risk)
         timeout_seconds = _timeout_seconds(timeout, self._runtime_timeout_seconds())
@@ -471,17 +483,22 @@ class ModelRouter:
         backoff = float(self.config.get("routing", "fallback_backoff_seconds", default=0.25) or 0.0)
         candidates = self._route_candidates(purpose, private=private, high_risk=high_risk)
         for index, candidate in enumerate(candidates):
+            if cancel_requested and cancel_requested():
+                raise ModelRequestCancelled("Model request cancelled before route attempt started.")
             started = time.monotonic()
             try:
                 provider, model = self._provider_for_target(candidate["target"], purpose=purpose)
-                response = provider.chat(
+                response = self._provider_chat(
+                    provider,
                     {
                         "model": model,
                         "messages": messages,
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                         "timeout": timeout_seconds,
-                    }
+                        "cancel_requested": cancel_requested,
+                    },
+                    cancel_requested=cancel_requested,
                 )
                 latency_ms = int((time.monotonic() - started) * 1000)
                 attempts.append({**candidate, "status": "success", "latency_ms": latency_ms})
@@ -497,6 +514,10 @@ class ModelRouter:
                 response["route"] = route
                 response["latency_ms"] = latency_ms
                 return response
+            except ModelRequestCancelled:
+                latency_ms = int((time.monotonic() - started) * 1000)
+                attempts.append({**candidate, "status": "cancelled", "latency_ms": latency_ms})
+                raise
             except ModelUnavailable as exc:
                 latency_ms = int((time.monotonic() - started) * 1000)
                 attempts.append(
@@ -515,6 +536,52 @@ class ModelRouter:
         if last_unavailable:
             raise ModelUnavailable(f"All model routes unavailable ({detail}); last error: {last_unavailable}") from last_unavailable
         raise ModelUnavailable(f"All model routes unavailable ({detail})")
+
+    def _provider_chat(
+        self,
+        provider: ModelProvider,
+        request: dict[str, Any],
+        *,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> dict[str, Any]:
+        if cancel_requested is None:
+            return provider.chat(request)
+        if cancel_requested():
+            raise ModelRequestCancelled("Model request cancelled before provider call.")
+
+        done = threading.Event()
+        result: dict[str, Any] = {}
+
+        def run() -> None:
+            try:
+                result["response"] = provider.chat(request)
+            except BaseException as exc:  # pragma: no cover - exercised through caller behavior
+                result["error"] = exc
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=run, name=f"praxile-model-{provider.name}", daemon=True)
+        thread.start()
+        while not done.wait(0.1):
+            if cancel_requested():
+                self._close_provider_transport(provider)
+                raise ModelRequestCancelled("Model request cancelled while waiting for provider response.")
+        if "error" in result:
+            raise result["error"]
+        response = result.get("response")
+        if not isinstance(response, dict):
+            raise ModelError("Model provider returned a non-object response.")
+        return response
+
+    @staticmethod
+    def _close_provider_transport(provider: ModelProvider) -> None:
+        transport = getattr(provider, "transport", None)
+        close = getattr(transport, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
 
     def configured_route_targets(self) -> list[dict[str, Any]]:
         grouped: dict[str, list[str]] = {}

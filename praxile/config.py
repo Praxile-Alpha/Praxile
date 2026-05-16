@@ -347,6 +347,17 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "channels_enabled": False,
             "multi_repo_roots": [],
         },
+        "github": {
+            "enabled": False,
+            "api_base_url": "https://api.github.com",
+            "api_version": "2026-03-10",
+            "token_env": "GITHUB_TOKEN",
+            "repository": None,
+            "default_pr_number": None,
+            "timeout_seconds": 20,
+            "artifact_import_dir": ".praxile/experience/ci/imported-artifacts",
+            "comment_marker": "<!-- praxile-report -->",
+        },
         "channels": {
             "version": 1,
             "default": None,
@@ -526,6 +537,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "memory.project_memory_soft_limit_bytes",
         "trace.retention_days",
         "gateway.max_threads",
+        "github.timeout_seconds",
         "evolution.llm_timeout_seconds",
         "evolution.llm_max_tokens",
         "evolution.llm_max_proposals",
@@ -581,6 +593,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.counterexample_checker.enabled",
         "workspace.keep_after_run",
         "reflect.ci.write_github_step_summary",
+        "github.enabled",
     ]:
         expect(path, bool)
     for path in [

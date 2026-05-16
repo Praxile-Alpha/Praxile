@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from praxile.config import Config, ConfigValidationError, validate_config
-from praxile.model import ModelRouter, ModelUnavailable
+from praxile.model import ModelRequestCancelled, ModelRouter, ModelUnavailable
 
 
 class FailingProvider:
@@ -37,6 +39,39 @@ class EchoProvider:
             "provider": "echo",
             "model": request["model"],
         }
+
+    def supports_tools(self, model):
+        return False
+
+    def max_context_window(self, model):
+        return 0
+
+
+class BlockingProvider:
+    name = "blocking"
+
+    def __init__(self):
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.transport = self
+        self.closed = False
+
+    def list_models(self):
+        return []
+
+    def chat(self, request):
+        self.started.set()
+        self.release.wait(timeout=5)
+        return {
+            "content": "{\"type\":\"finish\",\"status\":\"completed\",\"summary\":\"late\"}",
+            "usage": {},
+            "provider": "blocking",
+            "model": request["model"],
+        }
+
+    def close(self):
+        self.closed = True
+        self.release.set()
 
     def supports_tools(self, model):
         return False
@@ -77,6 +112,33 @@ def test_model_roles_select_primary_and_fallback(tmp_path: Path):
     assert response["provider"] == "echo"
     assert response["route"]["fallback_used"] is True
     assert [item["target"] for item in response["route"]["fallback_attempts"]] == ["primary:strong", "local:qwen"]
+
+
+def test_model_route_can_cancel_in_flight_provider_request(tmp_path: Path):
+    config = Config.load(tmp_path)
+    config.data["model_providers"] = {
+        "local": {
+            "type": "ollama",
+            "base_url": "http://localhost:11434/v1",
+            "models": [{"name": "qwen"}],
+        }
+    }
+    config.data["model_roles"] = {"coding_agent": {"provider": "local", "model": "qwen"}}
+    router = ModelRouter(config)
+    provider = BlockingProvider()
+    router.providers = {"local": provider}
+
+    started_at = time.monotonic()
+    with pytest.raises(ModelRequestCancelled):
+        router.chat(
+            [{"role": "user", "content": "hi"}],
+            purpose="coding_agent",
+            cancel_requested=lambda: provider.started.is_set(),
+        )
+    elapsed = time.monotonic() - started_at
+
+    assert elapsed < 1.0
+    assert provider.closed is True
 
 
 def test_model_role_validation_checks_declared_models(tmp_path: Path):

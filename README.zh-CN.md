@@ -342,6 +342,16 @@ praxile gateway serve --host 127.0.0.1 --port 8765
 ```
 然后在浏览器中打开 `http://127.0.0.1:8765/`。
 
+如果要使用独立 React/Vite Console：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Web Console 现在可以生成本地 CI report、在显式确认后通过 `GITHUB_TOKEN` 发布 GitHub PR comment、导入 GitHub Actions artifacts 到 `.praxile/`、可视化 experience graph，并通过结构化字段编辑 pending proposal。
+
 ### 5. 审查与解释
 
 ```bash

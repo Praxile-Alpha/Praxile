@@ -4,7 +4,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Iterator, Protocol
+from typing import Any, Callable, Iterator, Protocol
 
 
 class HTTPTransportError(RuntimeError):
@@ -22,6 +22,10 @@ class HTTPResponseDecodeError(HTTPTransportError):
     pass
 
 
+class HTTPTransportCancelled(HTTPTransportUnavailable):
+    pass
+
+
 class HTTPTransport(Protocol):
     name: str
 
@@ -32,6 +36,7 @@ class HTTPTransport(Protocol):
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         ...
 
@@ -42,6 +47,7 @@ class HTTPTransport(Protocol):
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> Iterator[dict[str, Any]]:
         ...
 
@@ -61,12 +67,14 @@ class SimpleHTTPTransport:
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         body = json.dumps(payload or {}).encode("utf-8")
         request = urllib.request.Request(url, data=body, headers=headers or {}, method="POST")
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
         for attempt in range(self.max_retries + 1):
+            _raise_if_cancelled(cancel_requested)
             try:
                 with urllib.request.urlopen(request, timeout=effective_timeout) as response:
                     return _decode_json_response(response.read())
@@ -86,7 +94,7 @@ class SimpleHTTPTransport:
                 raise HTTPResponseDecodeError(f"Invalid JSON response: {exc}") from exc
             if not last_error.retryable or attempt >= self.max_retries:
                 break
-            time.sleep(self.retry_backoff_seconds * (attempt + 1))
+            _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None
         raise last_error
 
@@ -97,6 +105,7 @@ class SimpleHTTPTransport:
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> Iterator[dict[str, Any]]:
         request_headers = dict(headers or {})
         request_headers.setdefault("Accept", "text/event-stream")
@@ -105,9 +114,10 @@ class SimpleHTTPTransport:
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
         for attempt in range(self.max_retries + 1):
+            _raise_if_cancelled(cancel_requested)
             try:
                 with urllib.request.urlopen(request, timeout=effective_timeout) as response:
-                    yield from _json_events_from_sse_lines(response)
+                    yield from _json_events_from_sse_lines(response, cancel_requested=cancel_requested)
                 return
             except urllib.error.HTTPError as exc:
                 detail = _safe_error_body(exc)
@@ -123,7 +133,7 @@ class SimpleHTTPTransport:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             if not last_error.retryable or attempt >= self.max_retries:
                 break
-            time.sleep(self.retry_backoff_seconds * (attempt + 1))
+            _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None
         raise last_error
 
@@ -166,10 +176,12 @@ class HttpxTransport:
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
         for attempt in range(self.max_retries + 1):
+            _raise_if_cancelled(cancel_requested)
             try:
                 response = self._get_client().post(
                     url,
@@ -194,7 +206,7 @@ class HttpxTransport:
                 raise HTTPResponseDecodeError(f"Invalid JSON response: {exc}") from exc
             if not last_error.retryable or attempt >= self.max_retries:
                 break
-            time.sleep(self.retry_backoff_seconds * (attempt + 1))
+            _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None
         raise last_error
 
@@ -205,12 +217,14 @@ class HttpxTransport:
         headers: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> Iterator[dict[str, Any]]:
         request_headers = dict(headers or {})
         request_headers.setdefault("Accept", "text/event-stream")
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
         for attempt in range(self.max_retries + 1):
+            _raise_if_cancelled(cancel_requested)
             try:
                 with self._get_client().stream(
                     "POST",
@@ -220,7 +234,7 @@ class HttpxTransport:
                     timeout=effective_timeout,
                 ) as response:
                     response.raise_for_status()
-                    yield from _json_events_from_sse_lines(response.iter_lines())
+                    yield from _json_events_from_sse_lines(response.iter_lines(), cancel_requested=cancel_requested)
                 return
             except self.httpx.HTTPStatusError as exc:
                 retryable = exc.response.status_code >= 500
@@ -235,7 +249,7 @@ class HttpxTransport:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             if not last_error.retryable or attempt >= self.max_retries:
                 break
-            time.sleep(self.retry_backoff_seconds * (attempt + 1))
+            _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None
         raise last_error
 
@@ -262,8 +276,9 @@ def _decode_json_response(raw: bytes) -> dict[str, Any]:
     return payload
 
 
-def _json_events_from_sse_lines(lines: Any) -> Iterator[dict[str, Any]]:
-    for data in _sse_data_events(lines):
+def _json_events_from_sse_lines(lines: Any, *, cancel_requested: Callable[[], bool] | None = None) -> Iterator[dict[str, Any]]:
+    for data in _sse_data_events(lines, cancel_requested=cancel_requested):
+        _raise_if_cancelled(cancel_requested)
         if data.strip() == "[DONE]":
             return
         try:
@@ -275,9 +290,10 @@ def _json_events_from_sse_lines(lines: Any) -> Iterator[dict[str, Any]]:
         yield payload
 
 
-def _sse_data_events(lines: Any) -> Iterator[str]:
+def _sse_data_events(lines: Any, *, cancel_requested: Callable[[], bool] | None = None) -> Iterator[str]:
     buffer: list[str] = []
     for raw_line in lines:
+        _raise_if_cancelled(cancel_requested)
         if isinstance(raw_line, bytes):
             line = raw_line.decode("utf-8", errors="replace")
         else:
@@ -294,6 +310,21 @@ def _sse_data_events(lines: Any) -> Iterator[str]:
             buffer.append(line[5:].lstrip())
     if buffer:
         yield "\n".join(buffer)
+
+
+def _raise_if_cancelled(cancel_requested: Callable[[], bool] | None) -> None:
+    if cancel_requested and cancel_requested():
+        raise HTTPTransportCancelled("HTTP request cancelled")
+
+
+def _sleep_with_cancel(seconds: float, cancel_requested: Callable[[], bool] | None) -> None:
+    deadline = time.monotonic() + max(0.0, seconds)
+    while True:
+        _raise_if_cancelled(cancel_requested)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(0.1, remaining))
 
 
 def _safe_error_body(exc: urllib.error.HTTPError) -> str:

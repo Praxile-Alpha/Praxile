@@ -17,6 +17,7 @@ from .audit import build_project_audit_bundle, build_project_audit_check
 from .channels import ChannelSystem, DEFAULT_TOKEN_ENVS, SUPPORTED_PLATFORMS
 from .console import ConsolePage, render_console
 from .config import Config, ProjectPaths
+from .github import GitHubConnector, GitHubIntegrationError, build_pr_comment_body, import_actions_artifacts
 from .model import ModelError, ModelRouter, ModelUnavailable
 from .reflect import ReflectEngine, ReflectScope
 from .runtime import AgentRuntime
@@ -114,6 +115,9 @@ class RunJob:
             self.status = status
             self.add_event("stage", stage, message, data)
 
+    def runtime_event(self, stage: str, message: str, data: dict[str, Any] | None = None) -> None:
+        self.add_event("runtime_stage", stage, message, data or {})
+
 
 class RunJobManager:
     def __init__(self, project_root: Path):
@@ -149,7 +153,13 @@ class RunJobManager:
             store = ExperienceStore(config.paths)
             store.initialize(config)
             job.add_event("stage", "running", "Agent runtime started.")
-            result = _run_task(config, store, job.payload, cancel_requested=job.cancel_requested)
+            result = _run_task(
+                config,
+                store,
+                job.payload,
+                cancel_requested=job.cancel_requested,
+                progress_callback=job.runtime_event,
+            )
             job.result = result
             if job.session_id:
                 _append_chat_job_result(config, job.session_id, job.job_id, result)
@@ -455,6 +465,11 @@ class GatewayApp:
             if not ref:
                 raise GatewayError(400, "`ref` or `asset` is required")
             return store.graph_explain(ref, depth=_query_int(query, "depth", 2), limit=_query_int(query, "limit", 100))
+        if method == "GET" and parts == ["graph", "view"]:
+            ref = (query.get("ref") or query.get("asset") or [None])[0]
+            if not ref:
+                raise GatewayError(400, "`ref` or `asset` is required")
+            return _graph_view(store, ref, depth=_query_int(query, "depth", 2), limit=_query_int(query, "limit", 100))
 
         if method == "GET" and parts == ["audit", "status"]:
             return build_project_audit_check(config, store, redaction="standard")
@@ -479,8 +494,18 @@ class GatewayApp:
 
         if method == "GET" and parts == ["ci", "reports"]:
             return _ci_reports(config, limit=_query_int(query, "limit", 50))
+        if method == "POST" and parts == ["ci", "reports"]:
+            return _generate_ci_report(config, store, payload)
+        if method == "POST" and len(parts) == 4 and parts[:2] == ["ci", "reports"] and parts[3] in {"publish-comment", "publish-pr-comment"}:
+            return _publish_github_pr_comment(config, store, {**payload, "report_id": parts[2]})
         if method == "GET" and len(parts) == 3 and parts[:2] == ["ci", "reports"]:
             return _ci_report(config, parts[2])
+        if method == "GET" and parts == ["github", "context"]:
+            return GitHubConnector(config).context()
+        if method == "POST" and parts == ["github", "pr-comments"]:
+            return _publish_github_pr_comment(config, store, payload)
+        if method == "POST" and parts == ["github", "actions", "artifacts", "import"]:
+            return _import_github_actions_artifacts(config, payload)
         if method == "GET" and parts == ["repos"]:
             return _multi_repo_status(config)
 
@@ -710,12 +735,18 @@ def _api_routes() -> list[str]:
         "POST /api/reflect/run",
         "GET /api/graph/status",
         "GET /api/graph/explain",
+        "GET /api/graph/view",
         "POST /api/graph/rebuild",
         "GET /api/audit/status",
         "POST /api/audit/check",
         "POST /api/audit/bundle",
         "GET /api/ci/reports",
+        "POST /api/ci/reports",
+        "POST /api/ci/reports/{report_id}/publish-comment",
         "GET /api/ci/reports/{report_id}",
+        "GET /api/github/context",
+        "POST /api/github/pr-comments",
+        "POST /api/github/actions/artifacts/import",
         "GET /api/repos",
         "GET /api/specs",
         "POST /api/spec/check",
@@ -1213,7 +1244,14 @@ def _safety_check_tool(config: Config, payload: dict[str, Any]) -> dict[str, Any
     }
 
 
-def _run_task(config: Config, store: ExperienceStore, payload: dict[str, Any], *, cancel_requested: Any | None = None) -> dict[str, Any]:
+def _run_task(
+    config: Config,
+    store: ExperienceStore,
+    payload: dict[str, Any],
+    *,
+    cancel_requested: Any | None = None,
+    progress_callback: Any | None = None,
+) -> dict[str, Any]:
     task = payload.get("task")
     if not isinstance(task, str) or not task.strip():
         raise GatewayError(400, "`task` is required")
@@ -1241,6 +1279,7 @@ def _run_task(config: Config, store: ExperienceStore, payload: dict[str, Any], *
         dry_run=bool(payload.get("dry_run", False)),
         spec_files=spec_files or None,
         cancel_requested=cancel_requested,
+        progress_callback=progress_callback,
     )
     return _run_detail(trajectory, store)
 
@@ -1379,6 +1418,98 @@ def _run_explain(trajectory: dict[str, Any], store: ExperienceStore) -> dict[str
         "asset_usage": store.usage_for_task(task_id) if task_id else [],
         "graph": store.graph_explain(task_id, depth=2, limit=80) if task_id else {},
     }
+
+
+def _graph_view(store: ExperienceStore, ref: str, *, depth: int = 2, limit: int = 100) -> dict[str, Any]:
+    graph = store.graph_explain(ref, depth=depth, limit=limit)
+    nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
+    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
+    start = (graph.get("start_node") or {}).get("node_id")
+    node_ids = [str(node.get("node_id")) for node in nodes if node.get("node_id")]
+    if not node_ids:
+        graph["view"] = {"nodes": [], "edges": [], "legend": {}}
+        return graph
+    distances = _graph_distances(start or node_ids[0], node_ids, edges)
+    layers: dict[int, list[dict[str, Any]]] = {}
+    for node in nodes:
+        node_id = str(node.get("node_id") or "")
+        layer = min(4, distances.get(node_id, 4))
+        layers.setdefault(layer, []).append(node)
+    view_nodes: list[dict[str, Any]] = []
+    width = 920
+    height = max(320, 130 * max(1, len(layers)))
+    for layer, items in sorted(layers.items()):
+        x = 110 + layer * 185
+        gap = height / (len(items) + 1)
+        for index, node in enumerate(sorted(items, key=lambda item: str(item.get("title") or item.get("node_id") or "")), start=1):
+            node_type = str(node.get("node_type") or "unknown")
+            view_nodes.append(
+                {
+                    **node,
+                    "x": x,
+                    "y": int(gap * index),
+                    "label": _graph_label(node),
+                    "color": _graph_node_color(node_type),
+                }
+            )
+    view_edges = [
+        {
+            **edge,
+            "source": edge.get("source_node_id"),
+            "target": edge.get("target_node_id"),
+            "label": edge.get("relation_type"),
+        }
+        for edge in edges
+    ]
+    graph["view"] = {
+        "width": width,
+        "height": height,
+        "nodes": view_nodes,
+        "edges": view_edges,
+        "legend": {
+            "run": _graph_node_color("run"),
+            "proposal": _graph_node_color("proposal"),
+            "asset": _graph_node_color("asset"),
+            "spec": _graph_node_color("spec"),
+            "feedback": _graph_node_color("feedback"),
+            "unknown": _graph_node_color("unknown"),
+        },
+    }
+    return graph
+
+
+def _graph_distances(start: str, node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, int]:
+    adjacency: dict[str, set[str]] = {node_id: set() for node_id in node_ids}
+    for edge in edges:
+        source = str(edge.get("source_node_id") or "")
+        target = str(edge.get("target_node_id") or "")
+        if source in adjacency and target in adjacency:
+            adjacency[source].add(target)
+            adjacency[target].add(source)
+    distances = {start: 0}
+    frontier = [start]
+    while frontier:
+        current = frontier.pop(0)
+        for next_id in sorted(adjacency.get(current, set())):
+            if next_id not in distances:
+                distances[next_id] = distances[current] + 1
+                frontier.append(next_id)
+    return distances
+
+
+def _graph_label(node: dict[str, Any]) -> str:
+    title = str(node.get("title") or node.get("ref_path") or node.get("node_id") or "")
+    return shorten(title, 42)
+
+
+def _graph_node_color(node_type: str) -> str:
+    return {
+        "run": "#2563eb",
+        "proposal": "#d97706",
+        "asset": "#16a34a",
+        "spec": "#7c3aed",
+        "feedback": "#be123c",
+    }.get(node_type, "#64748b")
 
 
 def _proposal_api(method: str, parts: list[str], payload: dict[str, Any], store: ExperienceStore) -> Any:
@@ -1620,6 +1751,151 @@ def _ci_report(config: Config, report_id: str) -> dict[str, Any]:
         if row.get("report_id") == safe_id or Path(str(row.get("path") or "")).stem == safe_id:
             return _load_relative_json(config, str(row["path"]))
     raise GatewayError(404, "CI/PR report not found")
+
+
+def _generate_ci_report(config: Config, store: ExperienceStore, payload: dict[str, Any]) -> dict[str, Any]:
+    _require_confirm(payload, "generate a CI/PR report artifact")
+    run_id = str(payload.get("run_id") or "latest")
+    trajectory = store.latest_trajectory() if run_id == "latest" else store.get_trajectory(run_id)
+    if not trajectory:
+        raise GatewayError(404, "Run not found")
+    audit = build_project_audit_check(
+        config,
+        store,
+        rebuild_graph=bool(payload.get("rebuild_graph", False)),
+        strict=bool(payload.get("strict", False)),
+        redaction=str(payload.get("redaction") or "standard"),
+    )
+    report_id = new_id("ci")
+    report = {
+        "report_id": report_id,
+        "kind": "github_actions_pr_report",
+        "status": _ci_status_from_run(trajectory, audit),
+        "summary": (trajectory.get("result") or {}).get("summary") or "Praxile CI report generated.",
+        "created_at": utc_now(),
+        "run_id": trajectory.get("task_id"),
+        "task": trajectory.get("user_task"),
+        "reward": (trajectory.get("reward_report") or {}).get("overall"),
+        "regression_passed": (trajectory.get("reward_report") or {}).get("regression_passed"),
+        "proposal_count": len(trajectory.get("experience_candidates") or []),
+        "silent_failure_count": len(trajectory.get("silent_failure_signals") or []),
+        "audit": audit,
+        "github": _github_context(),
+        "comment_publishing": {
+            "supported": True,
+            "requires_confirm": True,
+            "endpoint": "/api/github/pr-comments",
+            "token_env": config.get("github", "token_env", default="GITHUB_TOKEN"),
+        },
+    }
+    root = config.paths.state / "experience" / "ci"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{report_id}.json"
+    write_json(path, report)
+    if _payload_bool(payload.get("write_step_summary"), default=False):
+        _write_github_step_summary(report)
+    report["path"] = str(path.relative_to(config.paths.root))
+    return report
+
+
+def _publish_github_pr_comment(config: Config, store: ExperienceStore, payload: dict[str, Any]) -> dict[str, Any]:
+    _require_confirm(payload, "publish a GitHub PR comment")
+    connector = GitHubConnector(config)
+    try:
+        repo = connector.repository(payload.get("repository") if isinstance(payload.get("repository"), str) else None)
+        if not repo:
+            raise GitHubIntegrationError("GitHub repository is required")
+        raw_pr = payload.get("pr_number") or connector.default_pr_number()
+        if raw_pr is None:
+            raise GitHubIntegrationError("GitHub PR number is required")
+        pr_number = int(raw_pr)
+        report_id = str(payload.get("report_id") or "latest")
+        report = _ci_report(config, report_id) if not payload.get("body") else {}
+        body = str(payload.get("body") or "").strip()
+        if not body:
+            marker = str(payload.get("marker") or config.get("github", "comment_marker", default="<!-- praxile-report -->") or "<!-- praxile-report -->")
+            body = build_pr_comment_body(report, marker=marker)
+        preview_only = _payload_bool(payload.get("preview_only"), default=False)
+        result = {
+            "repository": repo,
+            "pr_number": pr_number,
+            "report_id": report.get("report_id") or report_id,
+            "preview_only": preview_only,
+            "body": body,
+        }
+        if preview_only:
+            result["status"] = "preview"
+            return result
+        published = connector.create_pr_comment(repo=repo, pr_number=pr_number, body=body)
+        result.update(published)
+        _record_github_comment_publish(config, result)
+        return result
+    except GitHubIntegrationError as exc:
+        raise GatewayError(400, str(exc)) from exc
+
+
+def _record_github_comment_publish(config: Config, result: dict[str, Any]) -> None:
+    root = config.paths.state / "experience" / "ci" / "github-comments"
+    root.mkdir(parents=True, exist_ok=True)
+    record = {key: value for key, value in result.items() if key != "body"}
+    record["body_preview"] = shorten(str(result.get("body") or ""), 1000)
+    record["created_at"] = utc_now()
+    write_json(root / f"{new_id('gh_comment')}.json", record)
+
+
+def _import_github_actions_artifacts(config: Config, payload: dict[str, Any]) -> dict[str, Any]:
+    _require_confirm(payload, "import GitHub Actions artifacts")
+    try:
+        return import_actions_artifacts(config, payload)
+    except GitHubIntegrationError as exc:
+        raise GatewayError(400, str(exc)) from exc
+
+
+def _ci_status_from_run(trajectory: dict[str, Any], audit: dict[str, Any]) -> str:
+    if (trajectory.get("result") or {}).get("status") == "failed":
+        return "failed"
+    if (trajectory.get("reward_report") or {}).get("regression_passed") is False:
+        return "failed"
+    if audit.get("status") in {"failed", "error"}:
+        return "failed"
+    if (trajectory.get("result") or {}).get("status") == "needs_human":
+        return "needs_human"
+    return "passed"
+
+
+def _github_context() -> dict[str, Any]:
+    keys = [
+        "GITHUB_ACTIONS",
+        "GITHUB_REPOSITORY",
+        "GITHUB_REF",
+        "GITHUB_SHA",
+        "GITHUB_RUN_ID",
+        "GITHUB_RUN_ATTEMPT",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_HEAD_REF",
+        "GITHUB_BASE_REF",
+    ]
+    return {key.lower(): os.environ.get(key) for key in keys if os.environ.get(key)}
+
+
+def _write_github_step_summary(report: dict[str, Any]) -> None:
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    path = Path(summary_path)
+    lines = [
+        "## Praxile Report",
+        "",
+        f"- Status: `{report.get('status')}`",
+        f"- Run: `{report.get('run_id')}`",
+        f"- Reward: `{report.get('reward')}`",
+        f"- Proposals: `{report.get('proposal_count')}`",
+        f"- Silent failures: `{report.get('silent_failure_count')}`",
+        "",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
 
 
 def _ci_report_id(config: Config, path: Path) -> str:

@@ -87,6 +87,8 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
         json.dumps({"kind": "github_pr", "status": "passed", "summary": "Praxile PR report", "run_id": "task_console", "created_at": utc_now()}),
         encoding="utf-8",
     )
+    config.data["github"]["repository"] = "Praxile-Alpha/Praxile"
+    config.write()
 
     app = GatewayApp(tmp_path)
     page = app.dispatch("GET", "/")
@@ -102,6 +104,7 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
     assert "Channel Bindings" in page.html
     assert "CI / PR Reports" in page.html
     assert "Multi-repo Dashboard" in page.html
+    assert "Structured Proposal Editor" in page.html
 
     status = app.dispatch("GET", "/api/status")
     assert status["counts"]["runs"] == 1
@@ -127,12 +130,10 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
     job_started = app.dispatch(
         "POST",
         f"/api/chat/sessions/{job_session['session_id']}/message-async",
-        payload={"task": "Inspect async gateway cancellation", "dry_run": True, "max_steps": 1},
+        payload={"task": "Inspect async gateway cancellation", "dry_run": True, "max_steps": 0},
     )
     job_id = job_started["job"]["job_id"]
     assert job_started["session"]["active_job_id"] == job_id
-    cancelled = app.dispatch("POST", f"/api/runs/jobs/{job_id}/cancel", payload={"reason": "test cancellation"})
-    assert cancelled["event"]["type"] == "stop_requested"
     terminal = None
     for _ in range(60):
         terminal = app.dispatch("GET", f"/api/runs/jobs/{job_id}", query={"after": ["0"]})
@@ -141,8 +142,17 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
         time.sleep(0.05)
     assert terminal is not None
     assert terminal["events"]
+    runtime_stages = {event["stage"] for event in terminal["events"] if event["type"] == "runtime_stage"}
+    assert {"analyze", "retrieve", "route", "evolve"} <= runtime_stages
     job_events = app.dispatch("GET", f"/api/runs/jobs/{job_id}/events", query={"format": ["json"], "after": ["0"]})
     assert job_events["job_id"] == job_id
+    cancel_started = app.dispatch(
+        "POST",
+        "/api/runs/jobs",
+        payload={"task": "Inspect cancellable gateway job", "dry_run": True, "max_steps": 0},
+    )
+    cancelled = app.dispatch("POST", f"/api/runs/jobs/{cancel_started['job_id']}/cancel", payload={"reason": "test cancellation"})
+    assert cancelled["event"]["type"] == "stop_requested"
 
     roles = app.dispatch("GET", "/api/models/roles")
     assert {row["role"] for row in roles} >= {"coding_agent", "embedding"}
@@ -248,6 +258,8 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
     assert "nodes" in graph_rebuild
     graph_explain = app.dispatch("GET", "/api/graph/explain", query={"ref": [".praxile/memory/console.md"]})
     assert graph_explain["ref"] == ".praxile/memory/console.md"
+    graph_view = app.dispatch("GET", "/api/graph/view", query={"ref": [".praxile/memory/console.md"]})
+    assert "view" in graph_view
 
     audit_check = app.dispatch("POST", "/api/audit/check", payload={"strict": False})
     assert audit_check["audit_type"] == "check"
@@ -257,6 +269,18 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
     assert ci_reports[0]["summary"] == "Praxile PR report"
     ci_report = app.dispatch("GET", f"/api/ci/reports/{ci_reports[0]['report_id']}")
     assert ci_report["status"] == "passed"
+    generated_ci = app.dispatch("POST", "/api/ci/reports", payload={"confirm": True, "run_id": "task_console"})
+    assert generated_ci["run_id"] == "task_console"
+    assert generated_ci["comment_publishing"]["supported"] is True
+    github_context = app.dispatch("GET", "/api/github/context")
+    assert github_context["repository"] == "Praxile-Alpha/Praxile"
+    preview_comment = app.dispatch(
+        "POST",
+        "/api/github/pr-comments",
+        payload={"confirm": True, "preview_only": True, "report_id": generated_ci["report_id"], "pr_number": 3},
+    )
+    assert preview_comment["status"] == "preview"
+    assert "Praxile Report" in preview_comment["body"]
     repos = app.dispatch("GET", "/api/repos")
     assert repos["repos"][0]["current"] is True
 
