@@ -38,12 +38,14 @@ class TestCLIProposalActions(unittest.TestCase):
             "title": "Low risk skill"
         }
         store.list_proposals.return_value = [proposal]
+        store.find_proposal.return_value = proposal
         store.apply_proposal.return_value = proposal
         
         args = argparse.Namespace(all_low_risk=True, yes=True, dry_run=False, limit=None)
         
         # Yes should apply
         cmd_accept(args, Path("."))
+        store.find_proposal.assert_called_once_with("prop_1", status="pending")
         store.apply_proposal.assert_called_once_with(proposal)
 
     @patch("praxile.cli.load")

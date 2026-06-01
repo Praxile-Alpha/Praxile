@@ -268,7 +268,7 @@ class ModelRouter:
             merged_config = dict(transport_config)
             merged_config.update(provider_config)
             provider_type = provider_config.get("type", "openai_compatible")
-            if provider_type in {"openai", "openai_compatible"}:
+            if provider_type in {"openai", "openai_compatible", "custom"}:
                 providers[name] = OpenAICompatibleProvider(name, merged_config)
             elif provider_type == "ollama":
                 merged_config.setdefault("base_url", "http://localhost:11434/v1")

@@ -153,7 +153,15 @@ flowchart LR
 ## 功能亮点
 
 - **以聊天为先的工作台 (Chat-First Web Console)**  
-  零外部依赖的本地工作台（`praxile gateway serve`），提供经典的三栏式布局：聊天区、执行明细与右侧治理上下文面板。
+  零外部依赖的本地工作台（`praxile gateway serve`），提供聊天执行、运行明细、治理上下文与仓库上下文健康度面板。
+- **仓库上下文同步 (Repository Context Sync)**
+  `praxile sync` 会生成本地、可审计的仓库上下文快照，包含 Context Health、文件分类信号、git 变更状态、近期 commits/diffs、docs/spec 索引、可选本地 CI/GitHub 上下文、经验资产计数与 ContextJuice 估算，并写入 `.praxile/context/repo_snapshot.json`、`.praxile/context/commits/`、`.praxile/context/diffs/` 与历史快照。
+- **ContextJuice 与 Repository Memory Tree**
+  `praxile context compress` 会按模型角色压缩上下文并保留证据元数据；`praxile context tree` 会在 `.praxile/context/tree/` 下生成面向人的仓库经验树。
+- **Policy Layers 与治理循环**
+  `praxile policy list/check/explain` 用于检查项目本地治理规则层；`praxile watch` 会执行安全治理循环，可同步、压缩、审计、重建图谱和运行 Reflect，但不会自动改代码或自动接受 proposal。
+- **Workflow Templates**
+  `praxile workflow list/show/seed` 提供可编辑的任务工作流模板，例如测试失败修复、spec 驱动功能、架构变更、安全修复和迁移。
 - **仓库本地经验**  
   Memories、skills、rules、evals、failure patterns、project patterns、frozen boundaries、architecture gates 等都保存在 `.praxile/` 下。
 - **Spec-aware execution**  
@@ -350,7 +358,8 @@ npm install
 npm run dev
 ```
 
-Web Console 现在可以生成本地 CI report、在显式确认后通过 `GITHUB_TOKEN` 发布 GitHub PR comment、导入 GitHub Actions artifacts 到 `.praxile/`、可视化 experience graph，并通过结构化字段编辑 pending proposal。
+Web Console 现在可以生成本地 CI report、在显式确认后通过 `GITHUB_TOKEN` 发布 GitHub PR comment、导入 GitHub Actions artifacts 到 `.praxile/`、可视化 experience graph、通过结构化字段编辑 pending proposal、查看 policy layers、触发 ContextJuice 压缩、生成 Repository Memory Tree，并运行安全的一次性治理循环。
+它也包含 Repository Context 面板，数据来源与 `praxile sync` 一致。
 
 ### 5. 审查与解释
 
@@ -406,6 +415,21 @@ praxile review --interactive    审查 pending proposals
 praxile explain latest          解释检索、reward 和 proposals
 praxile spec check              检查可选 spec 质量信号
 praxile spec verify latest      基于 spec context 验证运行结果
+praxile sync                    采集仓库上下文快照
+praxile sync --since 7d --docs --specs --ci --github
+                                  采集指定范围的上下文索引
+praxile sync --github-online    显式拉取 GitHub PR/Issue 摘要
+praxile context status          查看 ContextJuice 角色配置和输出
+praxile context compress --run latest
+                                  压缩运行上下文并保留证据元数据
+praxile context tree            生成面向人的仓库经验树
+praxile policy check            校验项目本地 policy layers
+praxile policy explain proposal_gate
+                                  解释当前生效的 policy 优先级
+praxile workflow list           查看内置和项目工作流模板
+praxile workflow seed           写入 .praxile/workflows 下的可编辑模板
+praxile watch --once --compress 执行安全的一次性治理循环
+praxile watch --iterations 3    执行多轮安全治理循环
 praxile reflect --summary       分析已积累经验
 praxile reflect --write-proposals
                                   生成可审查治理 proposal
@@ -514,6 +538,7 @@ Praxile 当前处于 **Alpha** 阶段。
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)
 - [Web Console](docs/WEB_CONSOLE.md)
+- [P0 Engineering Checklist](docs/P0_ENGINEERING_CHECKLIST.md)
 - [Praxile Reflect](docs/REFLECT.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
 - [Governance](docs/GOVERNANCE.md)

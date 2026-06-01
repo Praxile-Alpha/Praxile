@@ -75,6 +75,14 @@ class GitHubConnector:
         owner, name = repo.split("/", 1)
         return f"{self.api_base_url}/repos/{owner}/{name}/actions/artifacts/{artifact_id}/zip"
 
+    def pull_requests_url(self, repo: str, *, state: str = "open", per_page: int = 20) -> str:
+        owner, name = repo.split("/", 1)
+        return f"{self.api_base_url}/repos/{owner}/{name}/pulls?state={state}&per_page={max(1, min(100, int(per_page)))}"
+
+    def issues_url(self, repo: str, *, state: str = "open", per_page: int = 20) -> str:
+        owner, name = repo.split("/", 1)
+        return f"{self.api_base_url}/repos/{owner}/{name}/issues?state={state}&per_page={max(1, min(100, int(per_page)))}"
+
     def create_pr_comment(self, *, repo: str, pr_number: int, body: str) -> dict[str, Any]:
         if not body.strip():
             raise GitHubIntegrationError("PR comment body is required")
@@ -99,6 +107,19 @@ class GitHubConnector:
         artifacts = payload.get("artifacts") if isinstance(payload, dict) else []
         return [item for item in artifacts if isinstance(item, dict)]
 
+    def list_pull_requests(self, *, repo: str, state: str = "open", limit: int = 20) -> list[dict[str, Any]]:
+        payload = self._request_json_value("GET", self.pull_requests_url(repo, state=state, per_page=limit), require_token=True)
+        if not isinstance(payload, list):
+            raise GitHubIntegrationError("GitHub pull request response must be a JSON array")
+        return [_compact_github_item(item, kind="pull_request") for item in payload[: max(1, int(limit or 20))] if isinstance(item, dict)]
+
+    def list_issues(self, *, repo: str, state: str = "open", limit: int = 20) -> list[dict[str, Any]]:
+        payload = self._request_json_value("GET", self.issues_url(repo, state=state, per_page=limit), require_token=True)
+        if not isinstance(payload, list):
+            raise GitHubIntegrationError("GitHub issue response must be a JSON array")
+        issues = [item for item in payload if isinstance(item, dict) and "pull_request" not in item]
+        return [_compact_github_item(item, kind="issue") for item in issues[: max(1, int(limit or 20))]]
+
     def download_artifact_zip(self, *, repo: str, artifact_id: str | int) -> bytes:
         return self._request_bytes("GET", self.artifact_zip_url(repo, artifact_id), require_token=True)
 
@@ -118,6 +139,20 @@ class GitHubConnector:
         if not isinstance(data, dict):
             raise GitHubIntegrationError("GitHub response must be a JSON object")
         return data
+
+    def _request_json_value(
+        self,
+        method: str,
+        url: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        require_token: bool = False,
+    ) -> Any:
+        raw = self._request_bytes(method, url, payload=payload, require_token=require_token)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise GitHubIntegrationError(f"GitHub returned invalid JSON: {exc}") from exc
 
     def _request_bytes(
         self,
@@ -242,6 +277,24 @@ def _artifact_import_root(config: Config, import_id: str) -> Path:
     if not path_is_relative_to(root, state):
         raise GitHubIntegrationError("github.artifact_import_dir must stay inside .praxile")
     return root
+
+
+def _compact_github_item(item: dict[str, Any], *, kind: str) -> dict[str, Any]:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    labels = item.get("labels") if isinstance(item.get("labels"), list) else []
+    return {
+        "kind": kind,
+        "number": item.get("number"),
+        "title": item.get("title"),
+        "state": item.get("state"),
+        "draft": item.get("draft") if kind == "pull_request" else None,
+        "html_url": item.get("html_url"),
+        "api_url": item.get("url"),
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+        "author": user.get("login"),
+        "labels": [str(label.get("name")) for label in labels if isinstance(label, dict) and label.get("name")][:10],
+    }
 
 
 def _extract_zip_safely(raw: bytes, artifact_dir: Path, project_root: Path) -> list[str]:

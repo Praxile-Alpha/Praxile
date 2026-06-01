@@ -349,11 +349,13 @@ _HTML = """<!doctype html>
         <button data-panel="runs">Runs</button>
         <button data-panel="proposals">Proposals</button>
         <button data-panel="assets">Assets</button>
+        <button data-panel="context">Context</button>
         <button data-panel="reflect">Reflect</button>
         <button data-panel="graph">Graph</button>
         <button data-panel="audit">Audit</button>
         <button data-panel="spec">Spec</button>
         <button data-panel="safety">Safety</button>
+        <button data-panel="policy">Policy</button>
         <button data-panel="channels">Channels</button>
         <button data-panel="ci">CI / PR</button>
         <button data-panel="repos">Repos</button>
@@ -395,6 +397,8 @@ _HTML = """<!doctype html>
           <div class="toolbar" style="margin-bottom:10px">
             <button class="secondary" id="test-models">Test all routes</button>
           </div>
+          <h3>Setup Presets</h3>
+          <div id="model-presets"></div>
           <div id="models-table"></div>
           <h3>Edit Role Route</h3>
           <div class="mini-form">
@@ -463,6 +467,52 @@ _HTML = """<!doctype html>
 
         <section id="panel-proposals" class="panel">
           <h2>Proposal Inbox</h2>
+          <div class="mini-form" style="margin-bottom:10px">
+            <div class="grid3">
+              <select id="proposal-filter-status">
+                <option value="pending">pending</option>
+                <option value="">all statuses</option>
+                <option value="accepted">accepted</option>
+                <option value="rejected">rejected</option>
+              </select>
+              <select id="proposal-filter-type">
+                <option value="">all types</option>
+                <option value="memory">memory</option>
+                <option value="skill">skill</option>
+                <option value="harness_rule">harness_rule</option>
+                <option value="eval">eval</option>
+                <option value="failure_pattern">failure_pattern</option>
+                <option value="frozen_boundary">frozen_boundary</option>
+                <option value="project_pattern">project_pattern</option>
+              </select>
+              <select id="proposal-filter-risk">
+                <option value="">all risks</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+            <div class="grid3">
+              <select id="proposal-filter-confidence">
+                <option value="">any confidence</option>
+                <option value="high">high confidence</option>
+                <option value="medium">medium confidence</option>
+                <option value="low">low confidence</option>
+              </select>
+              <select id="proposal-filter-recommended">
+                <option value="">any recommendation</option>
+                <option value="accept">recommended accept</option>
+                <option value="review">needs review</option>
+                <option value="reject">recommended reject</option>
+              </select>
+              <input id="proposal-filter-source-run" placeholder="source run id">
+              <input id="proposal-filter-query" placeholder="search title, evidence, run id">
+            </div>
+            <div class="toolbar">
+              <button class="secondary" id="apply-proposal-filters">Apply filters</button>
+              <button class="ghost" id="clear-proposal-filters">Clear</button>
+            </div>
+          </div>
           <div id="proposals-table"></div>
           <h3>Structured Proposal Editor</h3>
           <div class="proposal-form">
@@ -503,6 +553,49 @@ _HTML = """<!doctype html>
             <button class="secondary" id="asset-archive">Archive</button>
             <button class="secondary" id="asset-reactivate">Reactivate</button>
           </div>
+        </section>
+
+        <section id="panel-context" class="panel">
+          <h2>Repository Context</h2>
+          <div class="toolbar" style="margin-bottom:10px">
+            <button class="secondary" id="sync-context">Sync context</button>
+            <button class="secondary" id="dry-sync-context">Dry run</button>
+            <button class="secondary" id="compress-context">Compress latest</button>
+            <button class="secondary" id="build-memory-tree">Build tree</button>
+            <button class="secondary" id="run-governance">Governance pass</button>
+          </div>
+          <div class="artifact-grid" id="context-health"></div>
+          <h3>ContextJuice</h3>
+          <div id="context-juice"></div>
+          <h3>Repository Memory Tree</h3>
+          <div id="memory-tree"></div>
+          <h3>Workflow Templates</h3>
+          <div class="toolbar" style="margin-bottom:8px">
+            <button class="secondary" id="load-workflows">Load workflows</button>
+            <button class="secondary" id="seed-workflows">Seed workflows</button>
+          </div>
+          <div id="workflow-table"></div>
+          <h3>Context Categories</h3>
+          <div id="context-categories"></div>
+          <h3>Recommendations</h3>
+          <div class="list" id="context-recommendations"></div>
+          <h3>Repository Context Payload</h3>
+          <pre id="context-detail">No context status loaded.</pre>
+        </section>
+
+        <section id="panel-policy" class="panel">
+          <h2>Policy Layers</h2>
+          <div class="toolbar" style="margin-bottom:10px">
+            <button class="secondary" id="check-policy">Check policies</button>
+            <button class="secondary" id="seed-policy">Seed defaults</button>
+          </div>
+          <div id="policy-table"></div>
+          <h3>Explain Policy</h3>
+          <div class="grid2" style="margin-bottom:8px">
+            <input id="policy-topic" placeholder="proposal_gate, tool_policy, coding_agent" value="proposal_gate">
+            <button class="secondary" id="explain-policy">Explain</button>
+          </div>
+          <pre id="policy-detail">No policy payload loaded.</pre>
         </section>
 
         <section id="panel-reflect" class="panel">
@@ -763,10 +856,29 @@ _HTML = """<!doctype html>
       if (!rows.length) return '<div class="item"><strong>No records</strong><span></span></div>';
       return `<table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
     }
+    function proposalQuery() {
+      const params = new URLSearchParams();
+      const status = $('proposal-filter-status')?.value ?? 'pending';
+      const type = $('proposal-filter-type')?.value || '';
+      const risk = $('proposal-filter-risk')?.value || '';
+      const confidence = $('proposal-filter-confidence')?.value || '';
+      const recommended = $('proposal-filter-recommended')?.value || '';
+      const sourceRun = $('proposal-filter-source-run')?.value?.trim() || '';
+      const q = $('proposal-filter-query')?.value?.trim() || '';
+      if (status) params.set('status', status);
+      if (type) params.set('type', type);
+      if (risk) params.set('risk', risk);
+      if (confidence) params.set('confidence', confidence);
+      if (recommended) params.set('recommended', recommended);
+      if (sourceRun) params.set('source_run', sourceRun);
+      if (q) params.set('q', q);
+      params.set('limit', '50');
+      return params.toString();
+    }
     function setPanel(name) {
       document.querySelectorAll('nav button').forEach(btn => btn.classList.toggle('active', btn.dataset.panel === name));
       document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${name}`));
-      $('panel-title').textContent = {chat:'Chat Workspace', models:'Model Roles', runs:'Runs', proposals:'Proposals', assets:'Assets', reflect:'Reflect Dashboard', graph:'Graph Explorer', audit:'Audit Dashboard', spec:'Spec Verify', safety:'Tool / Safety Policy', channels:'Channel Bindings', ci:'CI / PR Reports', repos:'Multi-repo Dashboard'}[name] || 'Praxile';
+      $('panel-title').textContent = {chat:'Chat Workspace', models:'Model Roles', runs:'Runs', proposals:'Proposals', assets:'Assets', context:'Repository Context', reflect:'Reflect Dashboard', graph:'Graph Explorer', audit:'Audit Dashboard', spec:'Spec Verify', safety:'Tool / Safety Policy', channels:'Channel Bindings', ci:'CI / PR Reports', repos:'Multi-repo Dashboard'}[name] || 'Praxile';
     }
     function renderMessages(session) {
       const messages = session?.messages || [];
@@ -875,18 +987,24 @@ _HTML = """<!doctype html>
       await refresh();
     }
     async function refresh() {
-      const [status, sessions, runs, proposals, assets, roles, providers, stats, channels] = await Promise.all([
+      const [status, context, sessions, runs, proposals, assets, roles, providers, presets, stats, channels, juice, tree, policies, workflows] = await Promise.all([
         api('/api/status'),
+        api('/api/context/status'),
         api('/api/chat/sessions'),
         api('/api/runs?limit=20'),
-        api('/api/proposals?status=pending&limit=50'),
+        api(`/api/proposals?${proposalQuery()}`),
         api('/api/assets'),
         api('/api/models/roles'),
         api('/api/models/providers'),
+        api('/api/models/presets'),
         api('/api/models/stats'),
-        api('/api/channels')
+        api('/api/channels'),
+        api('/api/context/juice/status'),
+        api('/api/context/tree'),
+        api('/api/policies'),
+        api('/api/workflows')
       ]);
-      $('project-kv').innerHTML = `<div>Runs</div><div>${status.counts.runs}</div><div>Pending</div><div>${status.counts.pending_proposals}</div><div>Providers</div><div>${status.counts.providers}</div>`;
+      $('project-kv').innerHTML = `<div>Runs</div><div>${status.counts.runs}</div><div>Pending</div><div>${status.counts.pending_proposals}</div><div>Context</div><div>${esc(context.health?.level || 'unknown')}</div><div>Providers</div><div>${status.counts.providers}</div>`;
       $('left-runs').innerHTML = runs.slice(0, 8).map(row => item(row.task_id, `${row.status} reward=${row.reward ?? 'n/a'} ${row.task || ''}`)).join('') || item('No runs', '');
       $('left-proposals').innerHTML = proposals.slice(0, 8).map(prop => item(prop.proposal_id, `${prop.type} ${prop.risk_level || ''}`)).join('') || item('No pending proposals', '');
       if (!currentSession) currentSession = sessions[0] ? await api(`/api/chat/sessions/${sessions[0].session_id}`) : await api('/api/chat/sessions', {method:'POST', body: JSON.stringify({title:'Web session'})});
@@ -894,7 +1012,12 @@ _HTML = """<!doctype html>
       renderRuns(runs);
       renderProposals(proposals);
       renderAssets(assets);
-      renderModels(roles, providers, stats);
+      renderContext(context);
+      renderContextJuice(juice);
+      renderMemoryTree(tree);
+      renderWorkflows(workflows);
+      renderPolicies(policies);
+      renderModels(roles, providers, presets, stats);
       renderChannels(channels);
       if (status.latest_run) {
         const run = await api(`/api/runs/${status.latest_run.task_id}`);
@@ -944,7 +1067,11 @@ _HTML = """<!doctype html>
       setPanel('runs');
     }
     function renderProposals(proposals) {
-      $('proposals-table').innerHTML = table(['ID','Type','Risk','Confidence','Title','Action'], proposals.map(prop => `<tr><td><button class="ghost" onclick="openProposal('${esc(prop.proposal_id)}')">${esc(prop.proposal_id)}</button></td><td>${esc(prop.type)}</td><td>${badge(prop.risk_level)}</td><td>${esc(prop.confidence ?? '')}</td><td>${esc(prop.title || '')}</td><td><button class="secondary" onclick="openProposal('${esc(prop.proposal_id)}')">Edit</button> <button class="secondary" onclick="acceptProposal('${esc(prop.proposal_id)}')">Accept</button> <button class="secondary" onclick="rejectProposal('${esc(prop.proposal_id)}')">Reject</button></td></tr>`));
+      $('proposals-table').innerHTML = table(['ID','Type','Risk','Confidence','Why loaded','Title','Action'], proposals.map(prop => {
+        const explanation = prop.review_explanation || {};
+        const why = explanation.why_in_inbox || explanation.recommended_action || prop.source_run || '';
+        return `<tr><td><button class="ghost" onclick="openProposal('${esc(prop.proposal_id)}')">${esc(prop.proposal_id)}</button></td><td>${esc(prop.type)}</td><td>${badge(prop.risk_level)}</td><td>${esc(prop.confidence ?? '')}</td><td>${esc(why)}</td><td>${esc(prop.title || '')}</td><td><button class="secondary" onclick="openProposal('${esc(prop.proposal_id)}')">Edit</button> <button class="secondary" onclick="acceptProposal('${esc(prop.proposal_id)}')">Accept</button> <button class="secondary" onclick="rejectProposal('${esc(prop.proposal_id)}')">Reject</button></td></tr>`;
+      }));
     }
     async function openProposal(id) {
       const proposal = await api(`/api/proposals/${encodeURIComponent(id)}`);
@@ -1010,6 +1137,127 @@ _HTML = """<!doctype html>
     }
     function renderAssets(assets) {
       $('assets-table').innerHTML = table(['Path','Type','Status','Usage','Positive','Negative'], assets.map(asset => `<tr><td><button class="ghost" onclick="openAsset('${encodeURIComponent(asset.path)}')">${esc(asset.path)}</button></td><td>${esc(asset.type)}</td><td>${badge(asset.status)}</td><td>${esc(asset.usage_count ?? 0)}</td><td>${esc(asset.positive_outcome_count ?? 0)}</td><td>${esc(asset.negative_outcome_count ?? 0)}</td></tr>`));
+    }
+    function renderContext(context) {
+      const health = context.health || {};
+      const repo = context.repository || {};
+      const experience = context.experience || {};
+      const juice = context.context_juice || {};
+      const categories = repo.categories || {};
+      const detected = context.detected || {};
+      const specs = context.specs || {};
+      const docs = context.docs || {};
+      const freshness = context.freshness || {};
+      $('context-health').innerHTML = [
+        item('Health', `${health.level || 'unknown'} ${health.score ?? ''}`),
+        item('Last sync', `${freshness.last_sync_at || 'never'} (${freshness.level || 'unknown'})`),
+        item('Stacks', (detected.stacks || []).join(', ') || 'none'),
+        item('Detected tests', (detected.test_commands || []).slice(0, 2).join(', ') || 'none'),
+        item('Specs', `${(specs.spec_files || []).length} files, ${specs.quality_label || 'unknown'}`),
+        item('Docs', `${(docs.files || []).length} files`),
+        item('Scanned files', `${repo.scanned_files ?? 0}${repo.truncated ? ' truncated' : ''}`),
+        item('Experience', `${experience.runs ?? 0} runs, ${experience.pending_proposals ?? 0} pending`),
+        item('Active assets', `${experience.active_assets ?? 0}`),
+        item('Graph', `${experience.graph_nodes ?? 0} nodes / ${experience.graph_edges ?? 0} edges`),
+        item('Git', `${repo.git?.changed_files ?? 0} changed files`),
+        item('ContextJuice', `${Math.round((juice.estimated_savings || 0) * 100)}% estimated savings`)
+      ].join('');
+      $('context-categories').innerHTML = table(['Category','Files','Bytes','Samples'], Object.entries(categories).map(([name, bucket]) => `<tr><td>${esc(name)}</td><td>${esc(bucket.count ?? 0)}</td><td>${esc(bucket.bytes ?? 0)}</td><td>${esc((bucket.paths || []).slice(0, 4).join(', '))}</td></tr>`));
+      $('context-recommendations').innerHTML = (context.recommendations || []).map(rec => item(rec.kind || 'recommendation', rec.message || '')).join('') || item('No recommendations', 'Repository context looks usable.');
+      $('context-detail').textContent = JSON.stringify(context, null, 2);
+    }
+    function renderContextJuice(juice) {
+      const latest = juice.latest || {};
+      const profiles = juice.profiles || {};
+      $('context-juice').innerHTML = [
+        item('Profiles', `${Object.keys(profiles).length}`),
+        item('Latest', latest.compression_id ? `${latest.compression_id} role=${latest.role} ratio=${latest.ratio}` : 'none'),
+        item('Outputs', `${(juice.outputs || []).length}`)
+      ].join('');
+    }
+    function renderMemoryTree(tree) {
+      if (!tree || tree.tree === null) {
+        $('memory-tree').innerHTML = item('No tree', 'Run Build tree to create .praxile/context/tree/index.md.');
+        return;
+      }
+      const links = tree.links || [];
+      const linkHtml = links.slice(0, 32).map(link => `<button class="ghost" onclick="openMemoryTreeLink('${esc(link.href || '')}', '${esc(link.ref || '')}')">${esc(link.kind || 'link')}: ${esc(link.label || link.ref || '')}</button>`).join('');
+      $('memory-tree').innerHTML = [
+        item('Tree', `${tree.tree_id || 'unknown'} modules=${tree.module_count ?? 0}`),
+        item('Markdown', tree.markdown_path || 'not written'),
+        item('Assets', `${tree.asset_count ?? 0}`),
+        `<div class="list">${linkHtml || item('No links', 'Build tree after assets or runs exist.')}</div>`
+      ].join('');
+    }
+    async function openMemoryTreeLink(href, ref) {
+      if (href.startsWith('#/assets/')) {
+        await openAsset(encodeURIComponent(ref));
+        return;
+      }
+      if (href.startsWith('#/runs/')) {
+        await openRun(ref);
+        return;
+      }
+      $('context-detail').textContent = `Link: ${ref || href}`;
+      setPanel('context');
+    }
+    function renderWorkflows(payload) {
+      const workflows = payload.workflows || [];
+      $('workflow-table').innerHTML = table(['Workflow','Source','Spec','Tests','Allowed tools'], workflows.map(workflow => `<tr><td>${esc(workflow.name)}</td><td>${esc(workflow.source)}</td><td>${esc(workflow.requires_spec || '')}</td><td>${esc((workflow.required_tests || []).join(', '))}</td><td>${esc((workflow.allowed_tools || []).join(', '))}</td></tr>`));
+      if (payload.errors && payload.errors.length) {
+        $('workflow-table').innerHTML += `<pre>${esc(JSON.stringify(payload.errors, null, 2))}</pre>`;
+      }
+    }
+    function renderPolicies(policies) {
+      const layers = policies.layers || [];
+      $('policy-table').innerHTML = table(['Layer','Source','Status','Keys'], layers.map(layer => `<tr><td>${esc(layer.name)}</td><td>${esc(layer.source)}</td><td>${badge(layer.exists ? 'present' : 'missing')}</td><td>${esc((layer.keys || []).join(', '))}</td></tr>`));
+      $('policy-detail').textContent = JSON.stringify(policies, null, 2);
+    }
+    async function syncContext(dryRun = false) {
+      const snapshot = await api('/api/context/sync', {method:'POST', body: JSON.stringify({dry_run: dryRun, refresh: true})});
+      renderContext(snapshot.status || snapshot);
+      setPanel('context');
+    }
+    async function compressContext() {
+      $('context-detail').textContent = 'Compressing latest run...';
+      const payload = await api('/api/context/compress', {method:'POST', body: JSON.stringify({run:'latest'})});
+      $('context-detail').textContent = JSON.stringify(payload, null, 2);
+      renderContextJuice(await api('/api/context/juice/status'));
+      setPanel('context');
+    }
+    async function buildMemoryTree() {
+      const payload = await api('/api/context/tree', {method:'POST', body: JSON.stringify({})});
+      $('context-detail').textContent = JSON.stringify(payload, null, 2);
+      renderMemoryTree(payload);
+      setPanel('context');
+    }
+    async function runGovernancePass() {
+      const payload = await api('/api/governance/run-once', {method:'POST', body: JSON.stringify({compress:true})});
+      $('context-detail').textContent = JSON.stringify(payload, null, 2);
+      setPanel('context');
+    }
+    async function loadWorkflows() {
+      const payload = await api('/api/workflows');
+      renderWorkflows(payload);
+      $('context-detail').textContent = JSON.stringify(payload, null, 2);
+      setPanel('context');
+    }
+    async function seedWorkflows() {
+      const payload = await api('/api/workflows/seed', {method:'POST', body: JSON.stringify({})});
+      $('context-detail').textContent = JSON.stringify(payload, null, 2);
+      renderWorkflows(await api('/api/workflows'));
+      setPanel('context');
+    }
+    async function checkPolicy(writeDefaults = false) {
+      const payload = await api('/api/policies/check', {method:'POST', body: JSON.stringify({write_defaults: writeDefaults})});
+      $('policy-detail').textContent = JSON.stringify(payload, null, 2);
+      renderPolicies(await api('/api/policies'));
+      setPanel('policy');
+    }
+    async function explainPolicy() {
+      const topic = $('policy-topic').value.trim() || 'proposal_gate';
+      $('policy-detail').textContent = JSON.stringify(await api(`/api/policies/${encodeURIComponent(topic)}`), null, 2);
+      setPanel('policy');
     }
     async function openAsset(path) {
       const asset = await api(`/api/assets/${path}`);
@@ -1178,16 +1426,27 @@ _HTML = """<!doctype html>
       if (!path) throw new Error('path is required');
       $('safety-detail').textContent = JSON.stringify(await api('/api/safety/check-path', {method:'POST', body: JSON.stringify({path, write: $('safety-path-write').value === 'true'})}), null, 2);
     }
-    function renderModels(roles, providers, stats) {
+    function renderModels(roles, providers, presets, stats) {
       cachedRoles = roles || [];
       cachedProviders = providers || [];
-      $('models-table').innerHTML = table(['Role','Category','Mode','Provider','Model','Status'], cachedRoles.map(role => `<tr><td><button class="ghost" onclick="fillRoleForm('${esc(role.role)}')">${esc(role.role)}</button></td><td>${esc(role.category)}</td><td>${esc(role.mode)}</td><td>${esc(role.provider || '')}</td><td>${esc(role.model || '')}</td><td>${badge(role.status)}</td></tr>`));
-      $('providers-table').innerHTML = table(['Provider','Type','Base URL','Key','Models'], cachedProviders.map(provider => `<tr><td><button class="ghost" onclick="fillProviderForm('${esc(provider.provider_id)}')">${esc(provider.provider_id)}</button></td><td>${esc(provider.type)}</td><td>${esc(provider.base_url || '')}</td><td>${badge(provider.api_key_status)}</td><td>${esc((provider.models || []).join(', '))}</td></tr>`));
+      $('model-presets').innerHTML = (presets || []).map(preset => `<div class="item"><strong>${esc(preset.label)}</strong><span>${esc(preset.description)}</span><div class="toolbar" style="margin-top:6px"><button class="secondary" onclick="applyModelPreset('${esc(preset.preset_id)}')">Apply preset</button></div></div>`).join('') || item('No presets', '');
+      $('models-table').innerHTML = table(['Role','Category','Mode','Provider','Model','Health','Status'], cachedRoles.map(role => {
+        const profile = role.compression_profile || {};
+        const health = role.health_reason ? `${role.health}: ${role.health_reason}` : role.health;
+        return `<tr><td><button class="ghost" onclick="fillRoleForm('${esc(role.role)}')">${esc(role.role)}</button></td><td>${esc(role.category)}</td><td>${esc(role.mode)}</td><td>${esc(role.provider || '')}</td><td>${esc(role.model || '')}</td><td>${esc(health || '')}</td><td>${badge(role.status)}</td></tr>`;
+      }));
+      $('providers-table').innerHTML = table(['Provider','Type','Base URL','Key','Health','Models'], cachedProviders.map(provider => `<tr><td><button class="ghost" onclick="fillProviderForm('${esc(provider.provider_id)}')">${esc(provider.provider_id)}</button></td><td>${esc(provider.type)}</td><td>${esc(provider.base_url || '')}</td><td>${badge(provider.api_key_status)}</td><td>${esc(provider.health || 'unknown')}</td><td>${esc((provider.models || []).join(', '))}</td></tr>`));
       $('model-stats').innerHTML = table(['Task type','Target','Runs','Reward','Latency'], stats.map(row => `<tr><td>${esc(row.task_type)}</td><td>${esc(row.target)}</td><td>${esc(row.runs)}</td><td>${esc(row.average_reward ?? '')}</td><td>${esc(row.average_latency_ms ?? '')}</td></tr>`));
       const previous = $('role-edit-name').value;
       $('role-edit-name').innerHTML = cachedRoles.map(role => `<option value="${esc(role.role)}">${esc(role.role)}</option>`).join('');
       if (previous) $('role-edit-name').value = previous;
       if ($('role-edit-name').value) fillRoleForm($('role-edit-name').value, false);
+    }
+    async function applyModelPreset(presetId) {
+      if (!confirm(`Apply model setup preset ${presetId}? This rewrites model_providers and model_roles.`)) return;
+      $('model-stats').innerHTML = `<pre>${esc(JSON.stringify(await api(`/api/models/presets/${encodeURIComponent(presetId)}`, {method:'POST', body: JSON.stringify({confirm:true})}), null, 2))}</pre>`;
+      await refresh();
+      setPanel('models');
     }
     function fillRoleForm(roleName, switchPanel = true) {
       const role = cachedRoles.find(item => item.role === roleName);
@@ -1437,6 +1696,17 @@ _HTML = """<!doctype html>
     $('save-role-route').onclick = () => saveRoleRoute().catch(error => alert(error.message));
     $('test-role-route').onclick = () => testRoleRoute().catch(error => alert(error.message));
     $('save-provider').onclick = () => saveProvider().catch(error => alert(error.message));
+    $('apply-proposal-filters').onclick = () => refresh().catch(error => alert(error.message));
+    $('clear-proposal-filters').onclick = () => {
+      $('proposal-filter-status').value = 'pending';
+      $('proposal-filter-type').value = '';
+      $('proposal-filter-risk').value = '';
+      $('proposal-filter-confidence').value = '';
+      $('proposal-filter-recommended').value = '';
+      $('proposal-filter-source-run').value = '';
+      $('proposal-filter-query').value = '';
+      refresh().catch(error => alert(error.message));
+    };
     $('run-reflect').onclick = () => runReflect().catch(error => $('reflect-detail').textContent = error.message);
     $('load-reflect').onclick = () => loadReflectReports().catch(error => $('reflect-detail').textContent = error.message);
     $('save-proposal-edit').onclick = () => saveProposalEdit().catch(error => alert(error.message));
@@ -1459,6 +1729,16 @@ _HTML = """<!doctype html>
     $('asset-deprecate').onclick = () => assetLifecycle('deprecate').catch(error => alert(error.message));
     $('asset-archive').onclick = () => assetLifecycle('archive').catch(error => alert(error.message));
     $('asset-reactivate').onclick = () => assetLifecycle('reactivate').catch(error => alert(error.message));
+    $('sync-context').onclick = () => syncContext(false).catch(error => $('context-detail').textContent = error.message);
+    $('dry-sync-context').onclick = () => syncContext(true).catch(error => $('context-detail').textContent = error.message);
+    $('compress-context').onclick = () => compressContext().catch(error => $('context-detail').textContent = error.message);
+    $('build-memory-tree').onclick = () => buildMemoryTree().catch(error => $('context-detail').textContent = error.message);
+    $('run-governance').onclick = () => runGovernancePass().catch(error => $('context-detail').textContent = error.message);
+    $('load-workflows').onclick = () => loadWorkflows().catch(error => $('context-detail').textContent = error.message);
+    $('seed-workflows').onclick = () => seedWorkflows().catch(error => $('context-detail').textContent = error.message);
+    $('check-policy').onclick = () => checkPolicy(false).catch(error => $('policy-detail').textContent = error.message);
+    $('seed-policy').onclick = () => checkPolicy(true).catch(error => $('policy-detail').textContent = error.message);
+    $('explain-policy').onclick = () => explainPolicy().catch(error => $('policy-detail').textContent = error.message);
     $('bind-channel').onclick = () => bindChannel().catch(error => $('channels-detail').textContent = error.message);
     $('load-ci').onclick = () => loadCiReports().catch(error => $('ci-detail').textContent = error.message);
     $('generate-ci').onclick = () => generateCiReport().catch(error => $('ci-detail').textContent = error.message);

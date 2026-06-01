@@ -129,6 +129,11 @@ def test_audit_run_asset_and_proposal_json(tmp_path: Path, capsys):
     assert bundle_report["proposal_chain"]["pending_count"] == 1
     assert bundle_report["asset_chain"]["count"] >= 1
 
+    assert main(["--project", str(tmp_path), "audit", "bundle", "--json", "--redaction", "none"]) == 0
+    raw_bundle_report = json.loads(capsys.readouterr().out)
+    assert raw_bundle_report["bundle"]["raw_secret_values"] is True
+    assert raw_bundle_report["bundle"]["warnings"][0]["code"] == "redaction_disabled"
+
     output_path = tmp_path / "audit-bundle.json"
     assert main(["--project", str(tmp_path), "audit", "bundle", "--json", "--output", str(output_path)]) == 0
     stdout = capsys.readouterr().out
@@ -140,6 +145,11 @@ def test_audit_run_asset_and_proposal_json(tmp_path: Path, capsys):
     assert check_report["audit_type"] == "check"
     assert check_report["check"]["passed"] is True
     assert any(item["code"] == "pending_proposals" for item in check_report["check"]["warnings"])
+
+    assert main(["--project", str(tmp_path), "audit", "check", "--json", "--redaction", "none"]) == 0
+    raw_check_report = json.loads(capsys.readouterr().out)
+    assert raw_check_report["redaction"]["profile"] == "none"
+    assert any(item["code"] == "redaction_disabled" for item in raw_check_report["check"]["warnings"])
 
     assert main(["--project", str(tmp_path), "audit", "check", "--json", "--max-pending", "0"]) == 1
     strict_pending_report = json.loads(capsys.readouterr().out)

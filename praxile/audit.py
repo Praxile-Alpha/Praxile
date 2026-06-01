@@ -263,6 +263,13 @@ def build_project_audit_bundle(
             "recommended_actions": _bundle_recommended_actions(pending, high_risk_pending, graph_status),
         },
     }
+    if _normalize_redaction_profile(redaction) == "none":
+        report["bundle"]["warnings"] = [
+            {
+                "code": "redaction_disabled",
+                "message": "Redaction is disabled; this audit export may contain raw secrets or sensitive project data.",
+            }
+        ]
     return _finalize_report(report, redaction=redaction)
 
 
@@ -288,7 +295,7 @@ def build_project_audit_check(
         store,
         limit_runs=limit_runs,
         rebuild_graph=rebuild_graph,
-        redaction="none",
+        redaction=redaction,
     )
     proposal_chain = bundle.get("proposal_chain") if isinstance(bundle.get("proposal_chain"), dict) else {}
     run_chain = bundle.get("run_chain") if isinstance(bundle.get("run_chain"), dict) else {}
@@ -296,6 +303,13 @@ def build_project_audit_check(
     constitution = _constitution_status(config)
     failures: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    if _normalize_redaction_profile(redaction) == "none":
+        warnings.append(
+            {
+                "code": "redaction_disabled",
+                "message": "Redaction is disabled; do not publish this audit output unless raw secrets have been reviewed.",
+            }
+        )
 
     if not constitution["ok"]:
         failures.append(

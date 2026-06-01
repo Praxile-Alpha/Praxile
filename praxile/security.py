@@ -288,6 +288,37 @@ class SafetyPolicy:
             status["loaded"] = True
             status["rules_count"] = len(self.policy_rules) - before
             self.policy_file_status.append(status)
+        self._load_policy_layer_rules()
+
+    def _load_policy_layer_rules(self) -> None:
+        policy_path = self.config.paths.state / "policies" / "tool_policy.json"
+        status = {
+            "path": "policies/tool_policy.json",
+            "resolved_path": str(policy_path),
+            "loaded": False,
+            "rules_count": 0,
+            "error": None,
+        }
+        if not policy_path.exists():
+            status["error"] = "missing"
+            self.policy_file_status.append(status)
+            return
+        try:
+            payload = parse_jsonc_object(policy_path.read_text(encoding="utf-8"))
+        except (OSError, RobustJSONError) as exc:
+            status["error"] = str(exc)
+            self.policy_errors.append(f"policies/tool_policy.json: {exc}")
+            self.policy_file_status.append(status)
+            return
+        tool_policy = payload.get("tool_policy") if isinstance(payload.get("tool_policy"), dict) else {}
+        rules = payload.get("rules")
+        if rules is None and isinstance(tool_policy, dict):
+            rules = tool_policy.get("rules")
+        before = len(self.policy_rules)
+        self._extend_policy_rules(rules or [], source="policies/tool_policy.json")
+        status["loaded"] = True
+        status["rules_count"] = len(self.policy_rules) - before
+        self.policy_file_status.append(status)
 
     def _extend_policy_rules(self, rules: Any, *, source: str) -> None:
         if isinstance(rules, dict):

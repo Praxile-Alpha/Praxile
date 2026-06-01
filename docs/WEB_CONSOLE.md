@@ -39,10 +39,12 @@ Implemented surfaces:
 - run submission;
 - chat governance cards with linked runs, reward, proposal counts, risk counts, and tool-call summaries;
 - run detail with actions, readable artifacts, command/test output, diff summary, reward, loaded assets, silent risks, and generated proposals;
-- proposal inbox with accept/reject actions;
+- proposal inbox with status/type/risk/confidence/source/recommendation/search filters, explanation fields, and accept/reject actions;
 - pending proposal JSON edit with confirmation and edit history;
 - asset lite list/detail plus usage, graph, archive, deprecate, and reactivate actions;
-- model roles, providers, route stats, selected-role route testing, and safe provider/role edits;
+- Repository Context panel with last sync/freshness, detected stacks, detected test commands, spec/docs coverage, active assets, recent failures, Reflect summary, Context Health, sampled file categories, ContextJuice estimates/outputs, Repository Memory Tree, Workflow Templates, Policy Layers, governance reports, and `praxile sync` snapshots;
+- model setup presets, role health, providers, route stats, selected-role route testing, and safe provider/role edits;
+- Repository Memory Tree links that jump to known runs/assets or show the referenced tree/context object;
 - Telegram/Discord channel binding configuration;
 - CI / PR report viewer and local report generation for `.praxile/experience/ci` artifacts;
 - explicit GitHub PR comment publishing for CI reports through `GITHUB_TOKEN` and user confirmation;
@@ -63,6 +65,19 @@ The gateway keeps legacy endpoints such as `/run`, `/history`, and `/accept`, an
 ```text
 GET  /api/status
 GET  /api/config
+GET  /api/context/status
+POST /api/context/sync
+GET  /api/context/juice/status
+POST /api/context/compress
+GET  /api/context/tree
+POST /api/context/tree
+GET  /api/workflows
+POST /api/workflows/seed
+GET  /api/workflows/{name}
+GET  /api/policies
+POST /api/policies/check
+GET  /api/policies/{topic}
+POST /api/governance/run-once
 GET  /api/chat/sessions
 POST /api/chat/sessions
 GET  /api/chat/sessions/{session_id}
@@ -89,6 +104,8 @@ GET  /api/models/providers
 POST /api/models/providers
 PATCH /api/models/providers/{provider_id}
 GET  /api/models/roles
+GET  /api/models/presets
+POST /api/models/presets/{preset_id}
 PATCH /api/models/roles/{role}
 POST /api/models/test
 POST /api/models/test-all
@@ -160,7 +177,7 @@ Next web-console work should focus on:
 
 - stronger provider-native abort support for model HTTP requests beyond best-effort client shutdown;
 - componentized rich diff and command-output viewers;
-- richer graph visualization beyond the current SVG-friendly layout;
+- richer navigation from Repository Memory Tree and Policy Layers into assets, runs, graph, and audit reports;
 - safer field-level validation in the structured proposal editor;
 - GitHub PR comment update/upsert by marker instead of always creating a new comment;
 - signed release packaging for the standalone React/Vite frontend.

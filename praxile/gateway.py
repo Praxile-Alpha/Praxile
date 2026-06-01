@@ -13,15 +13,29 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .audit import build_project_audit_bundle, build_project_audit_check
 from .channels import ChannelSystem, DEFAULT_TOKEN_ENVS, SUPPORTED_PLATFORMS
 from .console import ConsolePage, render_console
 from .config import Config, ProjectPaths
 from .github import GitHubConnector, GitHubIntegrationError, build_pr_comment_body, import_actions_artifacts
-from .model import ModelError, ModelRouter, ModelUnavailable
-from .reflect import ReflectEngine, ReflectScope
-from .runtime import AgentRuntime
+from .model import ModelRouter
+from .reflect import ReflectScope
 from .security import SafetyPolicy
+from .services import (
+    AssetService,
+    AuditService,
+    ContextJuiceService,
+    GraphService,
+    GovernanceLoopService,
+    ModelService,
+    PolicyService,
+    ProposalService,
+    ReflectService,
+    RepositoryContextService,
+    RepositoryMemoryTreeService,
+    RunService,
+    ServiceError,
+    WorkflowService,
+)
 from .specs import build_spec_context, check_spec_file, verify_spec_compliance
 from .store import ExperienceStore
 from .tools import READ_ONLY_ACTIONS, ToolRegistry
@@ -178,22 +192,6 @@ class RunJobManager:
 
 LOCAL_GATEWAY_HOSTS = {"127.0.0.1", "localhost", "::1"}
 DEFAULT_GATEWAY_MAX_THREADS = 16
-MODEL_ROLE_CATALOG = [
-    ("coding_agent", "Core execution", "required", "Primary coding and action loop"),
-    ("evidence_extraction", "Experience extraction", "recommended", "Extract reusable evidence from runs"),
-    ("experience_reflection", "Experience extraction", "recommended", "Summarize learning and propose durable experience"),
-    ("proposal_composer", "Experience extraction", "recommended", "Compose reviewable proposal text"),
-    ("review_recommendation", "Review and reward", "recommended", "Classify review recommendations"),
-    ("reward_judge", "Review and reward", "optional", "Optional quality judging"),
-    ("feedback_classifier", "Review and reward", "recommended", "Route natural-language feedback"),
-    ("attribution_judge", "Semantic judges", "optional", "Judge whether loaded assets influenced a run"),
-    ("counterexample_checker", "Semantic judges", "optional", "Check pattern counterexamples"),
-    ("pattern_mining", "Semantic judges", "optional", "Mine recurring cross-run patterns"),
-    ("project_pattern_composer", "Semantic judges", "optional", "Compose high-quality project pattern cards"),
-    ("deep_project_pattern_mining", "Semantic judges", "optional", "Higher-cost pattern mining"),
-    ("cheap_reasoner", "Utility", "optional", "Low-cost local reasoning fallback"),
-    ("embedding", "Utility", "required", "Retrieval embedding/vector role"),
-]
 
 
 def validate_gateway_auth_config(host: str, token: str | None) -> None:
@@ -290,7 +288,10 @@ class GatewayApp:
         if path == "/api":
             return {"routes": _api_routes()}
         if path.startswith("/api/"):
-            return self._dispatch_api(method, api_path, parts, query, payload, config, store)
+            try:
+                return self._dispatch_api(method, api_path, parts, query, payload, config, store)
+            except ServiceError as exc:
+                raise GatewayError(exc.status, exc.message) from exc
         if method == "GET" and path == "/health":
             return {"status": "ok", "agent": "praxile", "project": str(config.paths.root)}
         if method == "GET" and path == "/history":
@@ -315,7 +316,7 @@ class GatewayApp:
             test_commands = payload.get("test_commands")
             if test_commands is not None and not isinstance(test_commands, list):
                 raise GatewayError(400, "`test_commands` must be a list")
-            trajectory = AgentRuntime(config).run(
+            trajectory = RunService(config, store).run(
                 task,
                 test_commands=[str(item) for item in test_commands] if test_commands else None,
                 max_steps=int(payload.get("max_steps")) if payload.get("max_steps") is not None else None,
@@ -332,10 +333,7 @@ class GatewayApp:
             proposal_id = payload.get("proposal_id")
             if not isinstance(proposal_id, str) or not proposal_id:
                 raise GatewayError(400, "`proposal_id` is required")
-            proposal = store.find_proposal(proposal_id, status="pending")
-            if not proposal:
-                raise GatewayError(404, "No pending proposal found")
-            accepted = store.apply_proposal(proposal)
+            accepted = ProposalService(store).accept(proposal_id, confirm=True)
             return {"proposal_id": accepted["proposal_id"], "status": accepted["status"], "title": accepted["title"]}
         if method == "POST" and path == "/channels/bind":
             platform = payload.get("platform")
@@ -383,6 +381,56 @@ class GatewayApp:
             return _doctor_payload(config, store)
         if method == "GET" and path == "/config":
             return _sanitized_config(config)
+        if method == "GET" and parts == ["context", "status"]:
+            refresh = (query.get("refresh") or ["false"])[0].lower() in {"1", "true", "yes", "on"}
+            return RepositoryContextService(config, store).status(refresh_map=refresh)
+        if method == "POST" and parts == ["context", "sync"]:
+            dry_run = bool(payload.get("dry_run", False))
+            refresh = bool(payload.get("refresh", True))
+            return RepositoryContextService(config, store).sync(write=not dry_run, refresh_map=refresh)
+        if method == "GET" and parts == ["context", "juice", "status"]:
+            return ContextJuiceService(config, store).status()
+        if method == "POST" and parts == ["context", "compress"]:
+            service = ContextJuiceService(config, store)
+            role = payload.get("role") if isinstance(payload.get("role"), str) else "coding_agent"
+            write = not bool(payload.get("dry_run", False))
+            if isinstance(payload.get("source"), str) and payload["source"].strip():
+                return service.compress_file(payload["source"], role=role, write=write)
+            if isinstance(payload.get("text"), str) and payload["text"]:
+                return service.compress_text(payload["text"], source_type="text", source_id="web-console", role=role, write=write)
+            run_id = payload.get("run") if isinstance(payload.get("run"), str) and payload.get("run") else "latest"
+            return service.compress_run(run_id, role=role if payload.get("role") else "proposal_composer", write=write)
+        if method == "GET" and parts == ["context", "tree"]:
+            latest = RepositoryMemoryTreeService(config, store).latest()
+            return latest or {"tree": None, "message": "No repository memory tree has been generated yet."}
+        if method == "POST" and parts == ["context", "tree"]:
+            module = payload.get("module") if isinstance(payload.get("module"), str) and payload.get("module") else None
+            recent = payload.get("recent") if isinstance(payload.get("recent"), str) and payload.get("recent") else None
+            return RepositoryMemoryTreeService(config, store).build(module=module, recent=recent, write=not bool(payload.get("dry_run", False)))
+        if method == "GET" and parts == ["policies"]:
+            return PolicyService(config).list_layers()
+        if method == "POST" and parts == ["policies", "check"]:
+            return PolicyService(config).check(write_defaults=bool(payload.get("write_defaults", False)))
+        if method == "GET" and len(parts) == 2 and parts[0] == "policies":
+            return PolicyService(config).explain(unquote(parts[1]))
+        if method == "GET" and parts == ["workflows"]:
+            return WorkflowService(config).list()
+        if method == "POST" and parts == ["workflows", "seed"]:
+            return {"written": WorkflowService(config).seed(overwrite=bool(payload.get("overwrite", False)))}
+        if method == "GET" and len(parts) == 2 and parts[0] == "workflows":
+            try:
+                return WorkflowService(config).show(unquote(parts[1]))
+            except KeyError as exc:
+                raise GatewayError(404, str(exc)) from exc
+        if method == "POST" and parts == ["governance", "run-once"]:
+            return GovernanceLoopService(config, store).run_once(
+                write=not bool(payload.get("dry_run", False)),
+                compress=bool(payload.get("compress", False)),
+                rebuild_graph=not bool(payload.get("no_graph", False)),
+                run_audit=not bool(payload.get("no_audit", False)),
+                run_reflect=bool(payload.get("reflect", False)),
+                write_reflect_proposals=bool(payload.get("write_reflect_proposals", False)),
+            )
 
         if parts[:2] == ["chat", "sessions"]:
             return self._chat_api(method, parts, payload, config, store)
@@ -397,13 +445,19 @@ class GatewayApp:
             return _run_api(method, parts, store)
 
         if method == "GET" and parts == ["models", "providers"]:
-            return _model_providers(config)
+            return ModelService(config).providers()
         if method == "GET" and parts == ["models", "roles"]:
-            return _model_roles(config)
+            return ModelService(config).roles()
+        if method == "GET" and parts == ["models", "presets"]:
+            return ModelService(config).presets()
+        if method == "POST" and len(parts) == 3 and parts[:2] == ["models", "presets"]:
+            return ModelService(config).apply_preset(parts[2], confirm=bool(payload.get("confirm", False)))
         if method == "GET" and parts == ["models", "stats"]:
             return store.model_routing_stats(limit=_query_int(query, "limit", 200))
         if method == "POST" and parts == ["models", "test"]:
-            return _test_model_role(config, payload)
+            role = _safe_config_id(str(payload.get("role") or "").strip(), "role")
+            timeout = payload.get("timeout_seconds") if isinstance(payload.get("timeout_seconds"), int) else None
+            return ModelService(config).test_role(role, timeout_seconds=timeout)
         if method == "POST" and parts == ["models", "test-all"]:
             timeout = payload.get("timeout_seconds") if isinstance(payload.get("timeout_seconds"), int) else None
             return ModelRouter(config).check_routes(timeout_seconds=timeout)
@@ -434,12 +488,21 @@ class GatewayApp:
 
         if method == "GET" and parts == ["proposals"]:
             status = (query.get("status") or [None])[0]
-            return [_compact_proposal(item) for item in store.list_proposals(status=status, limit=_query_int(query, "limit", 100))]
+            return ProposalService(store).list(
+                status=status,
+                limit=_query_int(query, "limit", 100),
+                proposal_type=(query.get("type") or [None])[0],
+                risk=(query.get("risk") or [None])[0],
+                confidence=(query.get("confidence") or [None])[0],
+                source_run=(query.get("source_run") or [None])[0],
+                recommended=(query.get("recommended") or [None])[0],
+                query=(query.get("q") or [None])[0],
+            )
         if len(parts) >= 2 and parts[0] == "proposals":
             return _proposal_api(method, parts, payload, store)
 
         if method == "GET" and parts == ["assets"]:
-            return _list_assets(store, kind=(query.get("kind") or [None])[0])
+            return AssetService(config, store).list(kind=(query.get("kind") or [None])[0])
         if len(parts) >= 2 and parts[0] == "assets":
             return _asset_api(method, parts, payload, store, config)
 
@@ -454,17 +517,17 @@ class GatewayApp:
                 modes=frozenset(payload.get("modes") or []),
                 stale_days=payload.get("stale_days") if isinstance(payload.get("stale_days"), int) else None,
             )
-            return ReflectEngine(config, store).run(scope, write_proposals=bool(payload.get("write_proposals", False)))
+            return ReflectService(config, store).run(scope, write_proposals=bool(payload.get("write_proposals", False)))
 
         if method == "GET" and parts == ["graph", "status"]:
-            return store.graph_status()
+            return GraphService(store).status()
         if method == "POST" and parts == ["graph", "rebuild"]:
-            return store.rebuild_experience_graph()
+            return GraphService(store).rebuild()
         if method == "GET" and parts == ["graph", "explain"]:
             ref = (query.get("ref") or query.get("asset") or [None])[0]
             if not ref:
                 raise GatewayError(400, "`ref` or `asset` is required")
-            return store.graph_explain(ref, depth=_query_int(query, "depth", 2), limit=_query_int(query, "limit", 100))
+            return GraphService(store).explain(ref, depth=_query_int(query, "depth", 2), limit=_query_int(query, "limit", 100))
         if method == "GET" and parts == ["graph", "view"]:
             ref = (query.get("ref") or query.get("asset") or [None])[0]
             if not ref:
@@ -472,19 +535,15 @@ class GatewayApp:
             return _graph_view(store, ref, depth=_query_int(query, "depth", 2), limit=_query_int(query, "limit", 100))
 
         if method == "GET" and parts == ["audit", "status"]:
-            return build_project_audit_check(config, store, redaction="standard")
+            return AuditService(config, store).check(redaction="standard")
         if method == "POST" and parts == ["audit", "check"]:
-            return build_project_audit_check(
-                config,
-                store,
+            return AuditService(config, store).check(
                 rebuild_graph=bool(payload.get("rebuild_graph", False)),
                 strict=bool(payload.get("strict", False)),
                 redaction=str(payload.get("redaction") or "standard"),
             )
         if method == "POST" and parts == ["audit", "bundle"]:
-            return build_project_audit_bundle(
-                config,
-                store,
+            return AuditService(config, store).bundle(
                 limit_runs=int(payload.get("limit_runs") or 20),
                 rebuild_graph=bool(payload.get("rebuild_graph", False)),
                 redaction=str(payload.get("redaction") or "standard"),
@@ -681,6 +740,19 @@ def _api_routes() -> list[str]:
     return [
         "GET /api/status",
         "GET /api/config",
+        "GET /api/context/status",
+        "POST /api/context/sync",
+        "GET /api/context/juice/status",
+        "POST /api/context/compress",
+        "GET /api/context/tree",
+        "POST /api/context/tree",
+        "GET /api/policies",
+        "POST /api/policies/check",
+        "GET /api/policies/{topic}",
+        "GET /api/workflows",
+        "POST /api/workflows/seed",
+        "GET /api/workflows/{name}",
+        "POST /api/governance/run-once",
         "GET /api/chat/sessions",
         "POST /api/chat/sessions",
         "GET /api/chat/sessions/{session_id}",
@@ -707,6 +779,8 @@ def _api_routes() -> list[str]:
         "POST /api/models/providers",
         "PATCH /api/models/providers/{provider_id}",
         "GET /api/models/roles",
+        "GET /api/models/presets",
+        "POST /api/models/presets/{preset_id}",
         "PATCH /api/models/roles/{role}",
         "POST /api/models/test",
         "POST /api/models/test-all",
@@ -790,8 +864,9 @@ def _status_payload(config: Config, store: ExperienceStore) -> dict[str, Any]:
 
 
 def _doctor_payload(config: Config, store: ExperienceStore) -> dict[str, Any]:
-    providers = _model_providers(config)
-    roles = _model_roles(config)
+    model_service = ModelService(config)
+    providers = model_service.providers()
+    roles = model_service.roles()
     return {
         "project_root": str(config.paths.root),
         "state_exists": config.paths.state.exists(),
@@ -816,84 +891,11 @@ def _sanitized_config(config: Config) -> dict[str, Any]:
 
 
 def _model_providers(config: Config) -> list[dict[str, Any]]:
-    providers = config.get("model_providers", default={}) or {}
-    result: list[dict[str, Any]] = []
-    for provider_id, provider in providers.items():
-        if not isinstance(provider, dict):
-            continue
-        env_name = str(provider.get("api_key_env") or "")
-        base_url = str(provider.get("base_url") or "")
-        provider_type = str(provider.get("type") or "openai_compatible")
-        local_endpoint = "localhost" in base_url or "127.0.0.1" in base_url or provider_type == "ollama"
-        result.append(
-            {
-                "provider_id": provider_id,
-                "type": provider_type,
-                "base_url": base_url,
-                "api_key_env": env_name or None,
-                "api_key_status": "not_required" if local_endpoint and not os.environ.get(env_name) else ("configured" if env_name and os.environ.get(env_name) else "missing"),
-                "models": [item.get("name", item) if isinstance(item, dict) else item for item in provider.get("models", [])],
-                "timeout_seconds": provider.get("timeout_seconds"),
-            }
-        )
-    if not result:
-        result.append(
-            {
-                "provider_id": "local",
-                "type": "local",
-                "base_url": None,
-                "api_key_env": None,
-                "api_key_status": "not_required",
-                "models": ["local_hash"],
-                "timeout_seconds": None,
-            }
-        )
-    return result
+    return ModelService(config).providers()
 
 
 def _model_roles(config: Config) -> list[dict[str, Any]]:
-    roles_config = config.get("model_roles", default={}) or {}
-    providers = {item["provider_id"]: item for item in _model_providers(config)}
-    rows: list[dict[str, Any]] = []
-    for role, category, mode, purpose in MODEL_ROLE_CATALOG:
-        role_config = roles_config.get(role, {}) if isinstance(roles_config, dict) else {}
-        if not isinstance(role_config, dict):
-            role_config = {}
-        provider = role_config.get("provider")
-        model = role_config.get("model")
-        enabled = role_config.get("enabled", True)
-        fallback = role_config.get("fallback", [])
-        status = "disabled" if enabled is False else "not_configured"
-        if provider == "local" and model == "local_hash":
-            status = "connected"
-        elif isinstance(provider, str) and isinstance(model, str) and provider and model:
-            provider_row = providers.get(provider)
-            if not provider_row:
-                status = "provider_missing"
-            elif provider_row.get("api_key_status") == "missing":
-                status = "missing_key"
-            else:
-                status = "configured"
-        rows.append(
-            {
-                "role": role,
-                "category": category,
-                "purpose": purpose,
-                "mode": str(role_config.get("mode") or mode),
-                "provider": provider,
-                "model": model,
-                "fallback": fallback if isinstance(fallback, list) else [],
-                "status": status,
-            }
-        )
-    return rows
-
-
-def _role_catalog() -> dict[str, dict[str, str]]:
-    return {
-        role: {"category": category, "mode": mode, "purpose": purpose}
-        for role, category, mode, purpose in MODEL_ROLE_CATALOG
-    }
+    return ModelService(config).roles()
 
 
 def _safe_config_id(value: str, label: str) -> str:
@@ -955,7 +957,7 @@ def _upsert_model_provider(config: Config, payload: dict[str, Any]) -> dict[str,
 def _update_model_role(config: Config, role: str, payload: dict[str, Any]) -> dict[str, Any]:
     _require_confirm(payload, "update model role configuration")
     role = _safe_config_id(role, "role")
-    catalog = _role_catalog()
+    catalog = {row["role"]: row for row in ModelService(config).roles()}
     if role not in catalog:
         raise GatewayError(400, f"Unknown model role: {role}")
     roles = config.data.setdefault("model_roles", {})
@@ -991,94 +993,7 @@ def _test_model_role(config: Config, payload: dict[str, Any]) -> dict[str, Any]:
     timeout = payload.get("timeout_seconds") if isinstance(payload.get("timeout_seconds"), int) else None
     if timeout is None:
         timeout = int(config.get("runtime", "online_check_timeout_seconds", default=8) or 8)
-    role_row = next((item for item in _model_roles(config) if item["role"] == role), None)
-    if not role_row:
-        raise GatewayError(404, "Model role not found")
-    targets = _role_route_targets(config, role)
-    if targets:
-        router = ModelRouter(config)
-        return {"role": role, "routes": [_check_route_target(router, target, timeout_seconds=timeout) for target in targets]}
-    return {"role": role, "routes": [], "status": role_row["status"], "detail": "No configured route target for this role"}
-
-
-def _role_route_targets(config: Config, role: str) -> list[str]:
-    roles = config.get("model_roles", default={}) or {}
-    role_config = roles.get(role) if isinstance(roles, dict) else None
-    if not isinstance(role_config, dict):
-        return []
-    targets: list[str] = []
-    provider = role_config.get("provider")
-    model = role_config.get("model")
-    if isinstance(provider, str) and isinstance(model, str) and provider and model:
-        targets.append(f"{provider}:{model}")
-    for fallback in role_config.get("fallback") or []:
-        if isinstance(fallback, str) and ":" in fallback:
-            targets.append(fallback)
-        elif isinstance(fallback, dict):
-            fallback_provider = fallback.get("provider")
-            fallback_model = fallback.get("model")
-            if isinstance(fallback_provider, str) and isinstance(fallback_model, str):
-                targets.append(f"{fallback_provider}:{fallback_model}")
-    return list(dict.fromkeys(targets))
-
-
-def _check_route_target(router: ModelRouter, target: str, *, timeout_seconds: int | None = None) -> dict[str, Any]:
-    provider_name, model = target.split(":", 1) if ":" in target else ("", target)
-    started = time.monotonic()
-    result: dict[str, Any] = {
-        "target": target,
-        "provider": provider_name,
-        "model": model,
-        "provider_known": provider_name in router.providers or provider_name == "local",
-        "timeout_seconds": timeout_seconds,
-    }
-    if provider_name == "local" and model == "local_hash":
-        return {
-            **result,
-            "status": "ok",
-            "detail": "local_hash is available without a network model endpoint",
-            "latency_ms": int((time.monotonic() - started) * 1000),
-        }
-    provider = router.providers.get(provider_name)
-    if provider is None:
-        return {
-            **result,
-            "status": "error",
-            "detail": f"unknown provider: {provider_name or '(missing)'}",
-            "latency_ms": int((time.monotonic() - started) * 1000),
-        }
-    if not model:
-        return {**result, "status": "error", "detail": "missing model name", "latency_ms": int((time.monotonic() - started) * 1000)}
-    try:
-        provider.chat(
-            {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": "Reply with OK only."},
-                    {"role": "user", "content": "OK?"},
-                ],
-                "temperature": 0,
-                "max_tokens": 8,
-                "timeout": timeout_seconds,
-            }
-        )
-        status = "ok"
-        detail = "model endpoint accepted a minimal chat request"
-    except ModelUnavailable as exc:
-        status = "unavailable"
-        detail = str(exc)
-    except ModelError as exc:
-        status = "error"
-        detail = str(exc)
-    except Exception as exc:  # pragma: no cover - defensive network envelope guard
-        status = "error"
-        detail = f"{exc.__class__.__name__}: {exc}"
-    return {
-        **result,
-        "status": status,
-        "detail": detail,
-        "latency_ms": int((time.monotonic() - started) * 1000),
-    }
+    return ModelService(config).test_role(role, timeout_seconds=timeout)
 
 
 def _channels_payload(config: Config) -> dict[str, Any]:
@@ -1272,7 +1187,7 @@ def _run_task(
         run_config.data.setdefault("model_roles", {}).setdefault("coding_agent", {}).update({"provider": provider, "model": model})
     if isinstance(payload.get("allow_shell"), bool):
         run_config.data.setdefault("shell", {})["allow_shell_features"] = bool(payload["allow_shell"])
-    trajectory = AgentRuntime(run_config).run(
+    trajectory = RunService(run_config, store).run(
         task,
         test_commands=test_commands or None,
         max_steps=int(payload.get("max_steps")) if payload.get("max_steps") is not None else None,
@@ -1514,141 +1429,42 @@ def _graph_node_color(node_type: str) -> str:
 
 def _proposal_api(method: str, parts: list[str], payload: dict[str, Any], store: ExperienceStore) -> Any:
     proposal_id = parts[1]
-    proposal = store.find_proposal(proposal_id)
-    if not proposal:
-        raise GatewayError(404, "Proposal not found")
-    if method == "GET" and len(parts) == 2:
-        return proposal
-    if method == "POST" and len(parts) == 3 and parts[2] == "edit":
-        return _edit_proposal(proposal_id, payload, store)
-    if method == "POST" and len(parts) == 3 and parts[2] == "accept":
-        if not payload.get("confirm"):
-            raise GatewayError(400, "`confirm` is required to accept a proposal")
-        pending = store.find_proposal(proposal_id, status="pending")
-        if not pending:
-            raise GatewayError(404, "No pending proposal found")
-        accepted = store.apply_proposal(pending)
-        return accepted
-    if method == "POST" and len(parts) == 3 and parts[2] == "reject":
-        reason = str(payload.get("reason") or "").strip()
-        if not reason:
-            raise GatewayError(400, "`reason` is required to reject a proposal")
-        pending = store.find_proposal(proposal_id, status="pending")
-        if not pending:
-            raise GatewayError(404, "No pending proposal found")
-        return store.reject_proposal(pending, reason=reason)
+    service = ProposalService(store)
+    try:
+        if method == "GET" and len(parts) == 2:
+            return service.detail(proposal_id)
+        if method == "POST" and len(parts) == 3 and parts[2] == "edit":
+            return service.edit(proposal_id, payload, edited_by="web_console")
+        if method == "POST" and len(parts) == 3 and parts[2] == "accept":
+            return service.accept(proposal_id, confirm=bool(payload.get("confirm")))
+        if method == "POST" and len(parts) == 3 and parts[2] == "reject":
+            return service.reject(proposal_id, reason=str(payload.get("reason") or ""))
+    except ServiceError as exc:
+        raise GatewayError(exc.status, exc.message) from exc
     raise GatewayError(404, "Proposal route not found")
 
 
-def _edit_proposal(proposal_id: str, payload: dict[str, Any], store: ExperienceStore) -> dict[str, Any]:
-    if not payload.get("confirm"):
-        raise GatewayError(400, "`confirm` is required to edit a proposal")
-    pending = store.find_proposal(proposal_id, status="pending")
-    if not pending:
-        raise GatewayError(404, "No pending proposal found")
-    raw = payload.get("proposal")
-    if isinstance(raw, str):
-        try:
-            edited = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise GatewayError(400, f"Invalid proposal JSON: {exc}") from exc
-    elif isinstance(raw, dict):
-        edited = copy.deepcopy(raw)
-    else:
-        edited = copy.deepcopy(pending)
-        for key in ["title", "reason", "evidence", "changes", "risk_level", "confidence", "target_files"]:
-            if key in payload:
-                edited[key] = payload[key]
-    if not isinstance(edited, dict):
-        raise GatewayError(400, "`proposal` must be an object")
-    if edited.get("proposal_id") not in {None, proposal_id, pending.get("proposal_id")}:
-        raise GatewayError(400, "Edited proposal_id must match the pending proposal")
-    if edited.get("status") not in {None, "pending"}:
-        raise GatewayError(400, "Only pending proposals can be edited through the web console")
-    changes = edited.get("changes")
-    if changes is not None and not isinstance(changes, list):
-        raise GatewayError(400, "`changes` must be a list")
-    edited["proposal_id"] = pending["proposal_id"]
-    edited["status"] = "pending"
-    for key in ["created_at", "source_task_id", "generated_by"]:
-        if pending.get(key) is not None:
-            edited[key] = pending[key]
-    if not edited.get("target_files") and isinstance(changes, list):
-        edited["target_files"] = [str(change.get("path")) for change in changes if isinstance(change, dict) and change.get("path")]
-    events = pending.get("user_edits") if isinstance(pending.get("user_edits"), list) else []
-    edited["user_edits"] = [
-        *events,
-        {
-            "edited_at": utc_now(),
-            "edited_by": "web_console",
-            "reason": str(payload.get("reason") or "manual web console edit").strip(),
-        },
-    ]
-    store.write_proposal(edited)
-    return store.find_proposal(proposal_id, status="pending") or edited
-
-
 def _asset_api(method: str, parts: list[str], payload: dict[str, Any], store: ExperienceStore, config: Config) -> Any:
+    service = AssetService(config, store)
     if len(parts) >= 3 and parts[-1] in {"usage", "graph", "archive", "deprecate", "reactivate"}:
-        asset_path = _normalize_asset_path("/".join(parts[1:-1]))
+        asset_path = "/".join(parts[1:-1])
         action = parts[-1]
-        if method == "GET" and action == "usage":
-            return {
-                "path": asset_path,
-                "usage_history": store.attribution_history_for_asset(asset_path, limit=50),
-            }
-        if method == "GET" and action == "graph":
-            return store.graph_explain(asset_path, depth=2, limit=100)
-        if method == "POST" and action in {"archive", "deprecate", "reactivate"}:
-            return _asset_lifecycle_action(store, asset_path, action, payload)
-    asset_path = _normalize_asset_path("/".join(parts[1:]))
-    asset = store.get_asset(asset_path)
-    if method == "GET" and asset:
-        target = config.paths.root / asset_path
-        content = ""
-        if target.exists() and path_is_relative_to(target, config.paths.root):
-            content = target.read_text(encoding="utf-8", errors="replace")[:30000]
-        return {
-            **asset,
-            "content": content,
-            "usage_history": store.attribution_history_for_asset(asset_path, limit=20),
-            "graph": store.graph_explain(asset_path, depth=1, limit=60),
-        }
-    if not asset:
-        raise GatewayError(404, "Asset not found")
+        try:
+            if method == "GET" and action == "usage":
+                return service.usage(asset_path, limit=50)
+            if method == "GET" and action == "graph":
+                return service.graph(asset_path, depth=2, limit=100)
+            if method == "POST" and action in {"archive", "deprecate", "reactivate"}:
+                return service.lifecycle(asset_path, action, payload, source="web_console")
+        except ServiceError as exc:
+            raise GatewayError(exc.status, exc.message) from exc
+    asset_path = "/".join(parts[1:])
+    try:
+        if method == "GET":
+            return service.detail(asset_path)
+    except ServiceError as exc:
+        raise GatewayError(exc.status, exc.message) from exc
     raise GatewayError(404, "Asset route not found")
-
-
-def _asset_lifecycle_action(store: ExperienceStore, asset_path: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
-    _require_confirm(payload, f"{action} an asset")
-    asset = store.get_asset(asset_path)
-    if not asset:
-        raise GatewayError(404, "Asset not found")
-    status = {"archive": "archived", "deprecate": "deprecated", "reactivate": "active"}[action]
-    reason = str(payload.get("reason") or f"manual web console {action}").strip()
-    replaced_by = payload.get("replaced_by")
-    if replaced_by is not None:
-        replaced_by = _normalize_asset_path(str(replaced_by))
-    return store.update_asset_status(
-        asset_path,
-        status=status,
-        replaced_by=replaced_by,
-        reason=reason,
-        source="web_console",
-    )
-
-
-def _list_assets(store: ExperienceStore, *, kind: str | None = None) -> list[dict[str, Any]]:
-    kinds = [kind] if kind else ["memory", "skill", "rule", "eval", "failure", "pattern"]
-    assets: dict[str, dict[str, Any]] = {}
-    for item_kind in kinds:
-        if not item_kind:
-            continue
-        for asset in store.list_assets(item_kind, include_inactive=True):
-            path = str(asset.get("path") or "")
-            if path:
-                assets[path] = _compact_asset(asset)
-    return sorted(assets.values(), key=lambda item: str(item.get("path") or ""))
 
 
 def _reflect_reports(config: Config, *, limit: int = 20) -> list[dict[str, Any]]:
@@ -1759,9 +1575,7 @@ def _generate_ci_report(config: Config, store: ExperienceStore, payload: dict[st
     trajectory = store.latest_trajectory() if run_id == "latest" else store.get_trajectory(run_id)
     if not trajectory:
         raise GatewayError(404, "Run not found")
-    audit = build_project_audit_check(
-        config,
-        store,
+    audit = AuditService(config, store).check(
         rebuild_graph=bool(payload.get("rebuild_graph", False)),
         strict=bool(payload.get("strict", False)),
         redaction=str(payload.get("redaction") or "standard"),

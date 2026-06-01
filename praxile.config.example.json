@@ -33,7 +33,8 @@
     "max_prompt_chars": 120000,
     "compression_threshold": 0.8,
     "observation_keep_chars": 1600,
-    "recent_messages_to_keep": 6
+    "recent_messages_to_keep": 6,
+    "compression_by_role": {}
   },
   "trace": {
     "enabled": true,
@@ -93,6 +94,34 @@
   "project_map": {
     "cache_enabled": true,
     "cache_ttl_seconds": 30
+  },
+  "repository_context": {
+    "sync_enabled": true,
+    "max_files": 600,
+    "max_path_samples": 80,
+    "max_diff_chars": 30000
+  },
+  "policy_layers": {
+    "enabled": true,
+    "default_layers": [
+      "default",
+      "user",
+      "project",
+      "reflect",
+      "context",
+      "proposal_gate",
+      "tool_policy",
+      "model_roles"
+    ]
+  },
+  "governance_loop": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "run_reflect": false,
+    "run_audit": true,
+    "rebuild_graph": true,
+    "compress_sync_report": false,
+    "write_reports": true
   },
   "index": {
     "fts_enabled": true
@@ -636,6 +665,8 @@
     "repository": null,
     "default_pr_number": null,
     "timeout_seconds": 20,
+    "sync_network": false,
+    "max_sync_items": 20,
     "artifact_import_dir": ".praxile/experience/ci/imported-artifacts",
     "comment_marker": "<!-- praxile-report -->"
   },

@@ -22,7 +22,13 @@ Active model routing lives in three top-level keys:
 - `model_roles`: which provider/model to use for coding, evolution, reward judging, semantic judges, and retrieval.
 - `routing`: legacy/compatibility route aliases and fallback policy.
 
-The example file keeps `model_providers` empty by default so a freshly cloned open-source repo does not ship author-specific model choices. Look for `model_role_reference` and `model_setup_examples` in `praxile.config.example.json` for copyable Ollama and OpenAI-compatible templates, or run `praxile setup` to write the active keys interactively.
+The example file keeps `model_providers` empty by default so a freshly cloned open-source repo does not ship author-specific model choices. Look for `model_role_reference` and `model_setup_examples` in `praxile.config.example.json` for copyable Ollama and OpenAI-compatible templates, or run `praxile setup` to write the active keys interactively. The Web Console and Gateway also expose setup presets:
+
+- `minimal`: no autonomous coding provider; keeps local `local_hash` retrieval usable.
+- `local-first`: routes coding and low-cost judges to a local Ollama-compatible endpoint.
+- `cloud-coding-local-judges`: routes strong coding/deep mining to a cloud OpenAI-compatible endpoint while keeping review/judge roles local.
+
+Provider `type` accepts `openai`, `openai_compatible`, `anthropic`, `ollama`, `custom`, or `local`. `custom` uses the OpenAI-compatible request shape and exists for private gateways or vendor-compatible endpoints that should not be mislabeled.
 
 ## Init Detection
 
@@ -83,6 +89,11 @@ Praxile keeps operational knobs in `.praxile/config.json`:
     "compression_threshold": 0.8,
     "observation_keep_chars": 1600,
     "recent_messages_to_keep": 6
+  },
+  "repository_context": {
+    "sync_enabled": true,
+    "max_files": 600,
+    "max_path_samples": 80
   },
   "trace": {
     "enabled": true,
@@ -350,9 +361,17 @@ Praxile keeps operational knobs in `.praxile/config.json`:
 
 Project map caching stores a short-lived summary in `.praxile/cache/project_map.json`. Tool calls can force a fresh scan with `{"type":"project_map","refresh":true}` when recent filesystem changes matter.
 
+`repository_context` controls `praxile sync` and the Web Console Repository Context panel. The sync command samples repository files, skips protected/sensitive paths, groups files into source/test/doc/config categories, reports git dirtiness, and writes snapshots under `.praxile/experience/context/` plus `.praxile/context/repo_snapshot.json` unless `--dry-run` is used. It also writes `.praxile/context/commits/recent.json`, optional `.praxile/context/commits/since.json`, and `.praxile/context/diffs/working_tree.json` so future runs can load recent repository movement without rescanning the whole snapshot. `--docs` and `--specs` write `.praxile/context/docs_index.json` and `.praxile/context/specs_index.json`; `--ci` indexes local Praxile CI/reflect artifacts; `--github` captures local GitHub environment/config context without network fetch; `--github-online` opt-in fetches PR/issue summaries through the configured GitHub token; `--since` records recent git commits for that window. `--watch --iterations N` repeats safe sync passes. `max_files` limits scan cost, `max_path_samples` limits the number of displayed paths per category, and `max_diff_chars` limits stored diff excerpts.
+
 `checkpoint.enabled=true` writes resumable execution state under `.praxile/checkpoints/` after important runtime steps. Use `praxile run --resume <TASK_ID>` to continue from the last persisted action after an interruption.
 
-`context.compression_enabled=true` deterministically compresses older observations when prompt text approaches the configured threshold. This keeps long action loops from dragging full command output or large file reads through every subsequent model call.
+`context.compression_enabled=true` deterministically compresses older observations when prompt text approaches the configured threshold. This keeps long action loops from dragging full command output or large file reads through every subsequent model call. Runtime compression now uses the same role profiles as ContextJuice, records the selected role/profile/strategy in the trajectory, and treats config values as overrides for `.praxile/policies/context.json`. Use `praxile context status`, `praxile context compress --run latest`, `praxile context compress --source ci-log.txt`, and `praxile context tree` to inspect compression outputs and build the human-readable Repository Memory Tree.
+
+`policy_layers.enabled=true` enables policy-as-code inspection. `praxile policy list` shows built-in and file-backed layers under `.praxile/policies/`; `praxile policy check --write-defaults` seeds `default.json`, `context.json`, `proposal_gate.json`, and `tool_policy.json`; `praxile policy explain proposal_gate` shows layer precedence and the effective value. Rules in `.praxile/policies/tool_policy.json` are also loaded by `SafetyPolicy`, so project-local policy-as-code can deny matching runtime tool calls after human review.
+
+`workflow` templates are available through `praxile workflow list`, `praxile workflow show <name>`, and `praxile workflow seed`. Seeded JSON files live under `.praxile/workflows/` and can override built-in templates for test-failure repair, spec-driven feature work, architecture changes, security fixes, and migrations. Invalid workflow JSON is reported as a workflow error instead of crashing the CLI or Web Console.
+
+`governance_loop` configures `praxile watch`. The Alpha implementation is a safe governance loop: it can sync repository context, optionally compress the sync report, rebuild the graph, run audit, and run Reflect. It never edits source code, never auto-accepts proposals, and never rewrites durable assets. Use `--once` for one pass, `--iterations N` for bounded repeated passes, `--iterations 0` for a foreground loop until interrupted, and `--dry-run` to avoid writing context/governance artifacts.
 
 `trace.enabled=true` writes structured runtime events to daily files such as `.praxile/logs/trace_20260504.jsonl`, including model request/response timing, tool actions, snapshot refreshes, checkpoint writes, and context compression events. `trace.sync=false` avoids a disk `fsync` on every trace line; set it to `true` only when hard-sync audit durability is more important than runtime latency. `trace.retention_days` removes old trace files during runtime startup.
 

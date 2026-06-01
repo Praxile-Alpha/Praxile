@@ -16,6 +16,7 @@ from .model import ModelRequestCancelled, ModelRouter, ModelUnavailable
 from .reward import RewardEngine
 from .security import SafetyPolicy
 from .semantic_judges import AttributionJudge
+from .services.context_juice_service import ContextJuiceService
 from .silent_failure import detect_silent_failure_signals
 from .specs import build_spec_context, spec_context_prompt, verify_spec_compliance
 from .store import ExperienceStore
@@ -722,7 +723,7 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
-                messages = self._compress_messages_if_needed(messages, logger)
+                messages = self._compress_messages_if_needed(messages, logger, role="coding_agent")
                 self._emit_progress(
                     progress_callback,
                     "model_request",
@@ -1007,15 +1008,25 @@ class AgentRuntime:
         self,
         messages: list[dict[str, str]],
         logger: TrajectoryLogger,
+        *,
+        role: str = "coding_agent",
     ) -> list[dict[str, str]]:
         if not self.config.get("context", "compression_enabled", default=True):
             return messages
-        max_chars = int(self.config.get("context", "max_prompt_chars", default=120000) or 120000)
+        profile = ContextJuiceService(self.config, self.store).profiles().get(role, {})
+        configured_max_chars = int(self.config.get("context", "max_prompt_chars", default=120000) or 120000)
+        profile_max_chars = int(profile.get("max_chars") or 0)
+        max_chars = min(configured_max_chars, profile_max_chars) if profile_max_chars else configured_max_chars
         threshold = float(self.config.get("context", "compression_threshold", default=0.8) or 0.8)
-        if sum(len(item.get("content", "")) for item in messages) < max_chars * threshold:
+        prompt_chars_before = sum(len(item.get("content", "")) for item in messages)
+        if prompt_chars_before < max_chars * threshold:
             return messages
         keep_recent = max(2, int(self.config.get("context", "recent_messages_to_keep", default=6) or 6))
-        keep_chars = max(240, int(self.config.get("context", "observation_keep_chars", default=1600) or 1600))
+        keep_chars = max(
+            240,
+            int(profile.get("observation_keep_chars") or self.config.get("context", "observation_keep_chars", default=1600) or 1600),
+        )
+        strategy = str(profile.get("strategy") or "observation-head-tail")
         compressed = 0
         result: list[dict[str, str]] = []
         boundary = max(0, len(messages) - keep_recent)
@@ -1031,26 +1042,42 @@ class AgentRuntime:
                 result.append(
                     {
                         **message,
-                        "content": "Observation: [compressed observation]\n" + shorten(content, keep_chars),
+                        "content": (
+                            f"Observation: [compressed observation: role={role} strategy={strategy}]\n"
+                            + shorten(content, keep_chars)
+                        ),
                     }
                 )
                 compressed += 1
             else:
                 result.append(message)
         if compressed:
+            prompt_chars_after = sum(len(item.get("content", "")) for item in result)
             logger.data.setdefault("context_compressions", []).append(
                 {
                     "created_at": utc_now(),
+                    "role": role,
+                    "profile": profile,
+                    "strategy": strategy,
                     "compressed_messages": compressed,
                     "message_count": len(messages),
-                    "max_prompt_chars": max_chars,
+                    "configured_max_prompt_chars": configured_max_chars,
+                    "target_prompt_chars": max_chars,
+                    "prompt_chars_before": prompt_chars_before,
+                    "prompt_chars_after": prompt_chars_after,
+                    "preserve": profile.get("preserve") or [],
                 }
             )
             self._trace(
                 "context_compressed",
                 task_id=logger.task_id,
+                role=role,
+                strategy=strategy,
                 compressed_messages=compressed,
                 message_count=len(messages),
+                prompt_chars_before=prompt_chars_before,
+                prompt_chars_after=prompt_chars_after,
+                target_prompt_chars=max_chars,
             )
         return result
 

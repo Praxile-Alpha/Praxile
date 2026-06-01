@@ -153,7 +153,15 @@ The core rule is simple:
 ## Feature highlights
 
 - **Chat-First Web Console**  
-  A zero-dependency local workspace (`praxile gateway serve`) offering a 3-pane layout: Chat Execution, Run Details, and Governance Context.
+  A zero-dependency local workspace (`praxile gateway serve`) offering Chat Execution, Run Details, Governance Context, and Repository Context health.
+- **Repository Context Sync**
+  `praxile sync` captures a local, auditable repository context snapshot with Context Health, file-category signals, git dirtiness, recent commits/diffs, docs/spec indexes, optional local CI/GitHub context, experience counts, and ContextJuice estimates. It writes `.praxile/context/repo_snapshot.json`, `.praxile/context/commits/`, `.praxile/context/diffs/`, plus historical snapshots.
+- **ContextJuice and Repository Memory Tree**
+  `praxile context compress` produces role-specific compressed context with preserved evidence metadata; `praxile context tree` builds a human-readable memory tree under `.praxile/context/tree/`.
+- **Policy Layers and governance loop**
+  `praxile policy list/check/explain` inspects project-local governance layers, and `praxile watch` runs safe governance passes that can sync, compress, audit, rebuild graph, and reflect without editing code or auto-accepting proposals.
+- **Workflow Templates**
+  `praxile workflow list/show/seed` exposes editable task workflows such as test-failure repair, spec-driven feature work, architecture changes, security fixes, and migrations.
 - **Repository-local experience**  
   Memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.
 - **Spec-aware execution**  
@@ -350,7 +358,8 @@ npm install
 npm run dev
 ```
 
-The web console can generate local CI reports, publish confirmed GitHub PR comments with `GITHUB_TOKEN`, import GitHub Actions artifacts into `.praxile/`, visualize the experience graph, and edit pending proposals through structured fields.
+The web console can generate local CI reports, publish confirmed GitHub PR comments with `GITHUB_TOKEN`, import GitHub Actions artifacts into `.praxile/`, visualize the experience graph, edit pending proposals through structured fields, inspect policy layers, trigger ContextJuice compression, build the Repository Memory Tree, and run a safe one-shot governance pass.
+It also includes a Repository Context panel backed by the same data as `praxile sync`.
 
 ### 5. Review and explain
 
@@ -406,6 +415,21 @@ praxile review --interactive    Review pending proposals
 praxile explain latest          Explain retrieval, reward, and proposals
 praxile spec check              Check optional spec quality signals
 praxile spec verify latest      Verify a run against spec context
+praxile sync                    Capture repository context snapshot
+praxile sync --since 7d --docs --specs --ci --github
+                                  Capture scoped context indexes
+praxile sync --github-online    Opt into GitHub PR/issue summary fetches
+praxile context status          Show ContextJuice profiles and outputs
+praxile context compress --run latest
+                                  Compress run context with evidence metadata
+praxile context tree            Build human-readable repository memory tree
+praxile policy check            Validate project-local policy layers
+praxile policy explain proposal_gate
+                                  Explain active policy precedence
+praxile workflow list           Inspect built-in and project workflow templates
+praxile workflow seed           Write editable templates under .praxile/workflows
+praxile watch --once --compress Run a safe one-shot governance loop
+praxile watch --iterations 3    Run repeated safe governance passes
 praxile reflect --summary       Analyze accumulated experience
 praxile reflect --write-proposals
                                   Generate reviewable governance proposals
@@ -514,6 +538,7 @@ Not included in the first release:
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)
 - [Web Console](docs/WEB_CONSOLE.md)
+- [P0 Engineering Checklist](docs/P0_ENGINEERING_CHECKLIST.md)
 - [Praxile Reflect](docs/REFLECT.md)
 - [Why Praxile](docs/WHY_PRAXILE.md)
 - [Governance](docs/GOVERNANCE.md)

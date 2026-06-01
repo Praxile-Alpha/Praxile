@@ -16,6 +16,7 @@ pytestmark = [pytest.mark.resource, pytest.mark.gateway_resource, pytest.mark.sq
 
 
 def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\nmarkers = ['slow: slow tests', 'integration: integration tests']\n", encoding="utf-8")
     config = Config.load(tmp_path)
     store = ExperienceStore(config.paths)
     store.initialize(config)
@@ -105,10 +106,25 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
     assert "CI / PR Reports" in page.html
     assert "Multi-repo Dashboard" in page.html
     assert "Structured Proposal Editor" in page.html
+    assert "Repository Context" in page.html
+    assert "Workflow Templates" in page.html
 
     status = app.dispatch("GET", "/api/status")
     assert status["counts"]["runs"] == 1
     assert status["latest_run"]["task_id"] == "task_console"
+    context_status = app.dispatch("GET", "/api/context/status")
+    assert context_status["health"]["level"] in {"partial", "healthy", "strong"}
+    assert context_status["repository"]["categories"]["docs"]["count"] >= 1
+    assert context_status["detected"]["stacks"]
+    assert context_status["specs"]["spec_files"] == ["spec.md"]
+    assert context_status["freshness"]["level"] == "never_synced"
+    context_snapshot = app.dispatch("POST", "/api/context/sync", payload={"dry_run": True})
+    assert context_snapshot["kind"] == "repository_context_snapshot"
+    assert context_snapshot["path"] is None
+    workflows = app.dispatch("GET", "/api/workflows")
+    assert any(item["name"] == "architecture-change" for item in workflows["workflows"])
+    seeded_workflows = app.dispatch("POST", "/api/workflows/seed", payload={})
+    assert ".praxile/workflows/test-failure-repair.json" in seeded_workflows["written"]
 
     session = app.dispatch("POST", "/api/chat/sessions", payload={"title": "Console test"})
     assert session["session_id"].startswith("sess_")
@@ -156,6 +172,9 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
 
     roles = app.dispatch("GET", "/api/models/roles")
     assert {row["role"] for row in roles} >= {"coding_agent", "embedding"}
+    assert all("health" in row for row in roles)
+    presets = app.dispatch("GET", "/api/models/presets")
+    assert {row["preset_id"] for row in presets} >= {"minimal", "local-first", "cloud-coding-local-judges"}
     providers = app.dispatch("GET", "/api/models/providers")
     assert providers[0]["api_key_status"] != "configured"
     with pytest.raises(Exception):
@@ -178,6 +197,19 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
         },
     )
     assert provider["provider_id"] == "openai"
+    custom_provider = app.dispatch(
+        "POST",
+        "/api/models/providers",
+        payload={
+            "confirm": True,
+            "provider_id": "custom_gateway",
+            "type": "custom",
+            "base_url": "https://models.example.test/v1",
+            "api_key_env": "CUSTOM_MODEL_KEY",
+            "models": "custom-coder",
+        },
+    )
+    assert custom_provider["type"] == "custom"
     role = app.dispatch(
         "PATCH",
         "/api/models/roles/coding_agent",
@@ -310,6 +342,13 @@ def test_gateway_proposal_accept_and_reject_require_confirmation(tmp_path: Path)
         changes=[{"path": "memory/project.md", "operation": "append", "content": "Console accepted memory."}],
     )
     store.write_proposal(accept_proposal)
+    filtered = app.dispatch(
+        "GET",
+        "/api/proposals",
+        query={"status": ["pending"], "type": ["memory_update"], "risk": ["low"], "q": ["console"]},
+    )
+    assert filtered[0]["proposal_id"] == accept_proposal["proposal_id"]
+    assert filtered[0]["review_explanation"]["why_in_inbox"]
     with pytest.raises(Exception):
         app.dispatch("POST", f"/api/proposals/{accept_proposal['proposal_id']}/accept", payload={})
     with pytest.raises(Exception):

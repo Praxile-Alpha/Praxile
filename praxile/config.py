@@ -55,6 +55,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "compression_threshold": 0.8,
             "observation_keep_chars": 1600,
             "recent_messages_to_keep": 6,
+            "compression_by_role": {},
         },
         "trace": {
             "enabled": True,
@@ -114,6 +115,25 @@ def default_config(project_root: Path) -> dict[str, Any]:
         "project_map": {
             "cache_enabled": True,
             "cache_ttl_seconds": 30,
+        },
+        "repository_context": {
+            "sync_enabled": True,
+            "max_files": 600,
+            "max_path_samples": 80,
+            "max_diff_chars": 30000,
+        },
+        "policy_layers": {
+            "enabled": True,
+            "default_layers": ["default", "user", "project", "reflect", "context", "proposal_gate", "tool_policy", "model_roles"],
+        },
+        "governance_loop": {
+            "enabled": True,
+            "interval_seconds": 900,
+            "run_reflect": False,
+            "run_audit": True,
+            "rebuild_graph": True,
+            "compress_sync_report": False,
+            "write_reports": True,
         },
         "index": {
             "fts_enabled": True,
@@ -355,6 +375,8 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "repository": None,
             "default_pr_number": None,
             "timeout_seconds": 20,
+            "sync_network": False,
+            "max_sync_items": 20,
             "artifact_import_dir": ".praxile/experience/ci/imported-artifacts",
             "comment_marker": "<!-- praxile-report -->",
         },
@@ -551,7 +573,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reflect.max_findings",
         "retrieval.stale_usage_days",
         "search.timeout_seconds",
+        "repository_context.max_files",
+        "repository_context.max_path_samples",
+        "repository_context.max_diff_chars",
+        "governance_loop.interval_seconds",
         "cost_control.max_cloud_calls_per_run",
+        "github.max_sync_items",
         "reward.llm_judge.timeout_seconds",
         "reward.llm_judge.max_tokens",
         "semantic_judges.max_calls_per_run",
@@ -594,6 +621,15 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "workspace.keep_after_run",
         "reflect.ci.write_github_step_summary",
         "github.enabled",
+        "github.sync_network",
+        "repository_context.sync_enabled",
+        "policy_layers.enabled",
+        "governance_loop.enabled",
+        "governance_loop.run_reflect",
+        "governance_loop.run_audit",
+        "governance_loop.rebuild_graph",
+        "governance_loop.compress_sync_report",
+        "governance_loop.write_reports",
     ]:
         expect(path, bool)
     for path in [
@@ -669,6 +705,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "cost_control.use_cloud_for",
         "workspace.copy_excludes",
         "gateway.multi_repo_roots",
+        "policy_layers.default_layers",
     ]:
         expect(path, list)
     for path in [
@@ -687,6 +724,10 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.pattern_mining",
         "semantic_judges.counterexample_checker",
         "semantic_judges.risk_detector",
+        "repository_context",
+        "context.compression_by_role",
+        "policy_layers",
+        "governance_loop",
     ]:
         expect(path, dict)
     for path in [
@@ -755,6 +796,11 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reflect.max_findings",
         "retrieval.stale_usage_days",
         "search.timeout_seconds",
+        "repository_context.max_files",
+        "repository_context.max_path_samples",
+        "repository_context.max_diff_chars",
+        "governance_loop.interval_seconds",
+        "github.max_sync_items",
     ]:
         value = value_at(path)
         if isinstance(value, int) and value <= 0:
@@ -823,9 +869,9 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
                 errors.append(f"model_providers.{provider_name}: expected object")
                 continue
             provider_type = provider.get("type", "openai_compatible")
-            if provider_type not in {"openai", "openai_compatible", "anthropic", "ollama"}:
+            if provider_type not in {"openai", "openai_compatible", "anthropic", "ollama", "custom", "local"}:
                 errors.append(
-                    f"model_providers.{provider_name}.type: expected openai_compatible, openai, anthropic, or ollama"
+                    f"model_providers.{provider_name}.type: expected openai_compatible, openai, anthropic, ollama, custom, or local"
                 )
             base_url = provider.get("base_url")
             if base_url is not None and (not isinstance(base_url, str) or not urlparse(base_url).scheme):

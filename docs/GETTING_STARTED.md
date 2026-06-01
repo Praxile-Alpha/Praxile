@@ -235,11 +235,31 @@ The console can:
 - show recent runs, run detail, actions, reward, loaded assets, silent risks, and proposals;
 - review pending proposals and accept/reject/edit them with confirmation;
 - inspect model roles, providers, route stats, and route checks;
+- inspect Repository Context health, file-category coverage, git dirtiness, and ContextJuice estimates;
+- trigger ContextJuice compression, generate the Repository Memory Tree, inspect Policy Layers, and run a safe one-shot governance pass;
 - inspect the tool catalog and safety policy, and dry-check commands or paths;
 - inspect repository-local experience assets;
 - run Reflect, graph explain/rebuild, audit checks/bundles, and Spec check/verify from the browser.
 
 The web console uses the same local gateway API. It does not bypass approval or write directly to memory/skills.
+
+You can capture the same repository context from the CLI:
+
+```bash
+praxile sync
+praxile sync --since 7d --docs --specs --ci --github
+praxile sync --dry-run
+praxile context status
+praxile context compress --run latest
+praxile context compress --source ci-log.txt
+praxile context tree
+praxile policy check
+praxile policy explain proposal_gate
+praxile workflow list
+praxile workflow seed
+praxile watch --once --compress
+praxile watch --iterations 3
+```
 
 The browser console is intended for trusted localhost use. Praxile refuses non-localhost gateway binds such as `0.0.0.0` unless `--token` is provided. `--token` is best for API clients that can send `Authorization` or `X-Praxile-Token` headers.
 

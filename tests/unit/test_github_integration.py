@@ -53,6 +53,67 @@ def test_github_pr_comment_uses_issue_comment_endpoint(tmp_path: Path, monkeypat
     assert json.loads(calls[0].data.decode("utf-8"))["body"].startswith("<!-- praxile-report -->")
 
 
+def test_github_lists_prs_and_issues_for_context_sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = Config.load(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret")
+    calls: list[str] = []
+
+    def fake_urlopen(request: Request, timeout: int | None = None) -> FakeResponse:
+        calls.append(request.full_url)
+        if request.full_url.endswith("/pulls?state=open&per_page=2"):
+            return FakeResponse(
+                json.dumps(
+                    [
+                        {
+                            "number": 3,
+                            "title": "Add context sync",
+                            "state": "open",
+                            "draft": False,
+                            "html_url": "https://example.test/pull/3",
+                            "url": "https://api.example.test/pulls/3",
+                            "user": {"login": "maintainer"},
+                            "labels": [{"name": "p2"}],
+                        }
+                    ]
+                ).encode("utf-8")
+            )
+        if request.full_url.endswith("/issues?state=open&per_page=2"):
+            return FakeResponse(
+                json.dumps(
+                    [
+                        {"number": 4, "title": "Open issue", "state": "open", "user": {"login": "user"}},
+                        {"number": 3, "title": "PR issue mirror", "pull_request": {}},
+                    ]
+                ).encode("utf-8")
+            )
+        raise AssertionError(request.full_url)
+
+    connector = GitHubConnector(config, urlopen=fake_urlopen)
+
+    prs = connector.list_pull_requests(repo="Praxile-Alpha/Praxile", limit=2)
+    issues = connector.list_issues(repo="Praxile-Alpha/Praxile", limit=2)
+
+    assert prs[0]["kind"] == "pull_request"
+    assert prs[0]["number"] == 3
+    assert prs[0]["author"] == "maintainer"
+    assert issues == [
+        {
+            "kind": "issue",
+            "number": 4,
+            "title": "Open issue",
+            "state": "open",
+            "draft": None,
+            "html_url": None,
+            "api_url": None,
+            "created_at": None,
+            "updated_at": None,
+            "author": "user",
+            "labels": [],
+        }
+    ]
+    assert len(calls) == 2
+
+
 def test_import_actions_artifacts_extracts_inside_praxile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = Config.load(tmp_path)
     config.data["github"]["repository"] = "Praxile-Alpha/Praxile"
