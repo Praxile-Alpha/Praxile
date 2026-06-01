@@ -154,13 +154,13 @@ The core rule is simple:
 
 - **Chat-First Web Console**  
   A zero-dependency local workspace (`praxile gateway serve`) offering Chat Execution, Run Details, Governance Context, and Repository Context health.
-- **Repository Context Sync**
+- **Repository Context Sync**  
   `praxile sync` captures a local, auditable repository context snapshot with Context Health, file-category signals, git dirtiness, recent commits/diffs, docs/spec indexes, optional local CI/GitHub context, experience counts, and ContextJuice estimates. It writes `.praxile/context/repo_snapshot.json`, `.praxile/context/commits/`, `.praxile/context/diffs/`, plus historical snapshots.
-- **ContextJuice and Repository Memory Tree**
+- **ContextJuice and Repository Memory Tree**  
   `praxile context compress` produces role-specific compressed context with preserved evidence metadata; `praxile context tree` builds a human-readable memory tree under `.praxile/context/tree/`.
-- **Policy Layers and governance loop**
+- **Policy Layers and governance loop**  
   `praxile policy list/check/explain` inspects project-local governance layers, and `praxile watch` runs safe governance passes that can sync, compress, audit, rebuild graph, and reflect without editing code or auto-accepting proposals.
-- **Workflow Templates**
+- **Workflow Templates**  
   `praxile workflow list/show/seed` exposes editable task workflows such as test-failure repair, spec-driven feature work, architecture changes, security fixes, and migrations.
 - **Repository-local experience**  
   Memories, skills, rules, evals, failure patterns, project patterns, frozen boundaries, and architecture gates live under `.praxile/`.

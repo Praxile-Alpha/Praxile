@@ -154,13 +154,13 @@ flowchart LR
 
 - **以聊天为先的工作台 (Chat-First Web Console)**  
   零外部依赖的本地工作台（`praxile gateway serve`），提供聊天执行、运行明细、治理上下文与仓库上下文健康度面板。
-- **仓库上下文同步 (Repository Context Sync)**
+- **仓库上下文同步 (Repository Context Sync)**  
   `praxile sync` 会生成本地、可审计的仓库上下文快照，包含 Context Health、文件分类信号、git 变更状态、近期 commits/diffs、docs/spec 索引、可选本地 CI/GitHub 上下文、经验资产计数与 ContextJuice 估算，并写入 `.praxile/context/repo_snapshot.json`、`.praxile/context/commits/`、`.praxile/context/diffs/` 与历史快照。
-- **ContextJuice 与 Repository Memory Tree**
+- **ContextJuice 与 Repository Memory Tree**  
   `praxile context compress` 会按模型角色压缩上下文并保留证据元数据；`praxile context tree` 会在 `.praxile/context/tree/` 下生成面向人的仓库经验树。
-- **Policy Layers 与治理循环**
+- **Policy Layers 与治理循环**  
   `praxile policy list/check/explain` 用于检查项目本地治理规则层；`praxile watch` 会执行安全治理循环，可同步、压缩、审计、重建图谱和运行 Reflect，但不会自动改代码或自动接受 proposal。
-- **Workflow Templates**
+- **Workflow Templates**  
   `praxile workflow list/show/seed` 提供可编辑的任务工作流模板，例如测试失败修复、spec 驱动功能、架构变更、安全修复和迁移。
 - **仓库本地经验**  
   Memories、skills、rules、evals、failure patterns、project patterns、frozen boundaries、architecture gates 等都保存在 `.praxile/` 下。
