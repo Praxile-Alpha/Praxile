@@ -215,7 +215,9 @@ That JSON includes task, environment snapshot, retrieved experience, plan, actio
 
 The sidecar uses a ShareGPT-style conversation envelope similar to common trajectory research samples. It is a compatibility export, not the canonical audit record.
 
-Each trajectory also records `loaded_assets`: the memories, skills, rules, evals, or failure patterns that were loaded into the prompt, including `matched_terms`, `matched_fields`, score, and `why_loaded`. The SQLite store mirrors those events in `asset_usage` so `praxile explain <RUN_ID>` can show how accepted experience affected a run. Attribution is deliberately conservative: loaded-only assets are audit context, referenced assets can receive outcome credit, and explicitly used assets receive the strongest positive or negative usage signal.
+Each trajectory also records `loaded_assets`: the memories, skills, rules, evals, or failure patterns that were loaded into the prompt, including `matched_terms`, `matched_fields`, score, and `why_loaded`. SQLite preserves compatibility usage rows in `asset_usage` and an append-only activation ledger in `asset_activation_events`, so `praxile explain <RUN_ID>` can distinguish eligibility, retrieval, prompt injection, reference, compliance, and outcome attribution. Attribution is deliberately conservative: loading or referencing an asset is audit evidence only; positive or negative contribution requires an active semantic attribution with explicit causal-credit approval. Overall run success is never propagated into asset credit by itself.
+
+Harness-changing proposals additionally pass through the Proposal Validation Lab. `HarnessComponentRegistry` hashes the active config/asset state for prompts, retrieval, skills, rules, routing, tools, compression, stopping, and eval policy. A proposal names one base/candidate component version. `ProposalValidationLab` creates baseline and candidate copy workspaces, executes input-only cases, scores observations against source/regression/sealed expectations in the parent process, and persists an immutable comparison report under `.praxile/experience/validations/`. Validation never activates a candidate; a separate human `accept` command is required, and edits invalidate prior validation.
 
 ### Experience Graph
 
@@ -425,3 +427,9 @@ Judge output is stored as structured evidence in trajectories, usage rows, patte
 Praxile's safety layer is project-local and conservative. It enforces path restrictions, blocks sensitive files and dangerous commands, and uses an explicit proposal-based governance model.
 
 For full details, see the [Security Model](SECURITY_MODEL.md).
+
+## Bounded Harness Evolution
+
+Praxile mines repeated failure pathologies across episodes and indexes alternatives by pathology and exactly one owned harness component. Candidates run as isolated baseline/candidate experiments and cannot modify the active harness during validation. A validated candidate becomes active only after explicit human acceptance; activation writes a versioned manifest with validation evidence, approval, activation time, and rollback target.
+
+The frozen outer anchor includes the constitution, safety policy, sealed evals/scorers, architecture-gate enforcement, and approval enforcement. Normal proposals cannot modify it. Runtime rollback monitoring requires component participation evidence before acting, and experiment bundles redact repository content by default.

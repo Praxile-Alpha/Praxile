@@ -73,3 +73,54 @@ Retrieval attribution tracks the actual impact of loaded assets:
 - `referenced`: Referenced by the agent, but outcome unclear.
 - `strong_positive`: Explicitly used in a successful run.
 - `harmful`: Explicitly involved in a bad outcome or marked harmful by human feedback.
+
+## 6. Trusted Evolution Invariants
+
+Praxile treats self-evolution as a governed experiment, not as an LLM writing advice into Markdown.
+
+### Separate proposing from crediting
+
+LLMs may extract evidence, diagnose failures, and compose candidate changes. They do not unilaterally decide that their own proposal improved the harness. Credit belongs to an evaluation path composed from objective checks, comparison runs, calibrated semantic judges, and human decisions.
+
+### Measure the complete activation funnel
+
+An accepted asset is useful only if later runs can use it. Praxile's attribution model should distinguish:
+
+```text
+eligible -> retrieved -> injected -> referenced -> complied_with -> outcome_attributed
+```
+
+Each transition must be observable. A retrieval hit alone is not evidence that the agent learned from the asset.
+
+Praxile persists these stages in SQLite's append-only `asset_activation_events` ledger. Inspect a run with `praxile explain <TASK_ID>`, export it with `praxile audit run <TASK_ID> --json`, or open the run in the Web Console. To establish a retrieval-control baseline, rerun a comparable task with `praxile run "<TASK>" --without-experience`; the trajectory records that accepted project experience was deliberately withheld.
+
+### Validate against held-out cases
+
+Harness changes should be evaluated against three sets when evidence permits:
+
+- source episodes that motivated the change;
+- regression cases that protect known behavior;
+- sealed or held-out cases that were not visible to the proposal composer.
+
+A normal memory proposal can be accepted as project knowledge without claiming measured improvement. A harness-component proposal must declare one component plus its base/candidate versions and pass the Validation Lab before acceptance. Use:
+
+```bash
+praxile harness components
+praxile proposal validate <PROPOSAL_ID> --suite .praxile/evals/regression-cases/harness-suite.json
+praxile accept <PROPOSAL_ID>
+```
+
+The suite can label cases as `source`, `regression`, or `sealed`, with separate `owner` and `expected_owner` fields. Execution receives only case inputs; expected outputs stay in the scorer process. Equal baseline/candidate results are `inconclusive`, protected-set deterioration is `regressed`, and only measurable improvement without protected-set regression becomes `validated`.
+
+### Keep a frozen outer anchor
+
+Ordinary proposals must not weaken or rewrite:
+
+- human approval requirements;
+- sensitive path and dangerous command protections;
+- evidence and provenance requirements;
+- rollback and audit guarantees;
+- ownership of sealed evaluation cases;
+- the rule that LLM judgments are advisory signals rather than ground truth.
+
+Changing these invariants is an architecture-governance event and requires explicit human review outside the normal experience proposal flow.

@@ -11,6 +11,7 @@ from .episodes import EpisodeBuilder
 from .patterns import PatternMiner
 from .llm import LLMClient, LLMProposalParseError, build_proposal_generation_messages, parse_proposal_response
 from .model import ModelError, ModelRouter, ModelUnavailable
+from .harness_components import HarnessComponentRegistry
 from .semantic_judges import RiskDetectorJudge
 from .silent_failure import apply_silent_failure_to_proposals
 from .utils import append_jsonl, new_id, slugify, unified_diff, utc_now
@@ -378,7 +379,7 @@ class EvolutionEngine:
         normalized_risk = _normalized_risk(proposal_type, risk_level)
         confidence_level = _confidence_level(confidence)
         applicability = applicability_scope or future_applicability or "Apply only to future tasks similar to the source task after user review."
-        return {
+        proposal = {
             "proposal_id": new_id("prop"),
             "source_task_id": source_task_id,
             "source_trajectory_id": source_task_id,
@@ -419,6 +420,14 @@ class EvolutionEngine:
             "updated_at": utc_now(),
             "changes": changes,
         }
+        component_change = HarnessComponentRegistry(self.config).component_change_for(proposal_type, changes)
+        if component_change:
+            proposal["component_change"] = component_change
+            proposal["status"] = "proposed"
+            proposal["lifecycle_events"] = [
+                {"status": "proposed", "created_at": proposal["created_at"], "reason": "harness component candidate created"}
+            ]
+        return proposal
 
     def _safe_diff_target(self, change_path: str) -> Path:
         path = Path(change_path)
@@ -1003,7 +1012,7 @@ class EvolutionEngine:
             future_applicability="Model routing policy for similar privacy-sensitive, high-risk, or unavailable-route tasks.",
             applicability_scope="Model routing policy for similar privacy-sensitive, high-risk, or unavailable-route tasks.",
             anti_scope="Do not silently mutate model configuration or route unrelated low-risk tasks to expensive models.",
-            changes=[{"path": f"rules/harness-rules/{name}.md", "operation": "write", "content": content}],
+            changes=[{"path": f"rules/harness-rules/model-routing/{name}.md", "operation": "write", "content": content}],
         )
 
     def _llm_assisted_proposals(self, trajectory: dict[str, Any]) -> list[dict[str, Any]]:

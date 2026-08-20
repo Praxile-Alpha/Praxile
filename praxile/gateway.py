@@ -797,6 +797,7 @@ def _api_routes() -> list[str]:
         "POST /api/proposals/{proposal_id}/edit",
         "POST /api/proposals/{proposal_id}/accept",
         "POST /api/proposals/{proposal_id}/reject",
+        "POST /api/proposals/{proposal_id}/validate",
         "GET /api/assets",
         "GET /api/assets/{asset_path}",
         "GET /api/assets/{asset_path}/usage",
@@ -1252,6 +1253,7 @@ def _run_detail(trajectory: dict[str, Any], store: ExperienceStore) -> dict[str,
         },
         "spec_context": trajectory.get("spec_context") or {},
         "loaded_assets": trajectory.get("loaded_assets") or [],
+        "experience_activation": store.activation_funnel_for_task(task_id) if task_id else {},
         "silent_failure_signals": trajectory.get("silent_failure_signals") or [],
         "proposals": [_compact_proposal(item) for item in proposals if item],
         "actions": [_compact_action(item) for item in actions],
@@ -1331,6 +1333,7 @@ def _run_explain(trajectory: dict[str, Any], store: ExperienceStore) -> dict[str
     return {
         "run": _run_detail(trajectory, store),
         "asset_usage": store.usage_for_task(task_id) if task_id else [],
+        "experience_activation": store.activation_funnel_for_task(task_id) if task_id else {},
         "graph": store.graph_explain(task_id, depth=2, limit=80) if task_id else {},
     }
 
@@ -1439,6 +1442,16 @@ def _proposal_api(method: str, parts: list[str], payload: dict[str, Any], store:
             return service.accept(proposal_id, confirm=bool(payload.get("confirm")))
         if method == "POST" and len(parts) == 3 and parts[2] == "reject":
             return service.reject(proposal_id, reason=str(payload.get("reason") or ""))
+        if method == "POST" and len(parts) == 3 and parts[2] == "validate":
+            suite = str(payload.get("suite") or "").strip()
+            if not suite:
+                raise ServiceError(400, "`suite` is required")
+            suite_path = Path(suite).expanduser()
+            if not suite_path.is_absolute():
+                suite_path = (store.paths.root / suite_path).resolve()
+            if not path_is_relative_to(suite_path.resolve(), store.paths.root.resolve()):
+                raise ServiceError(400, "Gateway validation suites must stay inside the project root")
+            return service.validate(proposal_id, suite_path, keep_workspaces=payload.get("keep_workspaces"))
     except ServiceError as exc:
         raise GatewayError(exc.status, exc.message) from exc
     raise GatewayError(404, "Proposal route not found")

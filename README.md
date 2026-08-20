@@ -47,6 +47,10 @@ It is designed for developers and teams who want AI coding workflows to become m
 
 > Spec-driven development governs what the agent should build before execution. Praxile governs what the project should learn after execution.
 
+The wider agent ecosystem is converging on durable execution, human approval, skills, memory, and interoperable tools. Praxile focuses on the unresolved step after those capabilities: **proving which execution experience deserves to change the future harness**. Its governed proposal flow is the foundation; the next stage separates proposal generation from evidence-based credit, measures whether accepted experience was actually activated, and keeps an immutable governance boundary around self-modification.
+
+See [Agent Harness Landscape 2026](docs/AGENT_HARNESS_LANDSCAPE_2026.md) for the industry and research context, and [Trusted Harness Evolution Roadmap](docs/TRUSTED_HARNESS_EVOLUTION_ROADMAP.md) for the implementation plan. Research-inspired items in the roadmap are explicitly marked as planned; they are not presented as current capabilities.
+
 ---
 
 ## Why Praxile?
@@ -383,6 +387,14 @@ praxile accept <PROPOSAL_ID>
 praxile reject <PROPOSAL_ID> --reason "too broad"
 ```
 
+Harness-changing proposals require an isolated baseline/candidate validation before acceptance:
+
+```bash
+praxile harness components
+praxile proposal validate <PROPOSAL_ID> --suite <SUITE.json>
+praxile accept <PROPOSAL_ID>
+```
+
 ---
 
 ## Experience model
@@ -413,6 +425,8 @@ praxile run "..." --dry-run     Analyze and record without editing files
 praxile run "..." --spec ...    Run with spec context
 praxile review --interactive    Review pending proposals
 praxile explain latest          Explain retrieval, reward, and proposals
+praxile harness components      List versioned harness components
+praxile proposal validate ...   Run isolated baseline/candidate validation
 praxile spec check              Check optional spec quality signals
 praxile spec verify latest      Verify a run against spec context
 praxile sync                    Capture repository context snapshot
@@ -545,6 +559,8 @@ Not included in the first release:
 - [Install And Interop](docs/INSTALL_AND_INTEROP.md)
 - [Testing Guide](docs/contributing-testing.md)
 - [Security Policy](docs/SECURITY_MODEL.md)
+- [Agent Harness Landscape 2026](docs/AGENT_HARNESS_LANDSCAPE_2026.md)
+- [Trusted Harness Evolution Roadmap](docs/TRUSTED_HARNESS_EVOLUTION_ROADMAP.md)
 
 ---
 

@@ -461,6 +461,8 @@ _HTML = """<!doctype html>
           <div id="runs-table"></div>
           <h3>Readable Artifacts</h3>
           <div id="run-artifacts"></div>
+          <h3>Experience Activation</h3>
+          <div id="activation-funnel"></div>
           <h3>Run Detail</h3>
           <pre id="run-detail">Select a run.</pre>
         </section>
@@ -923,6 +925,21 @@ _HTML = """<!doctype html>
       $('loaded-assets').innerHTML = (latestRun?.loaded_assets || []).slice(0, 8).map(asset => item(asset.path || asset.title || 'asset', asset.why_loaded || asset.type || '')).join('') || item('None', '');
       $('silent-risks').innerHTML = (latestRun?.silent_failure_signals || []).map(sig => item(sig.type || sig.signal || 'risk', sig.reason || sig.risk || '')).join('') || item('None', '');
       $('run-proposals').innerHTML = (latestRun?.proposals || []).map(prop => item(prop.proposal_id, `${prop.type} ${prop.risk_level || ''}`)).join('') || item('None', '');
+      renderActivationFunnel(latestRun?.experience_activation || {});
+    }
+    function renderActivationFunnel(activation) {
+      const counts = activation?.stage_counts || {};
+      const metrics = activation?.metrics || {};
+      const stages = ['eligible', 'retrieved', 'injected', 'referenced', 'complied_with', 'outcome_attributed'];
+      const stageHtml = stages.map(stage => item(stage, counts[stage] ?? 0)).join('');
+      const metricHtml = [
+        ['activation rate', metrics.activation_rate],
+        ['compliance rate', metrics.compliance_rate],
+        ['attribution coverage', metrics.attribution_coverage],
+        ['positive contribution', metrics.positive_contribution_rate],
+        ['harmful rate', metrics.harmful_rate]
+      ].map(([label, value]) => item(label, value ?? 0)).join('');
+      $('activation-funnel').innerHTML = `<div class="artifact-grid">${stageHtml}${metricHtml}</div>`;
     }
     function renderProgress(events, job = null) {
       const header = job ? item(`Job ${job.job_id}`, `${job.status} ${job.stop_requested ? '(stop requested)' : ''}`) : '';

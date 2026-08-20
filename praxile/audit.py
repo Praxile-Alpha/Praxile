@@ -27,6 +27,7 @@ def build_run_audit(
         store.rebuild_experience_graph()
     proposals = _proposals_for_run(store, task_id, trajectory)
     usage = store.usage_for_task(task_id)
+    activation = store.activation_funnel_for_task(task_id)
     report = trajectory.get("reward_report") if isinstance(trajectory.get("reward_report"), dict) else {}
     objective = report.get("objective_signals") if isinstance(report.get("objective_signals"), dict) else {}
     report = _base_report(config, "run", task_id) | {
@@ -45,6 +46,7 @@ def build_run_audit(
             "spec_compliance": trajectory.get("spec_compliance") or {},
             "loaded_assets": _compact_loaded_assets(trajectory.get("loaded_assets") or []),
             "asset_usage": _compact_usage(usage),
+            "experience_activation": activation,
         },
         "decision_chain": {
             "task_analysis": trajectory.get("task_analysis") or {},
@@ -55,6 +57,10 @@ def build_run_audit(
         },
         "reward_chain": {
             "overall": report.get("overall"),
+            "schema_version": report.get("schema_version"),
+            "reward_profile": report.get("reward_profile") or {},
+            "evidence_graph": report.get("evidence_graph") or {},
+            "escalation": report.get("escalation") or {},
             "objective_score_component": report.get("objective_score_component"),
             "final_reward": report.get("final_reward") or {},
             "experience_generation": report.get("experience_generation") or {},

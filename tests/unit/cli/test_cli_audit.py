@@ -93,6 +93,7 @@ def test_audit_run_asset_and_proposal_json(tmp_path: Path, capsys):
     assert run_report["subject"]["task_id"] == "task_audit"
     assert run_report["decision_chain"]["executor_attribution"]["quality"] == "complete"
     assert run_report["proposal_chain"]["proposal_count"] == 1
+    assert run_report["source_chain"]["experience_activation"]["stage_counts"]["retrieved"] == 1
     assert "[REDACTED]" in run_report["decision_chain"]["actions"][0]["observation_excerpt"]
 
     assert main(["--project", str(tmp_path), "audit", "run", "task_audit", "--json", "--redaction", "none"]) == 0

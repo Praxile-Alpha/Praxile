@@ -4,10 +4,33 @@ from typing import Any
 
 from .base import StoreRepository
 from .common import *  # noqa: F401,F403
+from ..harness_components import HarnessComponentRegistry, is_harness_proposal
 
 
 class ProposalsStoreMixin:
     def write_proposal(self, proposal: dict[str, Any]) -> Path:
+        if is_harness_proposal(proposal):
+            if self.config is None:
+                raise ValueError("ExperienceStore must be initialized before writing a harness proposal")
+            registry = HarnessComponentRegistry(self.config)
+            if not isinstance(proposal.get("component_change"), dict):
+                proposal["component_change"] = registry.component_change_for(
+                    str(proposal.get("type") or ""),
+                    proposal.get("changes") if isinstance(proposal.get("changes"), list) else [],
+                )
+            registry.validate_proposal(
+                proposal,
+                verify_versions=str(proposal.get("status") or "pending") not in {"accepted", "rolled_back"},
+            )
+            if proposal.get("status") == "pending":
+                proposal["status"] = "proposed"
+            proposal.setdefault("lifecycle_events", []).append(
+                {
+                    "status": proposal.get("status") or "proposed",
+                    "created_at": utc_now(),
+                    "reason": "harness proposal normalized by component registry",
+                }
+            )
         proposal["updated_at"] = utc_now()
         directory = {
             "pending": self.paths.proposals_pending,
@@ -65,9 +88,10 @@ class ProposalsStoreMixin:
 
         for path in candidates:
             if path.stem == proposal_id or path.stem.startswith(proposal_id):
-                return read_json(path, {})
+                data = read_json(path, {})
+                return data if _proposal_status_matches(data, status) else None
             data = read_json(path, {})
-            if data.get("proposal_id", "").startswith(proposal_id):
+            if data.get("proposal_id", "").startswith(proposal_id) and _proposal_status_matches(data, status):
                 return data
         return None
     def list_proposals(self, *, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
@@ -83,7 +107,7 @@ class ProposalsStoreMixin:
         for directory in dirs:
             for path in sorted(directory.glob("*.json")):
                 proposal = read_json(path, {})
-                if proposal:
+                if proposal and _proposal_status_matches(proposal, status):
                     proposals.append(proposal)
         proposals.sort(key=lambda item: item.get("updated_at") or item.get("created_at") or "", reverse=True)
         return proposals[:limit]
@@ -103,6 +127,22 @@ class ProposalsStoreMixin:
         self.write_proposal(proposal)
         return proposal
     def apply_proposal(self, proposal: dict[str, Any]) -> dict[str, Any]:
+        if is_harness_proposal(proposal) and bool(
+            self.config.get("proposal_validation", "required_for_harness_components", default=True) if self.config else True
+        ):
+            component_change = HarnessComponentRegistry(self.config).validate_proposal(proposal)
+            active_version = HarnessComponentRegistry(self.config).describe(str(component_change["component_id"]))["version"]
+            if active_version != component_change.get("base_version"):
+                raise PermissionError("Harness component changed after validation; rerun shadow validation against the active version")
+            validation = proposal.get("validation") if isinstance(proposal.get("validation"), dict) else {}
+            if proposal.get("status") != "validated" or validation.get("status") != "validated":
+                raise PermissionError(
+                    "Harness component proposals require a validated shadow report before human acceptance"
+                )
+            report_path = self.paths.root / str(validation.get("report_path") or "")
+            report = read_json(report_path, {}) if report_path.exists() else {}
+            if report.get("component_change") != component_change or report.get("status") != "validated":
+                raise PermissionError("Validation report does not match the harness component candidate")
         with file_lock(self.paths.state / "proposal-apply.lock"):
             if not proposal.get("pre_apply_snapshot_id"):
                 snapshot = SnapshotManager(self.paths.state).create_snapshot(
@@ -245,7 +285,16 @@ class ProposalsStoreMixin:
                 )
 
             proposal["applied_changes"] = applied
+            proposal.setdefault("lifecycle_events", []).append(
+                {"status": "accepted", "created_at": utc_now(), "reason": "human accepted validated proposal"}
+            )
             proposal = self.move_proposal(proposal, "accepted")
+            if is_harness_proposal(proposal):
+                from ..bounded_evolution import BoundedHarnessEvolution
+                proposal["promotion"] = BoundedHarnessEvolution(self.config, self).promotion_manifest(proposal)
+                write_json(self.paths.proposals_accepted / f"{proposal['proposal_id']}.json", proposal)
+                with self._connection() as conn:
+                    self._index_proposal_row(conn, proposal, self.paths.proposals_accepted / f"{proposal['proposal_id']}.json")
             append_jsonl(
                 self.paths.logs / "evolution.jsonl",
                 {
@@ -408,6 +457,22 @@ class ProposalsStoreMixin:
                 self.remove_asset(index_target)
         proposal["status"] = "rolled_back"
         proposal["rolled_back_at"] = utc_now()
+        proposal.setdefault("lifecycle_events", []).append(
+            {"status": "rolled_back", "created_at": proposal["rolled_back_at"], "reason": "proposal rollback completed"}
+        )
+        if is_harness_proposal(proposal):
+            manifest_path = self.paths.state / "experience" / "harness" / "active-manifest.json"
+            manifest = read_json(manifest_path, {})
+            component_id = str((proposal.get("component_change") or {}).get("component_id") or "")
+            active = (manifest.get("components") or {}).get(component_id)
+            if isinstance(active, dict) and active.get("proposal_id") == proposal_id:
+                rolled_back_from = active.get("active_version")
+                active["rolled_back_from_version"] = rolled_back_from
+                active["active_version"] = HarnessComponentRegistry(self.config).describe(component_id)["version"]
+                active.setdefault("monitoring", {})["status"] = "rolled_back"
+                active["monitoring"]["rolled_back_at"] = proposal["rolled_back_at"]
+                manifest["updated_at"] = utc_now()
+                write_json(manifest_path, manifest)
         write_json(self.paths.proposals_accepted / f"{proposal['proposal_id']}.json", proposal)
         with self._connection() as conn:
             self._index_proposal_row(conn, proposal, self.paths.proposals_accepted / f"{proposal['proposal_id']}.json")
@@ -443,3 +508,12 @@ class ProposalsRepository(StoreRepository):
 
     def reject(self, proposal: dict[str, Any], *, reason: str | None = None) -> dict[str, Any]:
         return self.store.reject_proposal(proposal, reason=reason)
+
+
+def _proposal_status_matches(proposal: dict[str, Any], requested: str | None) -> bool:
+    if requested is None:
+        return True
+    actual = str(proposal.get("status") or "pending")
+    if requested == "pending":
+        return actual in {"pending", "proposed", "shadow_running", "validated", "inconclusive", "regressed"}
+    return actual == requested

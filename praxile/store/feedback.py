@@ -54,6 +54,24 @@ class FeedbackStoreMixin:
                     """,
                     (now, now, path),
                 )
+                event_context = {
+                    "asset_version": item.get("content_hash") or item.get("asset_version"),
+                    "model_role": item.get("model_role"),
+                    "executor_id": item.get("executor_id"),
+                    "evidence": {
+                        "matched_terms": item.get("matched_terms") or [],
+                        "matched_fields": item.get("matched_fields") or [],
+                        "why_loaded": item.get("why_loaded") or item.get("reason") or "",
+                    },
+                    "metadata": {
+                        "score": item.get("final_score", item.get("score")),
+                        "source_task_id": item.get("source_task_id"),
+                    },
+                }
+                self._insert_activation_event(conn, task_id, path, "eligible", now=now, **event_context)
+                self._insert_activation_event(conn, task_id, path, "retrieved", now=now, **event_context)
+                if used_in_prompt:
+                    self._insert_activation_event(conn, task_id, path, "injected", now=now, **event_context)
     def update_asset_usage_outcome(
         self,
         task_id: str,
@@ -87,6 +105,46 @@ class FeedbackStoreMixin:
                     """,
                     (json.dumps(attribution, ensure_ascii=False), now, task_id, path),
                 )
+                evidence = {
+                    "reason": attribution.get("reason"),
+                    "evidence": attribution.get("evidence") or [],
+                    "confidence": attribution.get("confidence"),
+                    "attribution_level": attribution.get("attribution_level"),
+                }
+                judge = attribution.get("semantic_judge") if isinstance(attribution.get("semantic_judge"), dict) else {}
+                if attribution.get("referenced"):
+                    self._insert_activation_event(
+                        conn,
+                        task_id,
+                        path,
+                        "referenced",
+                        now=now,
+                        model_role=judge.get("role"),
+                        evidence=evidence,
+                    )
+                if attribution.get("used_explicitly"):
+                    self._insert_activation_event(
+                        conn,
+                        task_id,
+                        path,
+                        "complied_with",
+                        now=now,
+                        model_role=judge.get("role"),
+                        evidence=evidence,
+                    )
+                if attribution.get("should_update_asset_outcome"):
+                    contribution = _activation_contribution(attribution.get("attribution_level"))
+                    self._insert_activation_event(
+                        conn,
+                        task_id,
+                        path,
+                        "outcome_attributed",
+                        now=now,
+                        outcome=normalized,
+                        contribution=contribution,
+                        model_role=judge.get("role"),
+                        evidence=evidence,
+                    )
             for path in referenced | used_explicitly:
                 conn.execute(
                     """
@@ -98,6 +156,15 @@ class FeedbackStoreMixin:
                     """,
                     (1 if path in referenced else 0, 1 if path in used_explicitly else 0, now, task_id, path),
                 )
+                if path not in attribution_by_path:
+                    self._insert_activation_event(
+                        conn,
+                        task_id,
+                        path,
+                        "referenced",
+                        now=now,
+                        evidence={"source": "runtime_heuristic", "causal_credit": False},
+                    )
             rows = conn.execute(
                 """
                 SELECT path, MAX(referenced) AS referenced, MAX(used_explicitly) AS used_explicitly
@@ -114,9 +181,7 @@ class FeedbackStoreMixin:
             if normalized == "success":
                 for row in rows:
                     attribution = attribution_by_path.get(str(row["path"]))
-                    if attribution and not _attribution_allows_outcome_update(attribution, success=True):
-                        continue
-                    if not attribution and not (int(row["referenced"] or 0) or int(row["used_explicitly"] or 0)):
+                    if not attribution or not _attribution_allows_outcome_update(attribution, success=True):
                         continue
                     conn.execute(
                         "UPDATE assets SET positive_outcome_count = positive_outcome_count + 1, updated_at = ? WHERE path = ?",
@@ -125,14 +190,122 @@ class FeedbackStoreMixin:
             elif normalized == "failed":
                 for row in rows:
                     attribution = attribution_by_path.get(str(row["path"]))
-                    if attribution and not _attribution_allows_outcome_update(attribution, success=False):
-                        continue
-                    if not attribution and not (int(row["referenced"] or 0) or int(row["used_explicitly"] or 0)):
+                    if not attribution or not _attribution_allows_outcome_update(attribution, success=False):
                         continue
                     conn.execute(
                         "UPDATE assets SET negative_outcome_count = negative_outcome_count + 1, updated_at = ? WHERE path = ?",
                         (now, row["path"]),
                     )
+
+    def _insert_activation_event(
+        self,
+        conn,
+        task_id: str,
+        path: str,
+        stage: str,
+        *,
+        now: str | None = None,
+        asset_version: str | None = None,
+        outcome: str = "unknown",
+        contribution: str = "unknown",
+        model_role: str | None = None,
+        executor_id: str | None = None,
+        evidence: dict[str, Any] | list[Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        allowed = {"eligible", "retrieved", "injected", "referenced", "complied_with", "outcome_attributed"}
+        if stage not in allowed:
+            raise ValueError(f"Unsupported asset activation stage: {stage}")
+        prior = conn.execute(
+            """
+            SELECT asset_version, model_role, executor_id
+            FROM asset_activation_events
+            WHERE task_id = ? AND path = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (task_id, path),
+        ).fetchone()
+        version = asset_version
+        if not version and prior:
+            version = prior["asset_version"]
+        if not version:
+            row = conn.execute("SELECT content_hash FROM assets WHERE path = ?", (path,)).fetchone()
+            version = str(row["content_hash"] or "") if row else ""
+        model_role = model_role or (prior["model_role"] if prior else None)
+        executor_id = executor_id or (prior["executor_id"] if prior else None)
+        conn.execute(
+            """
+            INSERT INTO asset_activation_events
+            (event_id, task_id, path, asset_version, stage, outcome, contribution,
+             model_role, executor_id, evidence, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id("activation"),
+                task_id,
+                path,
+                version or None,
+                stage,
+                outcome,
+                contribution,
+                model_role,
+                executor_id,
+                json.dumps(evidence or {}, ensure_ascii=False),
+                json.dumps(metadata or {}, ensure_ascii=False),
+                now or utc_now(),
+            ),
+        )
+
+    def activation_events_for_task(self, task_id: str) -> list[dict[str, Any]]:
+        self._init_db()
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM asset_activation_events WHERE task_id = ? ORDER BY id ASC",
+                (task_id,),
+            ).fetchall()
+        return [_decode_activation_event(dict(row)) for row in rows]
+
+    def activation_funnel_for_task(self, task_id: str) -> dict[str, Any]:
+        events = self.activation_events_for_task(task_id)
+        stages = ["eligible", "retrieved", "injected", "referenced", "complied_with", "outcome_attributed"]
+        by_path: dict[str, dict[str, Any]] = {}
+        for event in events:
+            path = str(event.get("path") or "")
+            item = by_path.setdefault(
+                path,
+                {
+                    "path": path,
+                    "asset_version": event.get("asset_version"),
+                    "stages": {stage: False for stage in stages},
+                    "outcome": "unknown",
+                    "contribution": "unknown",
+                    "events": [],
+                },
+            )
+            item["stages"][str(event.get("stage"))] = True
+            item["asset_version"] = event.get("asset_version") or item.get("asset_version")
+            if event.get("stage") == "outcome_attributed":
+                item["outcome"] = event.get("outcome") or "unknown"
+                item["contribution"] = event.get("contribution") or "unknown"
+            item["events"].append(event)
+        counts = {stage: sum(1 for item in by_path.values() if item["stages"].get(stage)) for stage in stages}
+        base = max(1, counts["eligible"])
+        attributed = counts["outcome_attributed"]
+        positive = sum(1 for item in by_path.values() if item.get("contribution") == "positive")
+        negative = sum(1 for item in by_path.values() if item.get("contribution") == "negative")
+        return {
+            "task_id": task_id,
+            "stage_counts": counts,
+            "metrics": {
+                "activation_rate": round(counts["referenced"] / base, 4),
+                "compliance_rate": round(counts["complied_with"] / base, 4),
+                "attribution_coverage": round(attributed / base, 4),
+                "positive_contribution_rate": round(positive / max(1, attributed), 4),
+                "harmful_rate": round(negative / max(1, attributed), 4),
+            },
+            "assets": list(by_path.values()),
+        }
     def record_feedback(self, feedback: dict[str, Any]) -> Path:
         self._init_db()
         feedback_id = str(feedback["feedback_id"])
@@ -319,3 +492,31 @@ class FeedbackRepository(StoreRepository):
 
     def list(self, **kwargs: Any) -> list[dict[str, Any]]:
         return self.store.list_feedback(**kwargs)
+
+
+def _activation_contribution(level: object) -> str:
+    normalized = _normalize_attribution_level(level)
+    if normalized in {"weak_positive", "strong_positive"}:
+        return "positive"
+    if normalized in {"weak_negative", "harmful"}:
+        return "negative"
+    if normalized == "neutral":
+        return "neutral"
+    return "unknown"
+
+
+def _decode_activation_event(item: dict[str, Any]) -> dict[str, Any]:
+    item["evidence"] = _decode_json_value(item.get("evidence"), {})
+    item["metadata"] = _decode_json_value(item.get("metadata"), {})
+    return item
+
+
+def _decode_json_value(value: Any, default: Any) -> Any:
+    if isinstance(value, (dict, list)):
+        return value
+    if not value:
+        return default
+    try:
+        return json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return default

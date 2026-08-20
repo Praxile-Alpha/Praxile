@@ -136,6 +136,7 @@ def test_gateway_chat_first_console_and_api_routes(tmp_path: Path) -> None:
 
     run = app.dispatch("GET", "/api/runs/task_console")
     assert run["governance_summary"]["loaded_assets"] == 1
+    assert "experience_activation" in run
     assert run["actions"][0]["type"] == "read_file"
     assert run["artifacts"]["tests"][0]["command"] == "python -m pytest"
     artifacts = app.dispatch("GET", "/api/runs/task_console/artifacts")

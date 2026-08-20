@@ -24,6 +24,7 @@ class TrajectoriesStoreMixin:
         vector_record = self._asset_vector_record(metadata) if metadata else None
         with self._connection() as conn:
             self._index_trajectory_row(conn, trajectory, path)
+            self._index_reward_evidence_conn(conn, trajectory)
             if metadata:
                 self._upsert_asset_metadata_conn(conn, metadata, vector_record)
                 self._record_index_event_conn(conn, path, "trajectory_recorded", processed=True)
@@ -101,10 +102,96 @@ class TrajectoriesStoreMixin:
         vector_record = self._asset_vector_record(metadata) if metadata else None
         with self._connection() as conn:
             self._index_trajectory_row(conn, trajectory, path)
+            self._index_reward_evidence_conn(conn, trajectory)
             if metadata:
                 self._upsert_asset_metadata_conn(conn, metadata, vector_record)
                 self._record_index_event_conn(conn, path, "trajectory_updated", processed=True)
         return path
+    def _index_reward_evidence_conn(self, conn: sqlite3.Connection, trajectory: dict[str, Any]) -> None:
+        task_id = str(trajectory.get("task_id") or "")
+        report = trajectory.get("reward_report") if isinstance(trajectory.get("reward_report"), dict) else {}
+        profile = report.get("reward_profile") if isinstance(report.get("reward_profile"), dict) else {}
+        graph = report.get("evidence_graph") if isinstance(report.get("evidence_graph"), dict) else {}
+        conn.execute("DELETE FROM reward_claims WHERE task_id = ?", (task_id,))
+        conn.execute("DELETE FROM reward_evidence WHERE task_id = ?", (task_id,))
+        if profile:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO reward_profiles(task_id, profile_id, profile_version, profile_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    profile.get("profile_id"),
+                    profile.get("profile_version"),
+                    json.dumps(profile, ensure_ascii=False),
+                    trajectory.get("end_time") or utc_now(),
+                ),
+            )
+        for item in graph.get("nodes") or []:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO reward_evidence
+                (evidence_id, task_id, evidence_type, source_ref, provenance, payload_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.get("evidence_id"), task_id, item.get("type"), item.get("source_ref"),
+                    item.get("provenance"), json.dumps(item.get("payload"), ensure_ascii=False), utc_now(),
+                ),
+            )
+        for item in graph.get("claims") or []:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO reward_claims
+                (claim_id, task_id, claim_type, value_json, provenance, status, profile_version, evidence_refs, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.get("claim_id"), task_id, item.get("claim_type"),
+                    json.dumps(item.get("value"), ensure_ascii=False), item.get("provenance"), item.get("status"),
+                    item.get("profile_version"), json.dumps(item.get("evidence_refs") or []), utc_now(),
+                ),
+            )
+    def reward_evidence_for_task(self, task_id: str) -> dict[str, Any]:
+        trajectory = self.get_trajectory(task_id)
+        if not trajectory:
+            return {"task_id": task_id, "found": False}
+        report = trajectory.get("reward_report") or {}
+        return {
+            "task_id": trajectory.get("task_id"),
+            "found": True,
+            "overall": report.get("overall"),
+            "reward_profile": report.get("reward_profile") or {},
+            "evidence_graph": report.get("evidence_graph") or {},
+            "escalation": report.get("escalation") or {},
+        }
+    def record_judge_calibration(self, report: dict[str, Any]) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO judge_calibration_runs
+                (calibration_id, judge, report_path, recall, disagreement_rate, abstention_rate, evidence_coverage, report_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    report.get("calibration_id"), report.get("judge"), report.get("path"),
+                    report.get("recall", 0.0), report.get("disagreement_rate", 0.0),
+                    report.get("abstention_rate", 0.0), report.get("evidence_coverage", 0.0),
+                    json.dumps(report, ensure_ascii=False), report.get("created_at") or utc_now(),
+                ),
+            )
+    def list_judge_calibrations(self, judge: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        query = "SELECT report_json FROM judge_calibration_runs"
+        params: list[Any] = []
+        if judge:
+            query += " WHERE judge = ?"
+            params.append(judge)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(max(1, int(limit)))
+        with self._connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [json.loads(row["report_json"]) for row in rows]
     def checkpoint_path(self, task_id: str) -> Path:
         return self.paths.checkpoints / f"{task_id}.json"
     def write_checkpoint(self, checkpoint: dict[str, Any]) -> Path:

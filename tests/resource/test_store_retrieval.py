@@ -116,7 +116,96 @@ def test_loaded_assets_do_not_receive_positive_outcome_without_reference() -> No
         )
         asset = store.get_asset(".praxile/memory/project.md")
         assert asset is not None
-        assert asset["positive_outcome_count"] == 1
+        assert asset["positive_outcome_count"] == 0
         usage = store.usage_for_task("task_attr_2")
         assert usage[0]["referenced"] is True
-        assert usage[0]["attribution_level"] == "weak_positive"
+        assert usage[0]["attribution_level"] == "referenced"
+        funnel = store.activation_funnel_for_task("task_attr_2")
+        assert funnel["stage_counts"] == {
+            "eligible": 1,
+            "retrieved": 1,
+            "injected": 1,
+            "referenced": 1,
+            "complied_with": 0,
+            "outcome_attributed": 0,
+        }
+        assert funnel["metrics"]["activation_rate"] == 1.0
+        assert funnel["metrics"]["attribution_coverage"] == 0.0
+
+
+@pytest.mark.sqlite_resource
+def test_activation_funnel_requires_explicit_semantic_credit() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        config = Config.load(root)
+        store = ExperienceStore(config.paths)
+        store.initialize(config)
+        memory_path = root / ".praxile" / "memory" / "project.md"
+        memory_path.write_text("# Project\n\nParser memory\n", encoding="utf-8")
+        store.index_asset(memory_path)
+        path = ".praxile/memory/project.md"
+        store.record_asset_usage(
+            "task_activation",
+            [{"path": path, "score": 0.9, "model_role": "coding_agent", "executor_id": "coding_agent"}],
+            used_in_prompt=True,
+        )
+        store.update_asset_usage_outcome(
+            "task_activation",
+            "success",
+            attribution_results=[
+                {
+                    "path": path,
+                    "referenced": True,
+                    "used_explicitly": True,
+                    "attribution_level": "strong_positive",
+                    "confidence": 0.9,
+                    "evidence": ["The run followed the parser strategy."],
+                    "reason": "Matched edit and verification sequence.",
+                    "should_update_asset_outcome": True,
+                    "semantic_judge": {"active": True, "role": "attribution_judge"},
+                }
+            ],
+        )
+
+        funnel = store.activation_funnel_for_task("task_activation")
+        assert funnel["stage_counts"]["complied_with"] == 1
+        assert funnel["stage_counts"]["outcome_attributed"] == 1
+        assert funnel["metrics"]["positive_contribution_rate"] == 1.0
+        assert funnel["assets"][0]["contribution"] == "positive"
+        assert funnel["assets"][0]["events"][-1]["model_role"] == "attribution_judge"
+        assert funnel["assets"][0]["events"][-1]["executor_id"] == "coding_agent"
+        assert store.get_asset(path)["positive_outcome_count"] == 1
+
+
+@pytest.mark.sqlite_resource
+def test_legacy_loaded_usage_migrates_without_compliance_or_credit() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        config = Config.load(root)
+        store = ExperienceStore(config.paths)
+        store.initialize(config)
+        now = "2026-08-12T00:00:00+00:00"
+        with store._connection() as conn:
+            conn.execute("DELETE FROM asset_activation_events")
+            conn.execute(
+                """
+                INSERT INTO asset_usage
+                (path, task_id, matched_terms, matched_fields, why_loaded, score, used_in_prompt,
+                 referenced, used_explicitly, outcome, created_at, updated_at)
+                VALUES (?, ?, '[]', '[]', 'legacy load', 0.5, 1, 0, 0, 'success', ?, ?)
+                """,
+                (".praxile/memory/project.md", "legacy_task", now, now),
+            )
+
+        migrated_store = ExperienceStore(config.paths)
+        funnel = migrated_store.activation_funnel_for_task("legacy_task")
+
+        assert funnel["stage_counts"] == {
+            "eligible": 1,
+            "retrieved": 1,
+            "injected": 1,
+            "referenced": 0,
+            "complied_with": 0,
+            "outcome_attributed": 0,
+        }
+        assert funnel["assets"][0]["contribution"] == "unknown"

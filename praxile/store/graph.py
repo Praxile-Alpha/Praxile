@@ -52,6 +52,12 @@ class GraphStoreMixin:
             asset_rows = [self._asset_row_with_lifecycle(row) for row in conn.execute("SELECT * FROM assets").fetchall()]
             task_rows = [dict(row) for row in conn.execute("SELECT * FROM tasks").fetchall()]
             usage_rows = [dict(row) for row in conn.execute("SELECT * FROM asset_usage").fetchall()]
+            activation_rows = [dict(row) for row in conn.execute("SELECT * FROM asset_activation_events ORDER BY id").fetchall()]
+
+        activation_by_usage: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for event in activation_rows:
+            key = (str(event.get("task_id") or ""), str(event.get("path") or ""))
+            activation_by_usage.setdefault(key, []).append(event)
 
         proposals = self.list_proposals(status=None, limit=10000)
         trajectories: dict[str, dict[str, Any]] = {}
@@ -124,6 +130,24 @@ class GraphStoreMixin:
                         "action_count": action_counts_by_executor.get(executor_id, 0),
                     },
                 )
+            reward_graph = (trajectory.get("reward_report") or {}).get("evidence_graph") or {}
+            for evidence_item in reward_graph.get("nodes") or []:
+                evidence_id = str(evidence_item.get("evidence_id") or "")
+                if evidence_id:
+                    add_node(evidence_id, "reward_evidence", ref_path=evidence_item.get("source_ref"), title=str(evidence_item.get("type") or evidence_id))
+            for claim_item in reward_graph.get("claims") or []:
+                claim_id = str(claim_item.get("claim_id") or "")
+                if not claim_id:
+                    continue
+                add_node(claim_id, "reward_claim", ref_path=f"{task_id}:{claim_item.get('claim_type')}", title=str(claim_item.get("claim_type") or claim_id))
+                add_edge(
+                    claim_id,
+                    _graph_run_node_id(task_id),
+                    "contributes_to_reward",
+                    evidence={"value": claim_item.get("value"), "provenance": claim_item.get("provenance"), "profile_version": claim_item.get("profile_version")},
+                )
+                for evidence_ref in claim_item.get("evidence_refs") or []:
+                    add_edge(str(evidence_ref), claim_id, "supports_reward_claim", evidence={"claim_type": claim_item.get("claim_type")})
 
         for asset in asset_rows:
             path = str(asset.get("path") or "")
@@ -208,13 +232,14 @@ class GraphStoreMixin:
             row_copy["referenced"] = bool(row_copy.get("referenced"))
             row_copy["used_explicitly"] = bool(row_copy.get("used_explicitly"))
             row_copy["semantic_attribution"] = _decode_json_dict(row_copy.get("semantic_attribution"))
-            level = (
-                _normalize_attribution_level(row_copy["semantic_attribution"].get("attribution_level"))
-                if isinstance(row_copy.get("semantic_attribution"), dict)
-                and row_copy["semantic_attribution"].get("semantic_judge", {}).get("active")
-                else _usage_attribution_level(row_copy)
+            semantic = row_copy.get("semantic_attribution") if isinstance(row_copy.get("semantic_attribution"), dict) else {}
+            has_causal_credit = bool(
+                semantic.get("semantic_judge", {}).get("active")
+                and semantic.get("should_update_asset_outcome")
             )
+            level = _normalize_attribution_level(semantic.get("attribution_level")) if has_causal_credit else _usage_attribution_level(row_copy)
             relation = "helped_run" if level in {"weak_positive", "strong_positive"} else "misled_run" if level in {"weak_negative", "harmful"} else "retrieved_in_run"
+            activation_events = activation_by_usage.get((task_id, path), [])
             add_edge(
                 asset_node,
                 run_node,
@@ -224,6 +249,9 @@ class GraphStoreMixin:
                     "attribution_level": level,
                     "outcome": row_copy.get("outcome"),
                     "why_loaded": row_copy.get("why_loaded"),
+                    "causal_credit": has_causal_credit,
+                    "activation_stages": list(dict.fromkeys(str(event.get("stage") or "") for event in activation_events)),
+                    "activation_event_ids": [str(event.get("event_id") or "") for event in activation_events],
                 },
             )
 

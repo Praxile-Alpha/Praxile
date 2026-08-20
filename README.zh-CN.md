@@ -47,6 +47,10 @@ Praxile **不是**另一个通用 Coding Agent，**不是**隐藏式全局记忆
 
 > Spec-Driven Development 治理编码前 Agent 应该构建什么；Praxile 治理编码后项目应该学到什么。
 
+当前 Agent 生态正在向 durable execution、人工审批、skills、memory 和开放工具协议收敛。Praxile 聚焦这些能力之后仍未解决的一步：**证明哪些执行经验有资格改变未来的 Harness**。现有的可治理 proposal 流程是基础；下一阶段将进一步分离 proposal 生成与证据记分，测量已接受经验是否真的被激活，并在自修改体系外保留不可被普通演化改写的治理边界。
+
+行业与论文背景见 [2026 Agent Harness 发展综述](docs/AGENT_HARNESS_LANDSCAPE_2026.md)，具体实现计划见 [可信 Harness 演化路线](docs/TRUSTED_HARNESS_EVOLUTION_ROADMAP.md)。路线中的研究启发能力会明确标记为 planned，不会被表述为当前已经实现。
+
 ---
 
 ## 为什么需要 Praxile？
@@ -383,6 +387,14 @@ praxile accept <PROPOSAL_ID>
 praxile reject <PROPOSAL_ID> --reason "too broad"
 ```
 
+会改变 Harness 的 proposal 必须先完成隔离的 baseline/candidate 对照验证，才能人工接受：
+
+```bash
+praxile harness components
+praxile proposal validate <PROPOSAL_ID> --suite <SUITE.json>
+praxile accept <PROPOSAL_ID>
+```
+
 ---
 
 ## 经验模型
@@ -413,6 +425,8 @@ praxile run "..." --dry-run     仅分析并记录，不编辑文件
 praxile run "..." --spec ...    附加 spec context 执行任务
 praxile review --interactive    审查 pending proposals
 praxile explain latest          解释检索、reward 和 proposals
+praxile harness components      查看带版本的 harness components
+praxile proposal validate ...   运行隔离 baseline/candidate 验证
 praxile spec check              检查可选 spec 质量信号
 praxile spec verify latest      基于 spec context 验证运行结果
 praxile sync                    采集仓库上下文快照
@@ -545,6 +559,8 @@ Praxile 当前处于 **Alpha** 阶段。
 - [Install And Interop](docs/INSTALL_AND_INTEROP.md)
 - [Testing Guide](docs/contributing-testing.md)
 - [Security Policy](docs/SECURITY_MODEL.md)
+- [2026 Agent Harness 发展综述](docs/AGENT_HARNESS_LANDSCAPE_2026.md)
+- [可信 Harness 演化路线](docs/TRUSTED_HARNESS_EVOLUTION_ROADMAP.md)
 
 ---
 

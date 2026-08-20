@@ -133,8 +133,48 @@ class BaseStore:
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS reward_profiles (
+                  task_id TEXT PRIMARY KEY,
+                  profile_id TEXT NOT NULL,
+                  profile_version TEXT NOT NULL,
+                  profile_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS reward_claims (
+                  claim_id TEXT PRIMARY KEY,
+                  task_id TEXT NOT NULL,
+                  claim_type TEXT NOT NULL,
+                  value_json TEXT,
+                  provenance TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  profile_version TEXT NOT NULL,
+                  evidence_refs TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS reward_evidence (
+                  evidence_id TEXT PRIMARY KEY,
+                  task_id TEXT NOT NULL,
+                  evidence_type TEXT NOT NULL,
+                  source_ref TEXT,
+                  provenance TEXT NOT NULL,
+                  payload_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS judge_calibration_runs (
+                  calibration_id TEXT PRIMARY KEY,
+                  judge TEXT NOT NULL,
+                  report_path TEXT NOT NULL,
+                  recall REAL NOT NULL,
+                  disagreement_rate REAL NOT NULL,
+                  abstention_rate REAL NOT NULL,
+                  evidence_coverage REAL NOT NULL,
+                  report_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_reward_claims_task ON reward_claims(task_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_reward_evidence_task ON reward_evidence(task_id)")
             self._ensure_asset_schema(conn)
             self._ensure_graph_schema(conn)
     def _ensure_graph_schema(self, conn: sqlite3.Connection) -> None:
@@ -284,6 +324,68 @@ class BaseStore:
                 "semantic_attribution": "TEXT",
             },
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS asset_activation_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              event_id TEXT NOT NULL UNIQUE,
+              task_id TEXT NOT NULL,
+              path TEXT NOT NULL,
+              asset_version TEXT,
+              stage TEXT NOT NULL,
+              outcome TEXT NOT NULL DEFAULT 'unknown',
+              contribution TEXT NOT NULL DEFAULT 'unknown',
+              model_role TEXT,
+              executor_id TEXT,
+              evidence TEXT,
+              metadata TEXT,
+              created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_asset_activation_task ON asset_activation_events(task_id, stage)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_asset_activation_path ON asset_activation_events(path, created_at)"
+        )
+        self._migrate_legacy_asset_usage_activation(conn)
+
+    def _migrate_legacy_asset_usage_activation(self, conn: sqlite3.Connection) -> None:
+        stages = [
+            ("eligible", "1 = 1"),
+            ("retrieved", "1 = 1"),
+            ("injected", "usage.used_in_prompt = 1"),
+            ("referenced", "usage.referenced = 1"),
+        ]
+        for stage, condition in stages:
+            conn.execute(
+                f"""
+                INSERT OR IGNORE INTO asset_activation_events
+                (event_id, task_id, path, asset_version, stage, outcome, contribution,
+                 evidence, metadata, created_at)
+                SELECT
+                  'legacy:' || usage.id || ':{stage}',
+                  usage.task_id,
+                  usage.path,
+                  assets.content_hash,
+                  '{stage}',
+                  CASE WHEN '{stage}' = 'referenced' THEN usage.outcome ELSE 'unknown' END,
+                  'unknown',
+                  '{{"source":"legacy_asset_usage","causal_credit":false}}',
+                  '{{"migration":"asset_usage_v1"}}',
+                  usage.created_at
+                FROM asset_usage AS usage
+                LEFT JOIN assets ON assets.path = usage.path
+                WHERE {condition}
+                  AND NOT EXISTS (
+                    SELECT 1 FROM asset_activation_events AS event
+                    WHERE event.task_id = usage.task_id
+                      AND event.path = usage.path
+                      AND event.stage = '{stage}'
+                  )
+                """
+            )
     def _ensure_columns(self, conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
         existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         for name, definition in columns.items():

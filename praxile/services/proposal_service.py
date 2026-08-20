@@ -5,6 +5,9 @@ import json
 from typing import Any
 
 from ..store import ExperienceStore
+from ..eval import EvalSuite
+from ..harness_components import is_harness_proposal
+from ..validation_lab import ProposalValidationLab
 from ..utils import utc_now
 from .errors import ServiceError
 
@@ -132,6 +135,17 @@ class ProposalService:
                 "reason": str(payload.get("reason") or "manual proposal edit").strip(),
             },
         ]
+        if is_harness_proposal(edited):
+            edited.pop("component_change", None)
+            edited.pop("validation", None)
+            edited["status"] = "proposed"
+            edited.setdefault("lifecycle_events", []).append(
+                {
+                    "status": "proposed",
+                    "created_at": utc_now(),
+                    "reason": "human edit invalidated the previous candidate version and validation",
+                }
+            )
         self.store.write_proposal(edited)
         return self.store.find_proposal(proposal_id, status="pending") or edited
 
@@ -142,6 +156,20 @@ class ProposalService:
         if not pending:
             raise ServiceError(404, "No pending proposal found")
         return self.store.apply_proposal(pending)
+
+    def validate(self, proposal_id: str, suite_path, *, keep_workspaces: bool | None = None) -> dict[str, Any]:
+        proposal = self.store.find_proposal(proposal_id)
+        if not proposal:
+            raise ServiceError(404, "Proposal not found")
+        try:
+            suite = EvalSuite.load(suite_path)
+            return ProposalValidationLab(self.store.config, self.store).validate(
+                proposal,
+                suite,
+                keep_workspaces=keep_workspaces,
+            )
+        except (ValueError, PermissionError) as exc:
+            raise ServiceError(400, str(exc)) from exc
 
     def reject(self, proposal_id: str, *, reason: str | None = None) -> dict[str, Any]:
         reason = str(reason or "").strip()
@@ -170,8 +198,8 @@ class ProposalService:
             raise ServiceError(400, "`proposal` must be an object")
         if edited.get("proposal_id") not in {None, proposal_id, pending.get("proposal_id")}:
             raise ServiceError(400, "Edited proposal_id must match the pending proposal")
-        if edited.get("status") not in {None, "pending"}:
-            raise ServiceError(400, "Only pending proposals can be edited through the web console")
+        if edited.get("status") not in {None, "pending", "proposed", "validated", "inconclusive", "regressed"}:
+            raise ServiceError(400, "Only inbox proposals can be edited through the web console")
         changes = edited.get("changes")
         if changes is not None and not isinstance(changes, list):
             raise ServiceError(400, "`changes` must be a list")

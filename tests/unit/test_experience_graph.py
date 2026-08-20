@@ -33,7 +33,24 @@ def test_experience_graph_rebuild_links_specs_runs_proposals_and_assets(tmp_path
         ],
         used_in_prompt=True,
     )
-    store.update_asset_usage_outcome(task_id, "success", referenced_paths=[asset_path])
+    store.update_asset_usage_outcome(
+        task_id,
+        "success",
+        referenced_paths=[asset_path],
+        attribution_results=[
+            {
+                "path": asset_path,
+                "referenced": True,
+                "used_explicitly": True,
+                "attribution_level": "strong_positive",
+                "should_update_asset_outcome": True,
+                "confidence": 0.91,
+                "reason": "The accepted parser guidance directly determined the repair.",
+                "evidence": ["Parser strips fenced JSON."],
+                "semantic_judge": {"active": True, "role": "attribution_judge"},
+            }
+        ],
+    )
     store.record_trajectory(
         {
             "task_id": task_id,
@@ -109,4 +126,36 @@ def test_experience_graph_rebuild_links_specs_runs_proposals_and_assets(tmp_path
     assert report["found"] is True
     relations = {edge["relation_type"] for edge in report["edges"]}
     assert {"approved_by", "helped_run"} <= relations
+    helped = next(edge for edge in report["edges"] if edge["relation_type"] == "helped_run")
+    assert helped["evidence"]["causal_credit"] is True
+    assert "outcome_attributed" in helped["evidence"]["activation_stages"]
     assert any(node["node_id"] == "proposal:prop_graph" for node in report["nodes"])
+
+
+def test_experience_graph_does_not_infer_help_from_run_success(tmp_path: Path):
+    config = Config.load(tmp_path)
+    store = ExperienceStore(config.paths)
+    store.initialize(config)
+    task_id = "task_no_causal_credit"
+    asset_path = ".praxile/memory/project.md"
+    store.record_asset_usage(task_id, [{"path": asset_path, "referenced": True}], used_in_prompt=True)
+    store.update_asset_usage_outcome(task_id, "success", referenced_paths=[asset_path])
+    store.record_trajectory(
+        {
+            "task_id": task_id,
+            "user_task": "Successful run with passively loaded memory",
+            "start_time": utc_now(),
+            "end_time": utc_now(),
+            "actions": [],
+            "result": {"status": "completed"},
+        }
+    )
+
+    result = store.rebuild_experience_graph()
+
+    assert result["relation_counts"].get("helped_run", 0) == 0
+    assert result["relation_counts"]["retrieved_in_run"] == 1
+    report = store.graph_explain(asset_path)
+    edge = next(edge for edge in report["edges"] if edge["relation_type"] == "retrieved_in_run")
+    assert edge["evidence"]["causal_credit"] is False
+    assert {"eligible", "retrieved", "injected", "referenced"} <= set(edge["evidence"]["activation_stages"])

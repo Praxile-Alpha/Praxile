@@ -1,5 +1,6 @@
 import tempfile
 import sys
+import json
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -38,12 +39,55 @@ def test_review_accept_explain_real_flow():
             "status": "pending"
         }
         store.write_proposal(proposal)
+
+        validation_tests = root / "validation_tests"
+        validation_tests.mkdir()
+        (validation_tests / "test_skill.py").write_text(
+            "from pathlib import Path\n"
+            "import unittest\n\n"
+            "class SkillTest(unittest.TestCase):\n"
+            "    def test_skill_exists(self):\n"
+            "        self.assertTrue(Path('.praxile/skills/test/SKILL.md').exists())\n",
+            encoding="utf-8",
+        )
+        suite = root / "skill-suite.json"
+        suite.write_text(
+            json.dumps(
+                {
+                    "owner": "project_maintainer",
+                    "expected_owner": "independent_eval_owner",
+                    "cases": [
+                        {
+                            "name": "skill exists",
+                            "set_type": "sealed",
+                            "input": {"command": ["python", "-m", "unittest", "discover", "-s", "validation_tests"]},
+                            "expected": {"returncode": 0},
+                            "metrics": ["returncode_match"],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         
         # Review (just check it doesn't crash)
         review_args = ["--project", str(root), "review", "--pending"]
         with patch.object(sys, "argv", ["praxile"] + review_args):
             main(review_args)
             
+        # Validate in isolated baseline/candidate workspaces, then accept.
+        validate_args = [
+            "--project",
+            str(root),
+            "proposal",
+            "validate",
+            "prop_123",
+            "--suite",
+            str(suite),
+        ]
+        with patch.object(sys, "argv", ["praxile"] + validate_args):
+            assert main(validate_args) == 0
+
         # Accept
         accept_args = ["--project", str(root), "accept", "prop_123"]
         with patch.object(sys, "argv", ["praxile"] + accept_args):

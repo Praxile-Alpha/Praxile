@@ -6,6 +6,12 @@ class TestExplain(unittest.TestCase):
     def test_build_run_explanation(self):
         store = MagicMock()
         store.usage_for_task.return_value = []
+        store.activation_funnel_for_task.return_value = {
+            "task_id": "test_1",
+            "stage_counts": {"eligible": 1, "retrieved": 1, "injected": 1, "referenced": 0, "complied_with": 0, "outcome_attributed": 0},
+            "metrics": {"activation_rate": 0.0, "compliance_rate": 0.0, "attribution_coverage": 0.0},
+            "assets": [],
+        }
         store.get_asset.return_value = {
             "type": "memory",
             "title": "Project Context",
@@ -59,6 +65,7 @@ class TestExplain(unittest.TestCase):
         self.assertEqual(explanation["used"][0]["attribution_level"], "mixed")
         self.assertEqual(len(explanation["produced"]), 1)
         self.assertEqual(explanation["produced"][0]["proposal_id"], "prop_1")
+        self.assertEqual(explanation["experience_activation"]["stage_counts"]["retrieved"], 1)
 
     def test_asset_attribution_level(self):
         self.assertEqual(_asset_attribution_level({"path": "memory/project.md"}), "loaded_only")

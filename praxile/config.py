@@ -106,6 +106,10 @@ def default_config(project_root: Path) -> dict[str, Any]:
                 "high_risk_score": 0.75,
                 "medium_risk_score": 0.45,
             },
+            "calibration": {
+                "min_recall": 0.80,
+                "repeated_runs": 2,
+            },
         },
         "search": {
             "backend": "auto",
@@ -184,6 +188,24 @@ def default_config(project_root: Path) -> dict[str, Any]:
         "proposal_gate": {
             "enabled": True,
             "min_confidence": 0.55,
+        },
+        "proposal_validation": {
+            "required_for_harness_components": True,
+            "workspace_mode": "copy",
+            "minimum_improvement": 0.01,
+            "regression_tolerance": 0.0,
+            "keep_workspaces": False,
+        },
+        "harness_evolution": {
+            "minimum_pathology_episodes": 2,
+            "routing": {"minimum_signals": 3},
+            "automatic_rollback": {
+                "enabled": True,
+                "minimum_runs": 3,
+                "reward_drop_tolerance": 0.20,
+                "minimum_safety": 0.50,
+            },
+            "export_private_repository_content": False,
         },
         "memory": {
             "shard_enabled": True,
@@ -323,6 +345,13 @@ def default_config(project_root: Path) -> dict[str, Any]:
                 "max_cost_per_run": 0.01,
                 "timeout_seconds": 12,
                 "max_tokens": 800,
+            },
+            "profiles": {
+                "default": "default",
+                "task_classes": {},
+                "definitions": {
+                    "default": {"version": "1"},
+                },
             },
             "scores": {
                 "default_task_success": 0.60,
@@ -604,6 +633,10 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "retrieval.vector_enabled",
         "evolution.llm_assisted_proposals",
         "proposal_gate.enabled",
+        "proposal_validation.required_for_harness_components",
+        "proposal_validation.keep_workspaces",
+        "harness_evolution.automatic_rollback.enabled",
+        "harness_evolution.export_private_repository_content",
         "memory.shard_enabled",
         "shell.allow_shell_features",
         "cost_control.local_first",
@@ -676,6 +709,10 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reward.min_experience_value_for_proposals",
         "evolution.consolidation_low_value_max_confidence",
         "proposal_gate.min_confidence",
+        "proposal_validation.minimum_improvement",
+        "proposal_validation.regression_tolerance",
+        "harness_evolution.automatic_rollback.reward_drop_tolerance",
+        "harness_evolution.automatic_rollback.minimum_safety",
         "cost_control.max_cost_per_run_usd",
         "reward.user_feedback.positive_reward_delta",
         "reward.user_feedback.negative_reward_delta",
@@ -684,6 +721,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.pattern_mining.only_after_heuristic_score",
         "semantic_judges.risk_detector.high_risk_score",
         "semantic_judges.risk_detector.medium_risk_score",
+        "semantic_judges.calibration.min_recall",
     ]:
         expect(path, (int, float))
     for path in [
@@ -692,6 +730,10 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "reward.cost_thresholds.medium_model_calls",
         "reward.cost_thresholds.high_model_calls",
         "reward.scope.broad_edit_top_level_threshold",
+        "semantic_judges.calibration.repeated_runs",
+        "harness_evolution.minimum_pathology_episodes",
+        "harness_evolution.routing.minimum_signals",
+        "harness_evolution.automatic_rollback.minimum_runs",
     ]:
         expect(path, int)
     for path in [
@@ -724,6 +766,11 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.pattern_mining",
         "semantic_judges.counterexample_checker",
         "semantic_judges.risk_detector",
+        "semantic_judges.calibration",
+        "reward.profiles",
+        "harness_evolution",
+        "harness_evolution.routing",
+        "harness_evolution.automatic_rollback",
         "repository_context",
         "context.compression_by_role",
         "policy_layers",

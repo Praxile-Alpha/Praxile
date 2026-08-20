@@ -84,6 +84,10 @@
       "enabled": true,
       "high_risk_score": 0.75,
       "medium_risk_score": 0.45
+    },
+    "calibration": {
+      "min_recall": 0.8,
+      "repeated_runs": 2
     }
   },
   "search": {
@@ -172,6 +176,26 @@
   "proposal_gate": {
     "enabled": true,
     "min_confidence": 0.55
+  },
+  "proposal_validation": {
+    "required_for_harness_components": true,
+    "workspace_mode": "copy",
+    "minimum_improvement": 0.01,
+    "regression_tolerance": 0.0,
+    "keep_workspaces": false
+  },
+  "harness_evolution": {
+    "minimum_pathology_episodes": 2,
+    "routing": {
+      "minimum_signals": 3
+    },
+    "automatic_rollback": {
+      "enabled": true,
+      "minimum_runs": 3,
+      "reward_drop_tolerance": 0.2,
+      "minimum_safety": 0.5
+    },
+    "export_private_repository_content": false
   },
   "memory": {
     "shard_enabled": true,
@@ -613,6 +637,33 @@
       "max_cost_per_run": 0.01,
       "timeout_seconds": 12,
       "max_tokens": 800
+    },
+    "profiles": {
+      "default": "default",
+      "task_classes": {
+        "ui": "ux-sensitive",
+        "architecture": "architecture-sensitive"
+      },
+      "definitions": {
+        "default": {
+          "version": "1"
+        },
+        "ux-sensitive": {
+          "version": "1",
+          "overrides": {
+            "min_experience_value_for_proposals": 0.65
+          }
+        },
+        "architecture-sensitive": {
+          "version": "1",
+          "overrides": {
+            "weights": {
+              "process_safety": 0.3,
+              "task_success": 0.2
+            }
+          }
+        }
+      }
     },
     "scores": {
       "default_task_success": 0.6,

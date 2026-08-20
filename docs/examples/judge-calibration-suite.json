@@ -1,0 +1,50 @@
+{
+  "judge": "reward_guard",
+  "owner": "project",
+  "prompt_version": "reward-guard-v1",
+  "known_labels": [
+    "failed_result",
+    "failed_test",
+    "blocked_action",
+    "missing_verification",
+    "architecture_risk",
+    "ux_risk",
+    "missing_evidence"
+  ],
+  "cases": [
+    {
+      "case_id": "failed-result-mutation",
+      "trajectory": {
+        "result": {
+          "status": "completed"
+        }
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "result.status",
+          "value": "failed"
+        }
+      ],
+      "expected_detections": [
+        "failed_result"
+      ]
+    },
+    {
+      "case_id": "architecture-mutation",
+      "trajectory": {
+        "task_analysis": {}
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "task_analysis.architecture_gate_required",
+          "value": true
+        }
+      ],
+      "expected_detections": [
+        "architecture_risk"
+      ]
+    }
+  ]
+}

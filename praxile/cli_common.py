@@ -25,12 +25,18 @@ from .config import Config, ProjectPaths, find_project_root
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .eval import EvalRunner, EvalSuite
 from .evolution import EvolutionEngine
+from .harness_components import HarnessComponentRegistry
+from .bounded_evolution import BoundedHarnessEvolution, FailurePathologyMiner
+from .judge_calibration import JudgeCalibrationRunner
 from .feedback import FeedbackSemanticClassifier, build_feedback, extract_feedback_intents
 from .gateway import serve_gateway
 from .inspector import inspect_project
 from .interop import format_interop_policy, interop_policy
 from .memory import MemorySystem
 from .model import ModelRouter
+from .patterns import PatternMiner
+from .hypothesis import CounterexampleChecker, HypothesisGenerator
+from .proposals import ProposalComposer
 from .project_map import build_project_map
 from .reflect import ReflectScope, build_reflect_ci_check, format_reflect_ci_markdown, format_reflect_markdown, format_reflect_summary
 from .reward import RewardEngine
@@ -1873,6 +1879,12 @@ def _count_by(items: list[dict], key: str) -> dict[str, int]:
 
 def build_run_explanation(store: ExperienceStore, trajectory: dict) -> dict:
     task_id = trajectory.get("task_id")
+    activation = store.activation_funnel_for_task(task_id) if task_id else {}
+    activation_by_path = {
+        str(item.get("path") or ""): item
+        for item in activation.get("assets") or []
+        if isinstance(item, dict)
+    }
     loaded_assets = trajectory.get("loaded_assets") or []
     if not loaded_assets and task_id:
         loaded_assets = [
@@ -1911,6 +1923,8 @@ def build_run_explanation(store: ExperienceStore, trajectory: dict) -> dict:
                 copy["last_used_at"] = asset.get("last_used_at", copy.get("last_used_at"))
         if copy.get("score_impact") is None:
             copy["score_impact"] = _score_impact(copy, store)
+        if path and path in activation_by_path:
+            copy["activation"] = activation_by_path[path]
         copy.setdefault("attribution_level", _asset_attribution_level(copy))
         hydrated_assets.append(copy)
     produced = []
@@ -1951,6 +1965,7 @@ def build_run_explanation(store: ExperienceStore, trajectory: dict) -> dict:
         "executors": trajectory.get("executors") or [],
         "parallel_readonly_exploration": trajectory.get("parallel_readonly_exploration") or {},
         "reward": trajectory.get("reward_report", {}),
+        "experience_activation": activation or trajectory.get("experience_activation") or {},
         "used": hydrated_assets,
         "produced": produced,
         "next_similar_task_will_likely_load": next_assets,
@@ -2070,6 +2085,23 @@ def print_run_explanation(explanation: dict) -> None:
             for key in ["deprecated_reason", "superseded_reason", "archived_reason"]:
                 if item.get(key):
                     print(f"  {key}: {item.get(key)}")
+    activation = explanation.get("experience_activation") or {}
+    counts = activation.get("stage_counts") or {}
+    metrics = activation.get("metrics") or {}
+    if counts:
+        print("\n1a. Experience activation")
+        print(
+            "- funnel: "
+            f"eligible={counts.get('eligible', 0)} retrieved={counts.get('retrieved', 0)} "
+            f"injected={counts.get('injected', 0)} referenced={counts.get('referenced', 0)} "
+            f"complied={counts.get('complied_with', 0)} attributed={counts.get('outcome_attributed', 0)}"
+        )
+        print(
+            "- metrics: "
+            f"activation={metrics.get('activation_rate', 0)} "
+            f"compliance={metrics.get('compliance_rate', 0)} "
+            f"attribution_coverage={metrics.get('attribution_coverage', 0)}"
+        )
     print("\n2. What this run learned")
     produced = explanation.get("produced") or []
     if not produced:

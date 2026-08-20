@@ -43,6 +43,48 @@ Architecture gates, frozen boundaries, routing policies, and broad harness rules
 - Ensure the scope is narrow enough.
 - Check if a simple local memory would be safer than a strict runtime rule.
 
+### Harness Validation Lab
+
+Skills, harness rules, routing, eval policy, architecture gates, and frozen boundaries are versioned harness components. They cannot move directly from proposal to active state. Inspect the active component versions, run an isolated comparison, then make the human decision:
+
+```bash
+praxile harness components
+praxile proposal validate <PROPOSAL_ID> --suite <SUITE.json>
+praxile accept <PROPOSAL_ID>
+```
+
+Validation creates separate baseline and candidate copy workspaces. Candidate changes never land in the active `.praxile/` tree during evaluation. Suites declare `source`, `regression`, or `sealed` cases and independent ownership. A proposal composer cannot own sealed expected outputs, and candidate changes cannot target `evals/sealed/` or `evals/scorers/`.
+
+Minimal command-suite example:
+
+```json
+{
+  "name": "parser skill validation",
+  "owner": "project_maintainer",
+  "expected_owner": "independent_eval_owner",
+  "cases": [
+    {
+      "name": "source parser repair",
+      "set_type": "source",
+      "input": {"command": ["python", "-m", "pytest", "tests/test_parser.py"]},
+      "expected": {"returncode": 0},
+      "metrics": ["returncode_match"]
+    },
+    {
+      "name": "sealed parser regression",
+      "set_type": "sealed",
+      "owner": "eval_maintainer",
+      "expected_owner": "independent_eval_owner",
+      "input": {"command": ["python", "-m", "pytest", "tests/test_parser_regression.py"]},
+      "expected": {"returncode": 0},
+      "metrics": ["returncode_match"]
+    }
+  ]
+}
+```
+
+Commands are argv arrays, run with `shell=False`, and must pass the project's normal `SafetyPolicy`. Copy workspaces isolate project state but are not advertised as an operating-system sandbox.
+
 ### Editing Before Accept
 Use interactive review (`praxile review --interactive`). Choose `e` to open the proposal in your editor. Tighten the scope, add anti-scopes, or specify the trigger, then accept the edited proposal.
 

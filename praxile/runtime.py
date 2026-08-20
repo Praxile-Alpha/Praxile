@@ -60,6 +60,7 @@ class AgentRuntime:
         resume: str | None = None,
         spec_files: list[str] | None = None,
         parallel_readonly_explore: bool | None = None,
+        use_experience: bool = True,
         cancel_requested: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
@@ -82,12 +83,24 @@ class AgentRuntime:
             logger = TrajectoryLogger(task, snapshot)
             self._register_base_executors(logger)
             logger.data["dry_run"] = dry_run
+            logger.data["experience_control"] = {
+                "mode": "enabled" if use_experience else "withheld",
+                "purpose": "normal_run" if use_experience else "retrieval_control_baseline",
+            }
             self._emit_progress(progress_callback, "spec", "Loading spec context.")
             logger.set_spec_context(build_spec_context(self.config.paths.root, spec_files))
             self._emit_progress(progress_callback, "retrieve", "Retrieving project experience.")
-            retrieved = self.store.retrieve(task, limit=8)
+            retrieved = self.store.retrieve(task, limit=8) if use_experience else []
             logger.set_loaded_context(retrieved)
-            self.store.record_asset_usage(logger.task_id, retrieved, used_in_prompt=True)
+            activation_assets = [
+                {
+                    **item,
+                    "model_role": "coding_agent",
+                    "executor_id": self._primary_executor().get("executor_id"),
+                }
+                for item in retrieved
+            ]
+            self.store.record_asset_usage(logger.task_id, activation_assets, used_in_prompt=True)
             self._emit_progress(progress_callback, "analyze", "Analyzing task risk and intent.")
             analysis = self.analyzer.analyze(task, retrieved)
             logger.set_task_analysis(analysis)
@@ -355,14 +368,18 @@ class AgentRuntime:
             trajectory["semantic_attributions"] = attribution_results
             self._attach_semantic_attributions(trajectory, attribution_results)
         self._emit_progress(progress_callback, "persist", "Persisting trajectory and proposals.")
-        self.store.record_trajectory(trajectory)
         self.store.update_asset_usage_outcome(
             logger.task_id,
             self._usage_outcome(trajectory),
             referenced_paths=referenced_paths,
-            used_explicitly_paths=referenced_paths,
             attribution_results=attribution_results,
         )
+        trajectory["experience_activation"] = self.store.activation_funnel_for_task(logger.task_id)
+        from .bounded_evolution import BoundedHarnessEvolution
+        rollback_events = BoundedHarnessEvolution(self.config, self.store).monitor(trajectory)
+        if rollback_events:
+            trajectory["harness_rollback_events"] = rollback_events
+        self.store.record_trajectory(trajectory)
         for proposal in proposals:
             self.store.write_proposal(proposal)
         self.store.delete_checkpoint(logger.task_id)
@@ -469,6 +486,7 @@ class AgentRuntime:
                 "model_role": role,
                 "provider": response.get("provider"),
                 "model": response.get("model"),
+                "prompt_version": "reward-judge-v1",
                 "route": route,
                 "latency_ms": response.get("latency_ms"),
                 "specificity": specificity,

@@ -20,6 +20,7 @@ def cmd_run(args: argparse.Namespace, project_root: Path) -> int:
         resume=args.resume,
         spec_files=args.spec or None,
         parallel_readonly_explore=getattr(args, "parallel_readonly_explore", None),
+        use_experience=not bool(getattr(args, "without_experience", False)),
     )
     print(f"Task: {trajectory['task_id']}")
     print(f"Status: {trajectory['result']['status']}")
@@ -29,6 +30,8 @@ def cmd_run(args: argparse.Namespace, project_root: Path) -> int:
             print(f"- {key}: {value}")
     if trajectory.get("dry_run"):
         print("Mode: dry-run (edits and shell commands were blocked)")
+    if (trajectory.get("experience_control") or {}).get("mode") == "withheld":
+        print("Experience: withheld (retrieval-control baseline)")
     spec_context = trajectory.get("spec_context") or {}
     if spec_context.get("enabled"):
         print(
@@ -155,9 +158,19 @@ def cmd_accept(args: argparse.Namespace, project_root: Path) -> int:
         return 0
     if not args.proposal_id:
         raise ValueError("accept requires <PROPOSAL_ID>, or use --all-low-risk")
-    proposal = store.find_proposal(args.proposal_id, status="pending")
+    proposal = store.find_proposal(args.proposal_id)
     if not proposal:
-        print("No pending proposal found.")
+        print("No proposal found.")
+        return 1
+    proposal_status = proposal.get("status") or "pending"
+    if proposal_status in {"proposed", "inconclusive", "regressed"}:
+        print(
+            "Harness proposal is not validated. Run "
+            f"`praxile proposal validate {proposal['proposal_id']} --suite <SUITE.json>` first."
+        )
+        return 1
+    if proposal_status not in {"pending", "validated"}:
+        print(f"Proposal cannot be accepted from status `{proposal_status}`.")
         return 1
     accepted = ProposalService(store).accept(proposal["proposal_id"], confirm=True)
     print(f"Accepted {accepted['proposal_id']}: {accepted['title']}")

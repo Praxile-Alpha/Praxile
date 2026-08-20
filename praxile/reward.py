@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .config import Config
+from .reward_evidence import RewardEvidenceBuilder, RewardProfileRegistry
 
 
 class RewardEngine:
@@ -36,9 +37,11 @@ class RewardEngine:
         spec_metric_missing_count = len(
             [item for item in spec_compliance.get("success_metric_coverage") or [] if not item.get("covered")]
         )
-        scores = self._reward_scores()
-        weights = self._reward_weights()
-        thresholds = self._cost_thresholds()
+        profile_registry = RewardProfileRegistry(self.config)
+        profile_overrides = profile_registry.overrides(trajectory)
+        scores = self._reward_scores(profile_overrides.get("scores"))
+        weights = self._reward_weights(profile_overrides.get("weights"))
+        thresholds = self._cost_thresholds(profile_overrides.get("cost_thresholds"))
 
         task_success = scores["default_task_success"]
         result_status = trajectory.get("result", {}).get("status")
@@ -119,7 +122,12 @@ class RewardEngine:
             else:
                 scope_control_score = round(scope_control_score * 0.92, 3)
         proposal_quality_score = round((experience_value * 0.6 + scope_control_score * 0.2 + process_safety * 0.2), 3)
-        min_experience_score = self._float("reward", "min_experience_value_for_proposals", default=0.5)
+        min_experience_score = float(
+            profile_overrides.get(
+                "min_experience_value_for_proposals",
+                self._float("reward", "min_experience_value_for_proposals", default=0.5),
+            )
+        )
         should_generate_experience = bool(experience_value >= min_experience_score or memory_requested)
         evidence_strength = self._evidence_strength(
             edits=bool(edits),
@@ -165,10 +173,11 @@ class RewardEngine:
             {"enabled": bool(self.config.get("reward", "llm_judge", "enabled", default=False)) if self.config else False, "active": False, "score": 0.0},
         )
 
-        reward_mode = self.config.get("reward", "mode", default="hybrid") if self.config else "hybrid"
-        obj_w = self._float("reward", "weights", "objective", default=0.6)
-        usr_w = self._float("reward", "weights", "user_feedback", default=0.3)
-        llm_w = self._float("reward", "weights", "llm_judge", default=0.1)
+        reward_mode = str(profile_overrides.get("mode") or (self.config.get("reward", "mode", default="hybrid") if self.config else "hybrid"))
+        override_weights = profile_overrides.get("weights") if isinstance(profile_overrides.get("weights"), dict) else {}
+        obj_w = float(override_weights.get("objective", self._float("reward", "weights", "objective", default=0.6)))
+        usr_w = float(override_weights.get("user_feedback", self._float("reward", "weights", "user_feedback", default=0.3)))
+        llm_w = float(override_weights.get("llm_judge", self._float("reward", "weights", "llm_judge", default=0.1)))
 
         if reward_mode == "objective_plus_user":
             obj_w, usr_w, llm_w = 0.7, 0.3, 0.0
@@ -254,8 +263,8 @@ class RewardEngine:
         notes.append("Durable memory/skill/eval/rule updates require explicit user approval.")
         requires_human_review = True
 
-        return {
-            "schema_version": 1,
+        report = {
+            "schema_version": 2,
             "task_success": task_success,
             "execution_score": task_success,
             "process_safety": process_safety,
@@ -358,8 +367,22 @@ class RewardEngine:
             },
             "notes": notes,
         }
+        effective_policy = {
+            "weights": report["config"]["weights"],
+            "hybrid_weights": report["config"]["hybrid_weights"],
+            "cost_thresholds": report["config"]["cost_thresholds"],
+            "scores": scores,
+            "mode": reward_mode,
+            "min_experience_score": min_experience_score,
+        }
+        profile = profile_registry.resolve(trajectory, effective_policy)
+        evidence_graph = RewardEvidenceBuilder().build(trajectory, test_results, report, profile)
+        report["reward_profile"] = profile
+        report["evidence_graph"] = evidence_graph
+        report["escalation"] = evidence_graph["escalation"]
+        return report
 
-    def _reward_weights(self) -> dict[str, float]:
+    def _reward_weights(self, overrides: dict[str, Any] | None = None) -> dict[str, float]:
         defaults = {
             "task_success": 0.30,
             "process_safety": 0.20,
@@ -367,9 +390,10 @@ class RewardEngine:
             "cost": 0.10,
             "experience_value": 0.15,
         }
-        return {key: self._float("reward", "weights", key, default=value) for key, value in defaults.items()}
+        overrides = overrides or {}
+        return {key: float(overrides.get(key, self._float("reward", "weights", key, default=value))) for key, value in defaults.items()}
 
-    def _reward_scores(self) -> dict[str, float]:
+    def _reward_scores(self, overrides: dict[str, Any] | None = None) -> dict[str, float]:
         defaults = {
             "default_task_success": 0.60,
             "completed_with_edits": 0.80,
@@ -394,16 +418,18 @@ class RewardEngine:
             "scope_control_broad_edits": 0.45,
             "scope_control_failed_or_blocked": 0.55,
         }
-        return {key: self._float("reward", "scores", key, default=value) for key, value in defaults.items()}
+        overrides = overrides or {}
+        return {key: float(overrides.get(key, self._float("reward", "scores", key, default=value))) for key, value in defaults.items()}
 
-    def _cost_thresholds(self) -> dict[str, int]:
+    def _cost_thresholds(self, overrides: dict[str, Any] | None = None) -> dict[str, int]:
         defaults = {
             "medium_tool_calls": 12,
             "high_tool_calls": 20,
             "medium_model_calls": 8,
             "high_model_calls": 12,
         }
-        return {key: self._int("reward", "cost_thresholds", key, default=value) for key, value in defaults.items()}
+        overrides = overrides or {}
+        return {key: int(overrides.get(key, self._int("reward", "cost_thresholds", key, default=value))) for key, value in defaults.items()}
 
     def _float(self, *keys: str, default: float) -> float:
         if not self.config:

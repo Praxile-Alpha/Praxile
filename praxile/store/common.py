@@ -15,7 +15,7 @@ from ..constants import PRAXILE_DIR
 from ..feedback import feedback_reward
 from ..interop import PRAXILE_TRAJECTORY_SCHEMA, EXTERNAL_COMPAT_TRAJECTORY_FORMAT
 from ..snapshot import SnapshotManager
-from ..utils import append_jsonl, file_lock, path_is_relative_to, read_json, shorten, stable_hash, utc_now, write_json
+from ..utils import append_jsonl, file_lock, new_id, path_is_relative_to, read_json, shorten, stable_hash, utc_now, write_json
 from ..vector import cosine_similarity, embed_text, vector_settings
 
 
@@ -209,13 +209,12 @@ def _attribution_allows_outcome_update(attribution: dict[str, Any], *, success: 
 
 
 def _usage_attribution_level(item: dict[str, Any]) -> str:
-    outcome = str(item.get("outcome") or "unknown")
     if item.get("used_explicitly"):
-        return "strong_positive" if outcome == "success" else "harmful" if outcome == "failed" else "referenced"
+        return "complied_with"
     if item.get("referenced"):
-        return "weak_positive" if outcome == "success" else "weak_negative" if outcome == "failed" else "referenced"
+        return "referenced"
     if item.get("used_in_prompt"):
-        return "loaded_only" if outcome in {"success", "failed", "unknown", "needs_human"} else "loaded_only"
+        return "loaded_only"
     return "none"
 
 
