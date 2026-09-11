@@ -1,5 +1,7 @@
 # Product Vision
 
+> **V2 direction:** Praxile is evolving from the V1 standalone governed-experience harness into an Eval and Evolution Control Plane for external Agent Harnesses. The frozen P0 boundary and current-state audit take precedence over older runtime-ownership language in this document. See [V2 P0 Frozen Boundary](V2_P0_FROZEN_BOUNDARY.md) and [V2 Current State Gap Audit](V2_CURRENT_STATE_GAP_AUDIT.md).
+
 Praxile exists because coding agents should not forget the useful parts of real project work.
 
 A normal agent run completes a task and leaves a transcript. Praxile turns the run into governed project experience:

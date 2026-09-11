@@ -37,6 +37,8 @@
 
 **Praxile** 是一个面向 AI 编程的可治理经验 Harness。
 
+> **V2 方向：**Praxile 正在演进为 **Agent Harness 的评测与演化控制平面**。外部 Agent 负责执行，Praxile 负责统一 Trace、评测、诊断、可治理资产、策略 Candidate、发布与回滚。这是已经冻结的研发方向，不代表 V2 Benchmark 链路已经完成。详见 [V2 P0 冻结边界](docs/V2_P0_FROZEN_BOUNDARY.md)和[现状差距审计](docs/V2_CURRENT_STATE_GAP_AUDIT.md)。
+
 它围绕 Coding Agent 的工作过程运行：记录环境交互，构建 trajectory，计算 reward 与风险信号，提取 evidence，生成可审查 proposal，并且只在人工审批后写入长期仓库知识。
 
 Praxile 内置了一个**以聊天为先 (Chat-first) 的 Web Console**，不仅为你提供熟悉的 Agent 对话界面，还在侧边栏深度融合了经验治理、合规审计和 Spec 校验能力。

@@ -37,6 +37,8 @@
 
 **Praxile** is a governed experience harness for AI coding.
 
+> **V2 direction:** Praxile is evolving into an **Eval and Evolution Control Plane for Agent Harnesses**. External agents own execution; Praxile owns normalized trace, evaluation, diagnosis, governed assets, policy candidates, promotion, and rollback. This is a frozen implementation direction, not a claim that the V2 benchmark path is complete. See the [V2 P0 boundary](docs/V2_P0_FROZEN_BOUNDARY.md) and [current-state gap audit](docs/V2_CURRENT_STATE_GAP_AUDIT.md).
+
 It sits around coding-agent work: it records environment interaction, builds a trajectory, computes reward and risk signals, extracts evidence, generates reviewable proposals, and writes durable repository knowledge only after human approval.
 
 Praxile includes a **Chat-first Web Console** that provides a familiar AI agent workspace seamlessly integrated with deep governance, spec-aware execution, and reflective auditing.
