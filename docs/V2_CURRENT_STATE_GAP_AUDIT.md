@@ -4,6 +4,8 @@ Status: completed for the V2 P0 boundary freeze
 Audit date: 2026-09-11  
 Scope: repository state before V2 implementation
 
+> This document records the pre-implementation audit. Current P0-A implementation status is tracked in [V2 Trace Foundation](V2_TRACE_FOUNDATION.md), [V2 Agent Adapters](V2_AGENT_ADAPTERS.md), and the frozen checklist.
+
 ## Executive conclusion
 
 Praxile V1 already contains useful governance machinery, but it is not yet the V2 control plane described in the design handoff. The current system is centered on Praxile's own coding runtime and a task-level trajectory document. V2 requires an external execution plane, a stable event stream, backend adapters that can run and observe agents, benchmark-grade evaluation, and failure attribution over trace evidence.
@@ -116,4 +118,3 @@ Bug fixes and security fixes remain allowed. New execution features require reop
 6. Run one local task end to end and verify event/artifact evidence.
 7. Add the SWE-bench development runner and baseline report.
 8. Add one Context/Experience policy candidate and run the controlled A/B.
-

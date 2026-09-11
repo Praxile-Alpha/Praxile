@@ -194,8 +194,8 @@ No benchmark result, semantic judge, Reflect run, or candidate generator can act
 - [x] Append-only event storage with idempotent ingestion.
 - [x] Run projection and deterministic replay.
 - [x] Versioned V1 trajectory import/projection compatibility.
-- [ ] mini-SWE-agent adapter with explicit capabilities and cancellation.
-- [ ] One real repository task trace containing context, tool, patch, verification, and result evidence.
+- [x] mini-SWE-agent adapter with explicit capabilities and cancellation.
+- [x] One real repository task trace containing context, tool, patch, verification, and result evidence.
 
 ### P0-B Eval Runner
 

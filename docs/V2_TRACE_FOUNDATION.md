@@ -5,7 +5,7 @@ Last updated: 2026-09-11
 
 ## Purpose
 
-The V2 Trace Foundation provides a backend-neutral audit contract before Praxile connects to a real external agent. It deliberately does not start processes, inject context, or implement agent policy.
+The V2 Trace Foundation provides a backend-neutral audit contract. Process execution and context injection remain outside this module and are connected through the versioned adapter layer documented in [V2 Agent Adapters](V2_AGENT_ADAPTERS.md).
 
 ## Public Python surface
 
@@ -67,13 +67,17 @@ The reverse projection preserves the task, environment snapshot, loaded assets, 
 - Index rebuilding rejects malformed events and orphaned or identity-mismatched artifacts.
 - Numeric costs, latency, sequence, size, and token counts reject invalid negative or non-finite values.
 
+## Implemented in the next P0-A layer
+
+- the versioned `AgentAdapterV2` execution protocol beside the legacy format adapter;
+- deterministic Fixture Adapter and Event Store runner;
+- mini-SWE-agent capability detection, isolated subprocess lifecycle, cancellation, native trajectory preservation, and post-run event normalization.
+- an accepted isolated mini-SWE-agent task trace containing context, tool, patch, verification, artifact, and result evidence.
+
 ## Not implemented yet
 
-- the versioned execution `AgentAdapter` protocol;
-- mini-SWE-agent capability detection and process lifecycle;
 - live event streaming from an external backend;
 - automatic projection of new V1 runs into the V2 store;
-- a real repository task with context, patch, verification, and result artifacts;
 - trace CLI commands and benchmark integration.
 
 These remain unchecked in the frozen P0-A checklist. No current `praxile run` behavior has changed.
@@ -93,3 +97,5 @@ SQLite and append-log tests are explicitly marked `resource` and `sqlite_resourc
 tests/resource/test_trace_store.py
 ```
 
+Adapter-specific tests are listed in [V2 Agent Adapters](V2_AGENT_ADAPTERS.md).
+The real-runtime acceptance record is in [V2 mini-SWE-agent Acceptance](V2_MINI_SWE_ACCEPTANCE.md).
