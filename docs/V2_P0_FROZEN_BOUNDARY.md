@@ -4,6 +4,8 @@ Status: frozen
 Effective date: 2026-09-11  
 Decision type: architecture boundary
 
+Implementation details for completed Trace Foundation items are documented in [V2 Trace Foundation](V2_TRACE_FOUNDATION.md).
+
 ## Decision
 
 Praxile V2 is an Eval and Evolution Control Plane for Agent Harnesses. It observes external execution, evaluates outcomes, diagnoses failures, governs reusable assets, proposes harness-policy candidates, compares candidates with baselines, and controls promotion and rollback.
@@ -187,11 +189,11 @@ No benchmark result, semantic judge, Reflect run, or candidate generator can act
 
 ### P0-A Trace Foundation
 
-- [ ] Versioned `AgentEvent`, identity, artifact, capability, and run-handle schemas.
-- [ ] Schema validation and forward-compatible serialization tests.
-- [ ] Append-only event storage with idempotent ingestion.
-- [ ] Run projection and deterministic replay.
-- [ ] Versioned V1 trajectory import/projection compatibility.
+- [x] Versioned `AgentEvent`, identity, artifact, capability, and run-handle schemas.
+- [x] Schema validation and forward-compatible serialization tests.
+- [x] Append-only event storage with idempotent ingestion.
+- [x] Run projection and deterministic replay.
+- [x] Versioned V1 trajectory import/projection compatibility.
 - [ ] mini-SWE-agent adapter with explicit capabilities and cancellation.
 - [ ] One real repository task trace containing context, tool, patch, verification, and result evidence.
 
@@ -269,4 +271,3 @@ Reopen this boundary before a change that:
 P0 is complete only when the repository can run a documented command that executes the same public development task set through the same mini-SWE-agent configuration in baseline and Praxile variants, persists replayable normalized traces and evidence-linked artifacts, produces comparable metrics and failure diagnoses, and demonstrates one governed policy candidate with an explicit improve, regress, or inconclusive decision.
 
 Improvement is not required. Reproducibility, attribution, and honest regression reporting are required.
-
