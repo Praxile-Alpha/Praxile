@@ -24,5 +24,6 @@ htmlcov/
 .coverage
 coverage.xml
 .praxile/
+logs/
 .env
 .env.*

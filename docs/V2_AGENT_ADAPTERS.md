@@ -99,7 +99,7 @@ mini-SWE-agent V2 keeps model-specific native message shapes and places normaliz
 - records the native trajectory format and exit status;
 - declares `event_streaming=false` and `stream_mode=post_run_trajectory` because the current CLI bridge converts the saved trajectory after the process exits.
 
-This adapter is an execution and evidence bridge. It is not yet the P0 benchmark runner: repository preparation, SWE-bench evaluation, resumability, reproducibility manifests, and baseline/candidate comparison remain separate unchecked deliverables.
+This adapter is an execution and evidence bridge. The separate P0-B benchmark control path is documented in [V2 Eval Runner](V2_EVAL_RUNNER.md); baseline/candidate comparison remains a P0-C responsibility.
 
 For a local model that does not support native tool calling, select mini-SWE-agent's text protocol explicitly, for example `MiniSweAgentAdapter(model="ollama/deepseek-coder:6.7b", model_class="litellm_textbased", config_specs=["mini_textbased.yaml"])`. If the local model has no price metadata, its run environment may explicitly set `MSWEA_COST_TRACKING=ignore_errors`; do not apply that override to priced cloud-model runs because it could hide a real cost-accounting failure.
 

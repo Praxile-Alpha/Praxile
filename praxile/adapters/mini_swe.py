@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import os
 import re
 import shutil
 import signal
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence, TextIO
@@ -68,6 +70,10 @@ class MiniSweAgentAdapter:
 
     def capabilities(self) -> AdapterCapabilities:
         available, resolved = self.availability()
+        try:
+            native_version = importlib.metadata.version("mini-swe-agent")
+        except importlib.metadata.PackageNotFoundError:
+            native_version = None
         return AdapterCapabilities(
             event_streaming=False,
             artifact_collection=True,
@@ -82,6 +88,7 @@ class MiniSweAgentAdapter:
                 "protocol_version": self.protocol_version,
                 "adapter_version": "1",
                 "native_runtime": "mini-swe-agent>=2,<3",
+                "native_runtime_version": native_version,
                 "stream_mode": "post_run_trajectory",
                 "available": available,
                 "executable": resolved,
@@ -96,6 +103,10 @@ class MiniSweAgentAdapter:
         path = Path(first).expanduser()
         if path.is_file():
             return True, str(path.resolve())
+        if self.command_prefix is None and len(Path(first).parts) == 1:
+            sibling = Path(sys.executable).parent / first
+            if sibling.is_file() and os.access(sibling, os.X_OK):
+                return True, str(sibling)
         return False, first
 
     def run(self, task: AdapterTask, policy: AdapterPolicy) -> RunHandle:
@@ -133,7 +144,7 @@ class MiniSweAgentAdapter:
         stderr_path = run_root / "stderr.log"
         stdout_handle = stdout_path.open("w", encoding="utf-8")
         stderr_handle = stderr_path.open("w", encoding="utf-8")
-        command = self._command(task, policy, trajectory_path)
+        command = self._command(task, policy, trajectory_path, resolved_executable=resolved)
         env = os.environ.copy()
         env.update(self.environment)
         if "MSWEA_GLOBAL_CONFIG_DIR" not in self.environment:
@@ -222,8 +233,15 @@ class MiniSweAgentAdapter:
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
 
-    def _command(self, task: AdapterTask, policy: AdapterPolicy, output_path: Path) -> list[str]:
-        command = list(self.command_prefix or (self.executable,))
+    def _command(
+        self,
+        task: AdapterTask,
+        policy: AdapterPolicy,
+        output_path: Path,
+        *,
+        resolved_executable: str | None = None,
+    ) -> list[str]:
+        command = list(self.command_prefix or (resolved_executable or self.executable,))
         command.extend(["--task", self._instruction(task, policy), "--output", str(output_path), "--yolo", "--exit-immediately"])
         model = str(policy.settings.get("model") or self.model or "").strip()
         if model:
@@ -233,6 +251,17 @@ class MiniSweAgentAdapter:
             command.extend(["--model-class", model_class])
         for spec in self.config_specs:
             command.extend(["--config", spec])
+        step_limit = policy.settings.get("step_limit")
+        if step_limit is not None:
+            try:
+                parsed_step_limit = int(step_limit)
+            except (TypeError, ValueError) as exc:
+                raise AdapterPolicyError("step_limit must be an integer") from exc
+            if parsed_step_limit <= 0:
+                raise AdapterPolicyError("step_limit must be greater than zero")
+            if not self.config_specs:
+                command.extend(["--config", "mini.yaml"])
+            command.extend(["--config", f"agent.step_limit={parsed_step_limit}"])
         max_cost = policy.budgets.get("max_cost")
         if max_cost is not None:
             command.extend(["--cost-limit", str(float(max_cost))])
@@ -510,18 +539,62 @@ class MiniSweAgentAdapter:
 
     @staticmethod
     def _capture_workspace_patch(root: Path, output_path: Path) -> None:
+        index_path = output_path.parent / "workspace-patch.index"
+        env = os.environ.copy()
+        env["GIT_INDEX_FILE"] = str(index_path)
         try:
-            result = subprocess.run(
-                ["git", "-C", str(root), "diff", "--binary", "--no-ext-diff", "--"],
+            read_tree = subprocess.run(
+                ["git", "-C", str(root), "read-tree", "HEAD"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 timeout=10,
                 check=False,
                 shell=False,
+                env=env,
+            )
+            if read_tree.returncode != 0:
+                return
+            staged = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "add",
+                    "-A",
+                    "--",
+                    ".",
+                    ":(exclude).praxile/trace/native",
+                    ":(exclude).praxile/trace/native/**",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+                shell=False,
+                env=env,
+            )
+            if staged.returncode != 0:
+                return
+            result = subprocess.run(
+                ["git", "-C", str(root), "diff", "--cached", "--binary", "--no-ext-diff", "HEAD", "--"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+                shell=False,
+                env=env,
             )
         except (OSError, subprocess.SubprocessError):
             return
+        finally:
+            for candidate in (index_path, index_path.with_suffix(index_path.suffix + ".lock")):
+                try:
+                    candidate.unlink()
+                except FileNotFoundError:
+                    pass
         if result.returncode == 0 and result.stdout:
             output_path.write_bytes(result.stdout)
 

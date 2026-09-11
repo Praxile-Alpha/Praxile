@@ -199,12 +199,12 @@ No benchmark result, semantic judge, Reflect run, or candidate generator can act
 
 ### P0-B Eval Runner
 
-- [ ] SWE-bench development-subset task loader and repository preparation.
-- [ ] Official-compatible patch/result handoff and evaluator integration.
-- [ ] Resumable eval runs and per-task timeout/error isolation.
-- [ ] Immutable reproducibility manifest.
-- [ ] Metrics for task success, token, cost, latency, tool calls, retries, recovery, and intervention.
-- [ ] Baseline report for a fixed model, adapter, task set, and budget.
+- [x] SWE-bench development-subset task loader and repository preparation.
+- [x] Official-compatible patch/result handoff and evaluator integration.
+- [x] Resumable eval runs and per-task timeout/error isolation.
+- [x] Immutable reproducibility manifest.
+- [x] Metrics for task success, token, cost, latency, tool calls, retries, recovery, and intervention.
+- [x] Baseline report for a fixed model, adapter, task set, and budget: [P0-B public baseline](baselines/P0_B_SWEBENCH_BASELINE.json).
 
 ### P0-C Diagnosis and Controlled A/B
 

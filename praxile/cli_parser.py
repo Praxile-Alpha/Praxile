@@ -553,6 +553,42 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval_run.add_argument("--output", default=None, help="Write JSON report to this path")
     p_eval_run.add_argument("--json", action="store_true", help="Emit full JSON report")
     p_eval_run.set_defaults(func=cmd_eval_run)
+    p_eval_benchmark = eval_sub.add_parser("benchmark", help="Run a V2 external-agent benchmark task set")
+    p_eval_benchmark.add_argument(
+        "tasks",
+        nargs="?",
+        default=None,
+        help="Official SWE-bench JSON/JSONL export; omit to load --dataset-name from Hugging Face",
+    )
+    p_eval_benchmark.add_argument("--dataset-name", default="SWE-bench/SWE-bench_Lite")
+    p_eval_benchmark.add_argument("--split", default="test")
+    p_eval_benchmark.add_argument("--instance-id", action="append", default=[], help="Select one instance (repeatable)")
+    p_eval_benchmark.add_argument("--development-size", type=int, default=None, help="Select a deterministic subset")
+    p_eval_benchmark.add_argument("--seed", default="praxile-p0", help="Development-subset selection seed")
+    p_eval_benchmark.add_argument("--model", required=True, help="mini-SWE-agent model and manifest identity")
+    p_eval_benchmark.add_argument("--model-class", default=None, help="Optional mini-SWE-agent model class")
+    p_eval_benchmark.add_argument(
+        "--cost-tracking",
+        choices=("default", "ignore_errors"),
+        default="default",
+        help="mini-SWE-agent cost policy; ignore_errors is explicit and recorded for unpriced models",
+    )
+    p_eval_benchmark.add_argument("--adapter-config", action="append", default=[], help="mini-SWE-agent config spec")
+    p_eval_benchmark.add_argument("--timeout", type=int, default=1800, help="Per-task agent and evaluator timeout")
+    p_eval_benchmark.add_argument("--step-limit", type=int, default=50, help="Maximum mini-SWE-agent steps per task")
+    p_eval_benchmark.add_argument("--max-cost", type=float, default=None, help="Optional per-task agent cost limit")
+    p_eval_benchmark.add_argument("--run-id", default=None, help="Stable run ID required when resuming")
+    p_eval_benchmark.add_argument("--resume", action="store_true", help="Reuse completed task results from the same manifest")
+    p_eval_benchmark.add_argument("--keep-workspaces", action="store_true")
+    p_eval_benchmark.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        metavar="REPO=PATH",
+        help="Use a local repository source for a dataset repo (repeatable)",
+    )
+    p_eval_benchmark.add_argument("--json", action="store_true", help="Emit the complete benchmark report")
+    p_eval_benchmark.set_defaults(func=cmd_eval_benchmark)
 
     p_judge = sub.add_parser("judge", help="Semantic judge calibration and governance")
     judge_sub = p_judge.add_subparsers(dest="judge_command", required=True)

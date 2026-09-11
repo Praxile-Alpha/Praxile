@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+
 from ..cli_common import *  # noqa: F401,F403
+from ..adapters import AdapterPolicy, MiniSweAgentAdapter
+from ..eval.v2 import BenchmarkEvalRunner, OfficialSWEbenchEvaluator, SWEbenchTaskLoader
+from ..trace import EventStore
 
 
 def cmd_workspace_list(args: argparse.Namespace, project_root: Path) -> int:
@@ -49,6 +54,106 @@ def cmd_eval_run(args: argparse.Namespace, project_root: Path) -> int:
             print(f"- {case['name']}: score={case['score']} {'passed' if case['passed'] else 'failed'}")
         print(f"Report: {saved}")
     return 0 if report["passed"] else 1
+
+
+def cmd_eval_benchmark(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    if args.resume and not args.run_id:
+        raise ValueError("--resume requires --run-id")
+    adapter = MiniSweAgentAdapter(
+        model=args.model,
+        model_class=args.model_class,
+        config_specs=args.adapter_config,
+        environment=(
+            {"MSWEA_COST_TRACKING": args.cost_tracking}
+            if args.cost_tracking != "default"
+            else None
+        ),
+        default_timeout_seconds=args.timeout,
+    )
+    evaluator = OfficialSWEbenchEvaluator(timeout_seconds=args.timeout)
+    adapter_available, adapter_detail = adapter.availability()
+    if not adapter_available:
+        raise RuntimeError(f"mini-SWE-agent is unavailable: {adapter_detail}; install praxile[benchmark]")
+    evaluator_available, evaluator_detail = evaluator.availability()
+    if not evaluator_available:
+        raise RuntimeError(f"SWE-bench evaluator is unavailable: {evaluator_detail}")
+    loader = SWEbenchTaskLoader(dataset_name=args.dataset_name, split=args.split)
+    selection = {
+        "instance_ids": args.instance_id,
+        "development_size": args.development_size,
+        "seed": args.seed,
+    }
+    task_set = (
+        loader.load(Path(args.tasks).expanduser().resolve(), **selection)
+        if args.tasks
+        else loader.load_huggingface(**selection)
+    )
+    source_overrides: dict[str, Path] = {}
+    for raw in args.source:
+        repo, separator, path = raw.partition("=")
+        if not separator or not repo.strip() or not path.strip():
+            raise ValueError(f"invalid --source {raw!r}; expected REPO=PATH")
+        source_overrides[repo.strip()] = Path(path).expanduser().resolve()
+    budgets: dict[str, Any] = {"wall_timeout_seconds": args.timeout}
+    if args.max_cost is not None:
+        budgets["max_cost"] = args.max_cost
+    policy = AdapterPolicy(
+        policy_id="p0-baseline",
+        version="1",
+        budgets=budgets,
+        settings={
+            "allow_unattended_execution": True,
+            "workspace_isolated": True,
+            "seed": args.seed,
+            "step_limit": args.step_limit,
+        },
+    )
+    adapter_config_identity: list[dict[str, Any]] = []
+    for spec in args.adapter_config:
+        candidate = Path(spec).expanduser()
+        if candidate.is_file():
+            adapter_config_identity.append(
+                {
+                    "path": str(candidate.resolve()),
+                    "content_digest": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                }
+            )
+        else:
+            adapter_config_identity.append({"spec": spec})
+    with adapter:
+        report = BenchmarkEvalRunner(config.paths.state, EventStore(config.paths)).run(
+            task_set,
+            adapter=adapter,
+            evaluator=evaluator,
+            policy=policy,
+            model={
+                "model_name_or_path": args.model,
+                "provider": args.model.partition("/")[0] if "/" in args.model else None,
+                "model_class": args.model_class,
+                "cost_tracking": args.cost_tracking,
+                "adapter_config": adapter_config_identity,
+            },
+            eval_run_id=args.run_id,
+            resume=args.resume,
+            keep_workspaces=args.keep_workspaces,
+            source_overrides=source_overrides,
+        )
+    metrics = report["metrics"]
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print(f"Benchmark run: {report['eval_run_id']}")
+        print(f"Task set: {report['task_set']}")
+        print(f"Completed: {metrics['completed_count']}/{metrics['task_count']}")
+        print(f"Resolved: {metrics['resolved_count']} (rate={metrics['resolution_rate']})")
+        print(f"Tokens: {metrics['tokens']}  cost={metrics['cost']}  tool_calls={metrics['tool_calls']}")
+        print(f"Manifest: {report['manifest_path']}")
+        print(f"Report: {config.paths.state / 'eval' / 'v2' / 'runs' / report['eval_run_id'] / 'report.json'}")
+    complete = metrics["completed_count"] == metrics["task_count"]
+    resolved = metrics["resolved_count"] == metrics["task_count"]
+    return 0 if complete and resolved else 1
 
 
 def cmd_harness_components(args: argparse.Namespace, project_root: Path) -> int:

@@ -1,0 +1,70 @@
+{
+  "schema_version": "praxile.public_baseline.v1",
+  "baseline_id": "p0-baseline-qwen3-coder-next-002",
+  "recorded_at": "2026-09-11T11:58:34Z",
+  "purpose": "P0-B Eval Runner end-to-end acceptance",
+  "manifest": {
+    "schema_version": "praxile.eval_manifest.v2",
+    "digest": "sha256:ea807f5784cc266e15391c6ced8b03d16f5d7f2b52909af1bb32e526a138a515"
+  },
+  "environment": {
+    "platform": "macOS-arm64",
+    "docker_version": "29.7.2",
+    "evaluation_image_platform": "linux/amd64 (Docker Desktop emulation)",
+    "python": "3.12.10"
+  },
+  "task_set": {
+    "dataset_name": "SWE-bench/SWE-bench_Lite",
+    "split": "test",
+    "instance_ids": [
+      "sympy__sympy-20590"
+    ],
+    "task_count": 1,
+    "base_commit": "cffd4e0f86fefd4802349a9f9b19ed70934ea354"
+  },
+  "execution": {
+    "adapter": "mini-swe-agent",
+    "adapter_version": "2.4.6",
+    "adapter_protocol": "praxile.agent_adapter.v2",
+    "model_name_or_path": "dashscope/qwen3-coder-next",
+    "cost_tracking": "ignore_errors",
+    "wall_timeout_seconds": 900,
+    "step_limit": null,
+    "task_concurrency": 1,
+    "workspace_isolated": true
+  },
+  "metrics": {
+    "completed_count": 1,
+    "resolved_count": 1,
+    "resolution_rate": 1.0,
+    "input_tokens": 4821942,
+    "output_tokens": 22996,
+    "model_calls": 128,
+    "tool_calls": 128,
+    "latency_ms": 804857,
+    "cost": null
+  },
+  "official_evaluator": {
+    "distribution": "swebench",
+    "distribution_version": "5.0.2",
+    "status": "completed",
+    "resolved": true,
+    "infrastructure_failures": 0,
+    "unstopped_containers": 0,
+    "report_digest": "sha256:21ce17ca478679292a6bbd9d1c6aaf29b5f2efdd80e9d5a6bd153514c3dd55f5"
+  },
+  "evidence": {
+    "trace_id": "trace_d6e294d58e13",
+    "agent_run_id": "run_e1e30a0f8edf",
+    "prediction_file_digest": "sha256:c1ecf52a74a143db491a13c85b085e7e14fda136818946603ef7f76f9fc98e74",
+    "patch_digest": "sha256:f4776c2768eeaed50ebca68e3380b1ab806968eb239224c44b8b4ac18b0454f0",
+    "native_trajectory_digest": "sha256:8388ca22091f56851d8df4f20991dbedcdff4f79e702eb7ff59b8fdd7723349a"
+  },
+  "limitations": [
+    "This one-task smoke baseline accepts the Eval Runner pipeline and is not a model-quality claim.",
+    "LiteLLM could call this model but could not price it, so monetary cost is unavailable.",
+    "This historical run had no step limit and required 128 model/tool iterations; subsequent CLI runs default to 50 steps.",
+    "The historical manifest labeled explicit instance selection as mode=all; the immutable task list and this public report identify the exact instance, and the loader bug is covered by a regression test.",
+    "The official x86_64 evaluator image ran under Docker Desktop emulation on arm64."
+  ]
+}

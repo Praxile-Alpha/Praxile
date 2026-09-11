@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,35 @@ def test_mini_swe_capabilities_are_honest_about_post_run_streaming() -> None:
     assert capabilities.artifact_collection is True
     assert capabilities.metadata["stream_mode"] == "post_run_trajectory"
     assert capabilities.metadata["available"] is False
+
+
+def test_mini_swe_finds_console_script_beside_current_interpreter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interpreter = tmp_path / "bin" / "python"
+    executable = interpreter.parent / "mini"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(interpreter))
+    monkeypatch.setattr("praxile.adapters.mini_swe.shutil.which", lambda _value: None)
+
+    available, resolved = MiniSweAgentAdapter().availability()
+
+    assert available is True
+    assert resolved == str(executable.resolve())
+
+
+def test_mini_swe_command_uses_resolved_console_script(tmp_path: Path) -> None:
+    adapter = MiniSweAgentAdapter()
+    command = adapter._command(
+        AdapterTask("task_cmd", "Fix it", str(tmp_path)),
+        AdapterPolicy(),
+        tmp_path / "out.json",
+        resolved_executable="/venv/bin/mini",
+    )
+
+    assert command[0] == "/venv/bin/mini"
 
 
 def test_mini_swe_requires_unattended_isolated_policy(tmp_path: Path) -> None:
@@ -36,7 +66,7 @@ def test_mini_swe_command_injects_context_and_budgets_without_shell(tmp_path: Pa
         policy_id="candidate",
         context=({"asset_id": "skill_1", "content": "Run parser tests"},),
         budgets={"max_cost": 1.5},
-        settings={"allow_unattended_execution": True, "workspace_isolated": True},
+        settings={"allow_unattended_execution": True, "workspace_isolated": True, "step_limit": 50},
     )
 
     command = adapter._command(task, policy, tmp_path / "out.json")
@@ -46,6 +76,8 @@ def test_mini_swe_command_injects_context_and_budgets_without_shell(tmp_path: Pa
     assert command[command.index("--model") + 1] == "model-a"
     assert command[command.index("--model-class") + 1] == "litellm_textbased"
     assert command[command.index("--cost-limit") + 1] == "1.5"
+    config_values = [command[index + 1] for index, value in enumerate(command) if value == "--config"]
+    assert config_values == ["mini.yaml", "agent.step_limit=50"]
 
 
 def test_mini_swe_rejects_existing_non_yaml_config_file(tmp_path: Path) -> None:

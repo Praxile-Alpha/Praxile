@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -137,3 +138,25 @@ def test_mini_swe_cancel_terminates_process_group(tmp_path: Path) -> None:
     assert process.poll() is not None
     assert events[-1].payload["status"] == "cancelled"
     adapter.close()
+
+
+def test_workspace_patch_includes_untracked_source_but_not_native_evidence(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "tests@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Praxile Tests"], cwd=tmp_path, check=True)
+    (tmp_path / "tracked.py").write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=tmp_path, check=True)
+    (tmp_path / "tracked.py").write_text("VALUE = 2\n", encoding="utf-8")
+    (tmp_path / "new.py").write_text("NEW = True\n", encoding="utf-8")
+    native = tmp_path / ".praxile" / "trace" / "native" / "run"
+    native.mkdir(parents=True)
+    (native / "trajectory.json").write_text("{}", encoding="utf-8")
+    patch_path = native / "workspace.patch"
+
+    MiniSweAgentAdapter._capture_workspace_patch(tmp_path, patch_path)
+
+    patch = patch_path.read_text(encoding="utf-8")
+    assert "tracked.py" in patch
+    assert "new.py" in patch
+    assert ".praxile/trace/native" not in patch
