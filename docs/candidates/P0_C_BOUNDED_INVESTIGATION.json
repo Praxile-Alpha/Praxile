@@ -1,0 +1,42 @@
+{
+  "schema_version": "praxile.context_candidate.v1",
+  "candidate_id": "p0-c-bounded-investigation",
+  "version": "1",
+  "title": "Bound broad repository exploration before context growth",
+  "candidate_type": "experience_activation",
+  "context_item": {
+    "asset_id": "project-pattern-bounded-investigation-v1",
+    "asset_type": "project_pattern",
+    "content": "For regressions involving shared inheritance or object layout, begin with the issue-introducing version boundary and the nearest shared base classes. Create one focused reproduction before scanning all subclasses. Stop expanding the repository-wide census once a direct mechanism is identified. Apply the smallest fix, run the focused regression first, then run the relevant regression suite."
+  },
+  "confidence": 0.62,
+  "evidence_refs": [
+    "event:run_e1e30a0f8edf:mini:382",
+    "event:run_e1e30a0f8edf:mini:389",
+    "artifact:eval-artifact_57716611e91c"
+  ],
+  "expected_effect": {
+    "resolved_rate": "non_decreasing",
+    "model_calls": "decrease",
+    "input_tokens": "decrease",
+    "tool_calls": "decrease"
+  },
+  "source_diagnosis_ids": [],
+  "source_task_ids": [
+    "sympy__sympy-20590"
+  ],
+  "applies_to": {
+    "repositories": [
+      "sympy/sympy"
+    ],
+    "task_signals": [
+      "shared inheritance",
+      "object layout",
+      "regression across versions"
+    ],
+    "does_not_apply_when": [
+      "The failure is already isolated to a leaf implementation.",
+      "The task is unrelated to Python class behavior or shared abstractions."
+    ]
+  }
+}

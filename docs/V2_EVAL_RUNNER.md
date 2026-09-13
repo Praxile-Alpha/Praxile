@@ -3,6 +3,9 @@
 Status: P0-B implementation and public fixed-model baseline accepted
 Last updated: 2026-09-11
 
+P0-C failure diagnosis and paired experiments are documented in
+[P0-C Diagnosis and Controlled A/B](V2_P0_C_DIAGNOSIS_AND_AB.md).
+
 ## Boundary
 
 `praxile.eval.v2` is the benchmark control plane. It does not replace the legacy `EvalRunner`, which continues to evaluate Praxile proposal generation and reviewed project commands.

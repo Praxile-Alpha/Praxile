@@ -208,11 +208,11 @@ No benchmark result, semantic judge, Reflect run, or candidate generator can act
 
 ### P0-C Diagnosis and Controlled A/B
 
-- [ ] Evidence-first P0 failure taxonomy with abstention.
-- [ ] Diagnosis records linked to event and artifact IDs.
-- [ ] Exactly one versioned Context or Experience Activation candidate.
-- [ ] Baseline and candidate execution under checked invariants.
-- [ ] Per-category gain, regression, cost, and trace-overhead explanation.
+- [x] Evidence-first P0 failure taxonomy with abstention.
+- [x] Diagnosis records linked to event and artifact IDs.
+- [x] Exactly one versioned Context or Experience Activation candidate.
+- [x] Baseline and candidate execution under checked invariants: [P0-C public A/B result](baselines/P0_C_BOUNDED_INVESTIGATION_AB.json).
+- [x] Per-category gain, regression, cost, and trace-overhead explanation.
 
 ### P0-D Public Result
 

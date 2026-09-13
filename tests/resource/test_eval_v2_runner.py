@@ -112,12 +112,21 @@ def test_benchmark_runner_persists_trace_metrics_manifest_and_resumes(tmp_path: 
     assert report["tasks"][0]["trace_id"]
     assert event_store.list_events(trace_id=report["tasks"][0]["trace_id"])
     assert report["tasks"][0]["artifacts"]
+    assert "evaluator_report" in {item["type"] for item in report["tasks"][0]["artifacts"]}
     preserved_uri = report["tasks"][0]["artifacts"][0]["uri"]
     assert Path(unquote(urlparse(preserved_uri).path)).is_file()
     assert any(
         item.metadata.get("materialized_by") == "praxile.eval.v2"
         for item in event_store.list_artifacts(report["tasks"][0]["trace_id"])
     )
+    evaluator_event = next(
+        event
+        for event in event_store.list_events(trace_id=report["tasks"][0]["trace_id"])
+        if event.actor.startswith("praxile-evaluator:")
+    )
+    assert evaluator_event.type == "VERIFICATION"
+    assert evaluator_event.payload["resolved"] is True
+    assert evaluator_event.artifact_ids
     assert not Path(report["tasks"][0]["repository"]["workspace_root"]).exists()
     assert evaluator.calls == 1
     assert resumed["tasks"][0]["prediction_digest"] == report["tasks"][0]["prediction_digest"]

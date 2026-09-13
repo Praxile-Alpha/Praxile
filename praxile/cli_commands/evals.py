@@ -4,7 +4,14 @@ import hashlib
 
 from ..cli_common import *  # noqa: F401,F403
 from ..adapters import AdapterPolicy, MiniSweAgentAdapter
-from ..eval.v2 import BenchmarkEvalRunner, OfficialSWEbenchEvaluator, SWEbenchTaskLoader
+from ..eval.v2 import (
+    BenchmarkEvalRunner,
+    ContextCandidate,
+    ControlledABExperiment,
+    FailureDiagnoser,
+    OfficialSWEbenchEvaluator,
+    SWEbenchTaskLoader,
+)
 from ..trace import EventStore
 
 
@@ -154,6 +161,161 @@ def cmd_eval_benchmark(args: argparse.Namespace, project_root: Path) -> int:
     complete = metrics["completed_count"] == metrics["task_count"]
     resolved = metrics["resolved_count"] == metrics["task_count"]
     return 0 if complete and resolved else 1
+
+
+def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    event_store = EventStore(config.paths)
+    run_root = config.paths.state / "eval" / "v2" / "runs" / args.run_id
+    report = read_json(run_root / "report.json", None)
+    if not isinstance(report, dict):
+        raise FileNotFoundError(run_root / "report.json")
+    diagnoses: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    diagnoser = FailureDiagnoser()
+    for result in report.get("tasks", []):
+        if not isinstance(result, dict):
+            continue
+        task_id = str(result.get("task_id") or "")
+        trace_id = str(result.get("trace_id") or "")
+        if not trace_id:
+            skipped.append({"task_id": task_id, "reason": "no trace evidence"})
+            continue
+        diagnosis = diagnoser.diagnose(
+            result,
+            event_store.list_events(trace_id=trace_id),
+            event_store.list_artifacts(trace_id),
+        ).to_dict()
+        write_json(run_root / "tasks" / task_id / "diagnosis.json", diagnosis)
+        diagnoses.append(diagnosis)
+    payload = {"run_id": args.run_id, "diagnoses": diagnoses, "skipped": skipped}
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"Diagnosed {len(diagnoses)} task(s); skipped {len(skipped)} without trace evidence.")
+        for item in diagnoses:
+            attribution = item["attribution"]
+            print(
+                f"- {item['task_id']}: outcome={item['outcome']} "
+                f"cause={attribution['category']} abstained={attribution['abstained']}"
+            )
+    return 0
+
+
+def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    candidate = ContextCandidate.load(Path(args.candidate).expanduser().resolve())
+    adapter = MiniSweAgentAdapter(
+        model=args.model,
+        model_class=args.model_class,
+        config_specs=args.adapter_config,
+        environment=(
+            {"MSWEA_COST_TRACKING": args.cost_tracking}
+            if args.cost_tracking != "default"
+            else None
+        ),
+        default_timeout_seconds=args.timeout,
+    )
+    evaluator = OfficialSWEbenchEvaluator(timeout_seconds=args.timeout)
+    adapter_available, adapter_detail = adapter.availability()
+    if not adapter_available:
+        raise RuntimeError(f"mini-SWE-agent is unavailable: {adapter_detail}; install praxile[benchmark]")
+    evaluator_available, evaluator_detail = evaluator.availability()
+    if not evaluator_available:
+        raise RuntimeError(f"SWE-bench evaluator is unavailable: {evaluator_detail}")
+    loader = SWEbenchTaskLoader(dataset_name=args.dataset_name, split=args.split)
+    selection = {
+        "instance_ids": args.instance_id,
+        "development_size": args.development_size,
+        "seed": args.seed,
+    }
+    task_set = (
+        loader.load(Path(args.tasks).expanduser().resolve(), **selection)
+        if args.tasks
+        else loader.load_huggingface(**selection)
+    )
+    source_overrides: dict[str, Path] = {}
+    for raw in args.source:
+        repo, separator, path = raw.partition("=")
+        if not separator or not repo.strip() or not path.strip():
+            raise ValueError(f"invalid --source {raw!r}; expected REPO=PATH")
+        source_overrides[repo.strip()] = Path(path).expanduser().resolve()
+    budgets: dict[str, Any] = {"wall_timeout_seconds": args.timeout}
+    if args.max_cost is not None:
+        budgets["max_cost"] = args.max_cost
+    baseline_policy = AdapterPolicy(
+        policy_id="p0-baseline",
+        version="1",
+        budgets=budgets,
+        settings={
+            "allow_unattended_execution": True,
+            "workspace_isolated": True,
+            "seed": args.seed,
+            "step_limit": args.step_limit,
+        },
+    )
+    adapter_config_identity: list[dict[str, Any]] = []
+    for spec in args.adapter_config:
+        path = Path(spec).expanduser()
+        adapter_config_identity.append(
+            {
+                "path": str(path.resolve()),
+                "content_digest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            if path.is_file()
+            else {"spec": spec}
+        )
+    with adapter:
+        report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).run(
+            task_set,
+            adapter=adapter,
+            evaluator=evaluator,
+            baseline_policy=baseline_policy,
+            candidate=candidate,
+            model={
+                "model_name_or_path": args.model,
+                "provider": args.model.partition("/")[0] if "/" in args.model else None,
+                "model_class": args.model_class,
+                "cost_tracking": args.cost_tracking,
+                "adapter_config": adapter_config_identity,
+            },
+            experiment_id=args.experiment_id,
+            resume=args.resume,
+            keep_workspaces=args.keep_workspaces,
+            source_overrides=source_overrides,
+        )
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        comparison = report["comparison"]
+        print(f"A/B experiment: {report['experiment_id']}")
+        print(f"Candidate: {report['candidate_id']}")
+        print(f"Invariants: {'valid' if report['invariant_check']['valid'] else 'invalid'}")
+        print(f"Decision: {comparison['decision']} - {comparison['rationale']}")
+        print(f"Report: {config.paths.state / 'eval' / 'v2' / 'experiments' / args.experiment_id / 'report.json'}")
+    return 1 if report["comparison"]["decision"] == "regress" else 0
+
+
+def cmd_eval_ab_analyze(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).analyze(
+        args.experiment_id
+    )
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        comparison = report["comparison"]
+        print(f"A/B experiment: {report['experiment_id']}")
+        print(f"Invariants: {'valid' if report['invariant_check']['valid'] else 'invalid'}")
+        print(f"Decision: {comparison['decision']} - {comparison['rationale']}")
+        print(
+            "Report: "
+            f"{config.paths.state / 'eval' / 'v2' / 'experiments' / args.experiment_id / 'report.json'}"
+        )
+    return 1 if report["comparison"]["decision"] == "regress" else 0
 
 
 def cmd_harness_components(args: argparse.Namespace, project_root: Path) -> int:

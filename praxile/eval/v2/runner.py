@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from urllib.parse import unquote, urlparse
 
 from ...adapters import AdapterPolicy, AdapterRunner, AgentAdapterV2
-from ...trace import ArtifactRecord, EventStore
+from ...trace import AgentEvent, ArtifactRecord, EventStore
 from ...utils import new_id, path_is_relative_to, read_json, utc_now, write_json
 from .evaluator import TaskEvaluator, prediction_from_adapter_result
 from .manifest import EvalRunManifest, ImmutableManifestStore
@@ -169,9 +169,17 @@ class BenchmarkEvalRunner:
             )
             prediction_path = prediction.write_jsonl(task_root / "prediction.jsonl")
             evaluator_result = evaluator.evaluate(task, prediction, task_root / "evaluator")
+            evaluator_event, evaluator_artifacts = self._record_evaluator_evidence(
+                task,
+                adapter_result,
+                evaluator,
+                evaluator_result,
+                task_root=task_root,
+            )
+            preserved_artifacts.extend(evaluator_artifacts)
             elapsed_ms = round((time.monotonic() - started) * 1000)
             metrics = trace_metrics(
-                adapter_result.events,
+                (*adapter_result.events, evaluator_event),
                 wall_latency_ms=elapsed_ms,
                 resolved=evaluator_result.resolved,
             )
@@ -287,6 +295,66 @@ class BenchmarkEvalRunner:
             preserved.append(record)
         return preserved
 
+    def _record_evaluator_evidence(
+        self,
+        task: EvalTask,
+        adapter_result: Any,
+        evaluator: TaskEvaluator,
+        evaluator_result: Any,
+        *,
+        task_root: Path,
+    ) -> tuple[AgentEvent, list[ArtifactRecord]]:
+        files: list[Path] = []
+        for value in evaluator_result.evidence_paths:
+            path = Path(value).expanduser().resolve()
+            if not path.is_file() or not path_is_relative_to(path, task_root):
+                raise EvalSchemaError(f"evaluator evidence escapes or is missing from task root: {value}")
+            if path not in files:
+                files.append(path)
+        artifact_ids = tuple(new_id("eval-evidence") for _ in files)
+        status = (
+            "passed"
+            if evaluator_result.resolved is True
+            else "failed"
+            if evaluator_result.resolved is False
+            else "unknown"
+        )
+        event = AgentEvent.create(
+            event_id=f"{adapter_result.handle.run_id}:praxile-evaluator",
+            timestamp=evaluator_result.ended_at,
+            trace_id=adapter_result.handle.trace_id,
+            run_id=adapter_result.handle.run_id,
+            task_id=task.task_id,
+            type="VERIFICATION",
+            actor=f"praxile-evaluator:{evaluator.name}",
+            payload={
+                "status": status,
+                "resolved": evaluator_result.resolved,
+                "evaluator": evaluator.name,
+                "evaluator_version": evaluator.version,
+            },
+            artifact_ids=artifact_ids,
+        )
+        self.event_store.append(event)
+        artifacts: list[ArtifactRecord] = []
+        for artifact_id, path in zip(artifact_ids, files):
+            record = ArtifactRecord(
+                artifact_id=artifact_id,
+                trace_id=adapter_result.handle.trace_id,
+                run_id=adapter_result.handle.run_id,
+                type=_evaluator_artifact_type(path),
+                uri=path.as_uri(),
+                content_digest=_file_digest(path),
+                producer_event_id=event.event_id,
+                created_at=evaluator_result.ended_at,
+                media_type=_evaluator_media_type(path),
+                size=path.stat().st_size,
+                metadata={"evaluator": evaluator.name, "task_id": task.task_id},
+            )
+            self.event_store.record_artifact(record)
+            artifacts.append(record)
+        return event, artifacts
+
 
 def _component(value: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,191}", value):
@@ -309,3 +377,19 @@ def _file_digest(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def _evaluator_artifact_type(path: Path) -> str:
+    if path.name == "prediction.jsonl":
+        return "evaluator_input"
+    if path.suffix == ".json":
+        return "evaluator_report"
+    return "evaluator_log"
+
+
+def _evaluator_media_type(path: Path) -> str:
+    if path.suffix == ".json":
+        return "application/json"
+    if path.suffix == ".jsonl":
+        return "application/x-ndjson"
+    return "text/plain"

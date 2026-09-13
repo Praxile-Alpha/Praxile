@@ -10,11 +10,14 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
     model_calls = [event for event in rows if event.type == "MODEL_CALL"]
     verifications = [event for event in rows if event.type == "VERIFICATION"]
     verification_states = [str(event.payload.get("status") or "unknown") for event in verifications]
-    recovery_count = sum(
-        1
-        for index, state in enumerate(verification_states)
-        if state == "passed" and "failed" in verification_states[:index]
-    )
+    recovery_count = 0
+    failed_interval = False
+    for state in verification_states:
+        if state == "failed":
+            failed_interval = True
+        elif state == "passed" and failed_interval:
+            recovery_count += 1
+            failed_interval = False
     return {
         "task_success": resolved,
         "tokens": {

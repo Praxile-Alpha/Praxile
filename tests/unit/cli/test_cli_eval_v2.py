@@ -41,3 +41,32 @@ def test_eval_benchmark_tasks_file_is_optional_for_huggingface_loading() -> None
     assert args.dataset_name == "SWE-bench/SWE-bench_Lite"
     assert args.cost_tracking == "default"
     assert args.step_limit == 50
+
+
+def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
+    parser = build_parser()
+    diagnose = parser.parse_args(["eval", "diagnose", "baseline-1", "--json"])
+    analyze = parser.parse_args(["eval", "ab-analyze", "p0-c-1", "--json"])
+    experiment = parser.parse_args(
+        [
+            "eval",
+            "ab",
+            "candidate.json",
+            "--experiment-id",
+            "p0-c-1",
+            "--model",
+            "ollama/model",
+            "--instance-id",
+            "owner__repo-1",
+            "--resume",
+        ]
+    )
+
+    assert diagnose.func.__name__ == "cmd_eval_diagnose"
+    assert diagnose.run_id == "baseline-1"
+    assert analyze.func.__name__ == "cmd_eval_ab_analyze"
+    assert analyze.experiment_id == "p0-c-1"
+    assert experiment.func.__name__ == "cmd_eval_ab"
+    assert experiment.experiment_id == "p0-c-1"
+    assert experiment.step_limit == 50
+    assert experiment.resume is True

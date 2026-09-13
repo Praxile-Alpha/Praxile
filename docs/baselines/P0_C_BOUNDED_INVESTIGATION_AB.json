@@ -1,0 +1,94 @@
+{
+  "schema_version": "praxile.public_ab_result.v1",
+  "experiment_id": "p0-c-bounded-investigation-001",
+  "recorded_at": "2026-09-11T14:03:31Z",
+  "purpose": "P0-C failure diagnosis and controlled Context/Experience A/B acceptance",
+  "track": "clean",
+  "environment": {
+    "platform": "macOS-arm64",
+    "python": "3.12.10",
+    "mini_swe_agent": "2.4.6",
+    "adapter_protocol": "praxile.agent_adapter.v2"
+  },
+  "task_set": {
+    "dataset_name": "SWE-bench/SWE-bench_Lite",
+    "split": "test",
+    "instance_ids": [
+      "sympy__sympy-18532"
+    ],
+    "base_commit": "74227f900b05009d4eed62e34a166228788a32ca",
+    "digest": "sha256:7a20f6a0935c6d998ac662ca2f2d0f4f314691a2383824bd764a60e4063ad197"
+  },
+  "execution": {
+    "adapter": "mini-swe-agent",
+    "model_name_or_path": "dashscope/qwen3-coder-next",
+    "cost_tracking": "ignore_errors",
+    "wall_timeout_seconds": 900,
+    "step_limit": 50,
+    "workspace_isolated": true
+  },
+  "candidate": {
+    "candidate_id": "p0-c-bounded-investigation",
+    "candidate_type": "experience_activation",
+    "version": "1",
+    "digest": "sha256:92b4d510546cf0795a22125ff1c7e475423e68ee1db04c5fb8e231fa76f19895",
+    "source_task_ids": [
+      "sympy__sympy-20590"
+    ],
+    "changed_variable": "policy.context[0]"
+  },
+  "invariant_check": {
+    "valid": true,
+    "violations": [],
+    "baseline_manifest_digest": "sha256:bb13cd542d448e552542aaf0b12499ae7fae9be55d39d57de357e3565ffbcf1b",
+    "candidate_manifest_digest": "sha256:90f47477abe5911516be12046fea24e7845a3f05ff73505cfeb9539351c8c65c"
+  },
+  "results": {
+    "baseline": {
+      "resolved": null,
+      "failure_category": "POLICY_HARNESS",
+      "failure_code": "execution_budget_exhausted",
+      "input_tokens": 695638,
+      "output_tokens": 6544,
+      "tool_calls": 50,
+      "latency_ms": 78553
+    },
+    "candidate": {
+      "resolved": null,
+      "failure_category": "POLICY_HARNESS",
+      "failure_code": "execution_budget_exhausted",
+      "input_tokens": 663706,
+      "output_tokens": 3514,
+      "tool_calls": 50,
+      "latency_ms": 59605
+    },
+    "delta": {
+      "tokens": -34962,
+      "tool_calls": 0,
+      "latency_ms": -18948,
+      "cost": null
+    }
+  },
+  "trace_overhead": {
+    "instrumentation_mode": "identical_in_both_arms",
+    "baseline_event_count": 156,
+    "candidate_event_count": 157,
+    "event_count_delta": 1,
+    "baseline_serialized_bytes": 330380,
+    "candidate_serialized_bytes": 284684,
+    "serialized_bytes_delta": -45696,
+    "context_inject_event_delta": 1,
+    "attributed_to_candidate": false
+  },
+  "decision": {
+    "value": "inconclusive",
+    "rationale": "Both arms exhausted the 50-step execution budget and produced no patch, so objective evaluator evidence is unavailable. Lower candidate token and latency usage alone cannot establish task improvement."
+  },
+  "limitations": [
+    "This one-task held-out experiment accepts the P0-C control path and is not a general model-quality claim.",
+    "Neither arm produced a patch, so the official SWE-bench evaluator did not run and resolution remains unknown.",
+    "Both failures are attributed to the configured harness step budget from native LimitsExceeded evidence, not to the model or candidate.",
+    "Monetary cost is unavailable because this model was run with explicit ignore_errors cost tracking.",
+    "Serialized trace size reflects different agent behavior plus one candidate context event; it does not measure tracer latency causality."
+  ]
+}
