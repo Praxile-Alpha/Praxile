@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Mapping
 
 from ...trace import AgentEvent, EventStore
-from ...utils import read_json, write_json
+from ...utils import read_json
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
 
@@ -96,8 +97,8 @@ class PublicExperimentExporter:
         manifest_path = destination / "experiment-manifest.json"
         metrics_path = destination / "raw-metrics.json"
         trace_path = destination / "trace-sample.jsonl"
-        write_json(manifest_path, public_manifest)
-        write_json(metrics_path, public_metrics)
+        _write_public_json(manifest_path, public_manifest)
+        _write_public_json(metrics_path, public_metrics)
         trace_path.write_text(
             self._trace_sample(baseline_report, candidate_report), encoding="utf-8"
         )
@@ -214,3 +215,13 @@ def _object(value: Any, name: str) -> Mapping[str, Any]:
 def _safe_id(value: str) -> None:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,179}", value):
         raise EvalSchemaError(f"unsafe experiment_id: {value!r}")
+
+
+def _write_public_json(path: Path, value: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(dict(value), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)

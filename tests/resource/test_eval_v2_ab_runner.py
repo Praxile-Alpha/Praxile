@@ -134,6 +134,7 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     assert "Start with one focused regression test." not in trace_text
     assert '"tokens"' in metrics_text
     assert '"tokens": "<redacted:credential>"' not in metrics_text
+    assert not list(public.glob("*.lock"))
     for line in trace_text.splitlines():
         event = AgentEvent.from_json(line)
         assert event.extensions["public_export"]["redacted"] is True
