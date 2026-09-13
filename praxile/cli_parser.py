@@ -620,6 +620,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval_ab_analyze.add_argument("experiment_id")
     p_eval_ab_analyze.add_argument("--json", action="store_true")
     p_eval_ab_analyze.set_defaults(func=cmd_eval_ab_analyze)
+    p_eval_export = eval_sub.add_parser(
+        "export-public", help="Export redacted manifests, raw metrics, and trace samples"
+    )
+    p_eval_export.add_argument("experiment_id")
+    p_eval_export.add_argument("--output", required=True, help="Destination directory for public evidence")
+    p_eval_export.add_argument("--json", action="store_true")
+    p_eval_export.set_defaults(func=cmd_eval_export_public)
 
     p_judge = sub.add_parser("judge", help="Semantic judge calibration and governance")
     judge_sub = p_judge.add_subparsers(dest="judge_command", required=True)

@@ -5,15 +5,15 @@
 <!-- Optional: replace this with your project logo. -->
 <!-- <img src="assets/praxile-logo.png" alt="Praxile" width="64%" /> -->
 
-<h3>Governed experience harness for AI coding</h3>
+<h3>Eval and Evolution Control Plane for Agent Harnesses</h3>
 
 <p>
   <b>Specs govern intent. Praxile governs experience.</b>
 </p>
 
 <p>
-  Capture what coding agents actually did, turn each run into evidence-backed proposals,<br />
-  and store only approved repository-local knowledge under <code>.praxile/</code>.
+  Observe what base agents actually did, evaluate what worked, and turn runs into governed candidates.<br />
+  Only approved repository-local knowledge becomes active under <code>.praxile/</code>.
 </p>
 
 <p>
@@ -35,9 +35,11 @@
 
 ## What is Praxile?
 
-**Praxile** is a governed experience harness for AI coding.
+**Praxile** is an evaluation and evolution control plane for Agent Harnesses.
 
-> **V2 direction:** Praxile is evolving into an **Eval and Evolution Control Plane for Agent Harnesses**. External agents own execution; Praxile owns normalized trace, evaluation, diagnosis, governed assets, policy candidates, promotion, and rollback. This is a frozen implementation direction, not a claim that the V2 benchmark path is complete. See the [V2 P0 boundary](docs/V2_P0_FROZEN_BOUNDARY.md) and [current-state gap audit](docs/V2_CURRENT_STATE_GAP_AUDIT.md).
+> **V2 boundary:** External Base Agents own planning, tools, and execution. Praxile owns normalized trace, evaluation, diagnosis, governed assets, policy candidates, promotion, and rollback. The P0 reference path is runnable and publicly documented; it is an engineering acceptance result, not a broad benchmark claim. See the [V2 P0 public result](docs/V2_P0_PUBLIC_RESULT.md) and [frozen boundary](docs/V2_P0_FROZEN_BOUNDARY.md).
+
+The measured V2 reference system is **mini-SWE-agent as the Base Agent + Praxile as the Control Plane + SWE-bench as the evaluator**. Results belong to that complete system. Praxile does not relabel the Base Agent's model calls, tool use, or coding behavior as Praxile execution capability.
 
 It sits around coding-agent work: it records environment interaction, builds a trajectory, computes reward and risk signals, extracts evidence, generates reviewable proposals, and writes durable repository knowledge only after human approval.
 
@@ -556,6 +558,7 @@ Not included in the first release:
 - [V2 Trace Foundation](docs/V2_TRACE_FOUNDATION.md)
 - [V2 Agent Adapters](docs/V2_AGENT_ADAPTERS.md)
 - [V2 mini-SWE-agent Acceptance](docs/V2_MINI_SWE_ACCEPTANCE.md)
+- [V2 P0 Public Result](docs/V2_P0_PUBLIC_RESULT.md)
 - [Web Console](docs/WEB_CONSOLE.md)
 - [P0 Engineering Checklist](docs/P0_ENGINEERING_CHECKLIST.md)
 - [Praxile Reflect](docs/REFLECT.md)

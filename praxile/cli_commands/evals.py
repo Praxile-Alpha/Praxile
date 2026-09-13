@@ -10,6 +10,7 @@ from ..eval.v2 import (
     ControlledABExperiment,
     FailureDiagnoser,
     OfficialSWEbenchEvaluator,
+    PublicExperimentExporter,
     SWEbenchTaskLoader,
 )
 from ..trace import EventStore
@@ -316,6 +317,22 @@ def cmd_eval_ab_analyze(args: argparse.Namespace, project_root: Path) -> int:
             f"{config.paths.state / 'eval' / 'v2' / 'experiments' / args.experiment_id / 'report.json'}"
         )
     return 1 if report["comparison"]["decision"] == "regress" else 0
+
+
+def cmd_eval_export_public(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    paths = PublicExperimentExporter(config.paths.state, EventStore(config.paths)).export(
+        args.experiment_id,
+        Path(args.output),
+    )
+    if args.json:
+        print(json.dumps(paths, indent=2, ensure_ascii=False))
+    else:
+        print(f"Public evidence package: {args.experiment_id}")
+        for name, path in paths.items():
+            print(f"- {name}: {path}")
+    return 0
 
 
 def cmd_harness_components(args: argparse.Namespace, project_root: Path) -> int:

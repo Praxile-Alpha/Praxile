@@ -16,10 +16,11 @@ from praxile.eval.v2 import (
     EvalTaskSet,
     EvaluatorResult,
     RepositorySpec,
+    PublicExperimentExporter,
     SWEbenchEvaluationSpec,
     SWEbenchPrediction,
 )
-from praxile.trace import EventStore
+from praxile.trace import AgentEvent, EventStore
 from praxile.utils import utc_now
 
 
@@ -114,5 +115,25 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
 
     reanalyzed = experiment.analyze("p0-c-fixture")
 
-    assert reanalyzed["diagnoses"]["baseline"][0]["diagnosis_id"] == report["diagnoses"]["baseline"][0]["diagnosis_id"]
-    assert reanalyzed["diagnoses"]["candidate"][0]["diagnosis_id"] == report["diagnoses"]["candidate"][0]["diagnosis_id"]
+    assert reanalyzed["diagnoses"]["baseline"][0]["diagnosis_id"] == (
+        report["diagnoses"]["baseline"][0]["diagnosis_id"]
+    )
+    assert reanalyzed["diagnoses"]["candidate"][0]["diagnosis_id"] == (
+        report["diagnoses"]["candidate"][0]["diagnosis_id"]
+    )
+
+    public = tmp_path / "public"
+    paths = PublicExperimentExporter(state, store).export("p0-c-fixture", public)
+    manifest_text = Path(paths["manifest"]).read_text(encoding="utf-8")
+    metrics_text = Path(paths["metrics"]).read_text(encoding="utf-8")
+    trace_text = Path(paths["trace_sample"]).read_text(encoding="utf-8")
+
+    assert str(tmp_path) not in manifest_text
+    assert "<redacted:content>" in trace_text
+    assert "Fix the issue" not in trace_text
+    assert "Start with one focused regression test." not in trace_text
+    assert '"tokens"' in metrics_text
+    assert '"tokens": "<redacted:credential>"' not in metrics_text
+    for line in trace_text.splitlines():
+        event = AgentEvent.from_json(line)
+        assert event.extensions["public_export"]["redacted"] is True

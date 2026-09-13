@@ -5,15 +5,15 @@
 <!-- 可选：发布后替换为项目 Logo。 -->
 <!-- <img src="assets/praxile-logo.png" alt="Praxile" width="64%" /> -->
 
-<h3>面向 AI 编程的可治理经验 Harness</h3>
+<h3>Agent Harness 的评测与演化控制平面</h3>
 
 <p>
   <b>Spec 治理意图，Praxile 治理经验。</b>
 </p>
 
 <p>
-  采集 Coding Agent 实际做过什么，将每次运行转化为<b>有证据支撑</b>、<b>可审查</b>的 proposal，<br />
-  并只把经过审批的仓库本地知识写入 <code>.praxile/</code>。
+  观测 Base Agent 实际做过什么，评测什么真正有效，并把运行转化为受治理的 Candidate，<br />
+  只有经过审批的仓库本地知识才会在 <code>.praxile/</code> 下生效。
 </p>
 
 <p>
@@ -35,9 +35,11 @@
 
 ## Praxile 是什么？
 
-**Praxile** 是一个面向 AI 编程的可治理经验 Harness。
+**Praxile** 是 Agent Harness 的评测与演化控制平面。
 
-> **V2 方向：**Praxile 正在演进为 **Agent Harness 的评测与演化控制平面**。外部 Agent 负责执行，Praxile 负责统一 Trace、评测、诊断、可治理资产、策略 Candidate、发布与回滚。这是已经冻结的研发方向，不代表 V2 Benchmark 链路已经完成。详见 [V2 P0 冻结边界](docs/V2_P0_FROZEN_BOUNDARY.md)和[现状差距审计](docs/V2_CURRENT_STATE_GAP_AUDIT.md)。
+> **V2 边界：**外部 Base Agent 负责规划、工具与执行；Praxile 负责统一 Trace、评测、诊断、可治理资产、策略 Candidate、发布与回滚。P0 参考链路已经可以运行并提供公开证据，但它只是工程验收结果，不是大规模 Benchmark 结论。详见 [V2 P0 公开结果](docs/V2_P0_PUBLIC_RESULT.md)和[V2 P0 冻结边界](docs/V2_P0_FROZEN_BOUNDARY.md)。
+
+V2 实际测量的完整系统是：**mini-SWE-agent 作为 Base Agent + Praxile 作为 Control Plane + SWE-bench 作为 Evaluator**。结果属于这个组合系统；Praxile 不会把 Base Agent 的模型调用、工具使用和编码行为包装成 Praxile 自身的执行能力。
 
 它围绕 Coding Agent 的工作过程运行：记录环境交互，构建 trajectory，计算 reward 与风险信号，提取 evidence，生成可审查 proposal，并且只在人工审批后写入长期仓库知识。
 
@@ -556,6 +558,7 @@ Praxile 当前处于 **Alpha** 阶段。
 - [V2 Trace Foundation](docs/V2_TRACE_FOUNDATION.md)
 - [V2 Agent Adapters](docs/V2_AGENT_ADAPTERS.md)
 - [V2 mini-SWE-agent Acceptance](docs/V2_MINI_SWE_ACCEPTANCE.md)
+- [V2 P0 Public Result](docs/V2_P0_PUBLIC_RESULT.md)
 - [Web Console](docs/WEB_CONSOLE.md)
 - [P0 Engineering Checklist](docs/P0_ENGINEERING_CHECKLIST.md)
 - [Praxile Reflect](docs/REFLECT.md)

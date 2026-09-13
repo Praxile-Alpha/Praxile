@@ -1,0 +1,288 @@
+{
+  "schema_version": "praxile.public_experiment_manifest.v1",
+  "experiment_id": "p0-c-bounded-investigation-001",
+  "recorded_at": "2026-09-11T13:57:48+00:00",
+  "track": "clean",
+  "changed_variable": "policy.context[0]",
+  "frozen_invariants": [
+    "task_set",
+    "adapter",
+    "model",
+    "evaluator",
+    "execution",
+    "policy.budgets",
+    "policy.settings"
+  ],
+  "task_set_digest": "sha256:7a20f6a0935c6d998ac662ca2f2d0f4f314691a2383824bd764a60e4063ad197",
+  "candidate": {
+    "applies_to": {
+      "does_not_apply_when": [
+        "The failure is already isolated to a leaf implementation.",
+        "The task is unrelated to Python class behavior or shared abstractions."
+      ],
+      "repositories": [
+        "sympy/sympy"
+      ],
+      "task_signals": [
+        "shared inheritance",
+        "object layout",
+        "regression across versions"
+      ]
+    },
+    "candidate_id": "p0-c-bounded-investigation",
+    "candidate_type": "experience_activation",
+    "confidence": 0.62,
+    "context_item": {
+      "asset_id": "project-pattern-bounded-investigation-v1",
+      "asset_type": "project_pattern",
+      "content": "<redacted:content>"
+    },
+    "evidence_refs": [
+      "event:run_e1e30a0f8edf:mini:382",
+      "event:run_e1e30a0f8edf:mini:389",
+      "artifact:eval-artifact_57716611e91c"
+    ],
+    "expected_effect": {
+      "input_tokens": "decrease",
+      "model_calls": "decrease",
+      "resolved_rate": "non_decreasing",
+      "tool_calls": "decrease"
+    },
+    "schema_version": "praxile.context_candidate.v1",
+    "source_diagnosis_ids": [],
+    "source_task_ids": [
+      "sympy__sympy-20590"
+    ],
+    "title": "Bound broad repository exploration before context growth",
+    "version": "1"
+  },
+  "candidate_digest": "sha256:92b4d510546cf0795a22125ff1c7e475423e68ee1db04c5fb8e231fa76f19895",
+  "arms": {
+    "baseline": {
+      "eval_run_id": "p0-c-bounded-investigation-001.baseline",
+      "source_reproducibility_digest": "sha256:bb13cd542d448e552542aaf0b12499ae7fae9be55d39d57de357e3565ffbcf1b",
+      "experiment_variable": {},
+      "reproducibility": {
+        "adapter": {
+          "capabilities": {
+            "artifact_collection": true,
+            "cancellation": true,
+            "checkpointing": false,
+            "context_injection": true,
+            "event_streaming": false,
+            "metadata": {
+              "adapter_version": "1",
+              "available": true,
+              "executable": "<redacted:absolute-path>",
+              "native_runtime": "mini-swe-agent>=2,<3",
+              "native_runtime_version": "2.4.6",
+              "protocol_version": "praxile.agent_adapter.v2",
+              "stream_mode": "post_run_trajectory"
+            },
+            "native_event_types": [
+              "messages",
+              "extra.actions",
+              "info.model_stats"
+            ],
+            "sandbox_visibility": false,
+            "subagent_visibility": false,
+            "token_usage": true
+          },
+          "name": "mini-swe-agent",
+          "protocol_version": "praxile.agent_adapter.v2"
+        },
+        "environment": {
+          "implementation": "CPython",
+          "platform": "macOS-26.6.2-arm64-arm-64bit",
+          "praxile_version": "0.1.0",
+          "python": "3.12.10",
+          "python_runtime": "3.12.10"
+        },
+        "evaluator": {
+          "distribution_version": "5.0.2",
+          "entrypoint": "swebench.harness.run_evaluation",
+          "extra_args": [],
+          "max_workers": 1,
+          "name": "swe-bench-official",
+          "timeout_seconds": 900,
+          "version": "1"
+        },
+        "execution": {
+          "keep_workspaces": false,
+          "resumable": true,
+          "retry_policy": {},
+          "seed": "praxile-p0",
+          "source_overrides": {},
+          "task_concurrency": 1,
+          "timeout_seconds": 900
+        },
+        "model": {
+          "adapter_config": [],
+          "cost_tracking": "ignore_errors",
+          "model_class": null,
+          "model_name_or_path": "dashscope/qwen3-coder-next",
+          "provider": "dashscope"
+        },
+        "policy": {
+          "budgets": {
+            "wall_timeout_seconds": 900
+          },
+          "context": [],
+          "policy_id": "p0-baseline",
+          "settings": {
+            "allow_unattended_execution": true,
+            "seed": "praxile-p0",
+            "step_limit": 50,
+            "workspace_isolated": true
+          },
+          "version": "1"
+        },
+        "task_set": {
+          "dataset_name": "SWE-bench/SWE-bench_Lite",
+          "digest": "sha256:7a20f6a0935c6d998ac662ca2f2d0f4f314691a2383824bd764a60e4063ad197",
+          "name": "SWE-bench_Lite",
+          "selection": {
+            "instance_ids": [
+              "sympy__sympy-18532"
+            ],
+            "mode": "instance_ids",
+            "source": "huggingface:SWE-bench/SWE-bench_Lite@test"
+          },
+          "split": "test",
+          "tasks": [
+            {
+              "base_commit": "74227f900b05009d4eed62e34a166228788a32ca",
+              "fingerprint": "sha256:193756bde50ebd921ec61e573ed6ba2e83a9d32e06137149092e8db2046e4dc9",
+              "repo": "sympy/sympy",
+              "task_id": "sympy__sympy-18532"
+            }
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "eval_run_id": "p0-c-bounded-investigation-001.candidate",
+      "source_reproducibility_digest": "sha256:90f47477abe5911516be12046fea24e7845a3f05ff73505cfeb9539351c8c65c",
+      "experiment_variable": {
+        "candidate_digest": "sha256:92b4d510546cf0795a22125ff1c7e475423e68ee1db04c5fb8e231fa76f19895",
+        "candidate_id": "p0-c-bounded-investigation",
+        "candidate_version": "1",
+        "changed_variable": "policy.context[0]",
+        "type": "experience_activation"
+      },
+      "reproducibility": {
+        "adapter": {
+          "capabilities": {
+            "artifact_collection": true,
+            "cancellation": true,
+            "checkpointing": false,
+            "context_injection": true,
+            "event_streaming": false,
+            "metadata": {
+              "adapter_version": "1",
+              "available": true,
+              "executable": "<redacted:absolute-path>",
+              "native_runtime": "mini-swe-agent>=2,<3",
+              "native_runtime_version": "2.4.6",
+              "protocol_version": "praxile.agent_adapter.v2",
+              "stream_mode": "post_run_trajectory"
+            },
+            "native_event_types": [
+              "messages",
+              "extra.actions",
+              "info.model_stats"
+            ],
+            "sandbox_visibility": false,
+            "subagent_visibility": false,
+            "token_usage": true
+          },
+          "name": "mini-swe-agent",
+          "protocol_version": "praxile.agent_adapter.v2"
+        },
+        "environment": {
+          "implementation": "CPython",
+          "platform": "macOS-26.6.2-arm64-arm-64bit",
+          "praxile_version": "0.1.0",
+          "python": "3.12.10",
+          "python_runtime": "3.12.10"
+        },
+        "evaluator": {
+          "distribution_version": "5.0.2",
+          "entrypoint": "swebench.harness.run_evaluation",
+          "extra_args": [],
+          "max_workers": 1,
+          "name": "swe-bench-official",
+          "timeout_seconds": 900,
+          "version": "1"
+        },
+        "execution": {
+          "keep_workspaces": false,
+          "resumable": true,
+          "retry_policy": {},
+          "seed": "praxile-p0",
+          "source_overrides": {},
+          "task_concurrency": 1,
+          "timeout_seconds": 900
+        },
+        "model": {
+          "adapter_config": [],
+          "cost_tracking": "ignore_errors",
+          "model_class": null,
+          "model_name_or_path": "dashscope/qwen3-coder-next",
+          "provider": "dashscope"
+        },
+        "policy": {
+          "budgets": {
+            "wall_timeout_seconds": 900
+          },
+          "context": [
+            {
+              "asset_id": "project-pattern-bounded-investigation-v1",
+              "asset_type": "project_pattern",
+              "candidate_digest": "sha256:92b4d510546cf0795a22125ff1c7e475423e68ee1db04c5fb8e231fa76f19895",
+              "candidate_id": "p0-c-bounded-investigation",
+              "candidate_version": "1",
+              "content": "<redacted:content>"
+            }
+          ],
+          "policy_id": "p0-c-bounded-investigation",
+          "settings": {
+            "allow_unattended_execution": true,
+            "seed": "praxile-p0",
+            "step_limit": 50,
+            "workspace_isolated": true
+          },
+          "version": "1"
+        },
+        "task_set": {
+          "dataset_name": "SWE-bench/SWE-bench_Lite",
+          "digest": "sha256:7a20f6a0935c6d998ac662ca2f2d0f4f314691a2383824bd764a60e4063ad197",
+          "name": "SWE-bench_Lite",
+          "selection": {
+            "instance_ids": [
+              "sympy__sympy-18532"
+            ],
+            "mode": "instance_ids",
+            "source": "huggingface:SWE-bench/SWE-bench_Lite@test"
+          },
+          "split": "test",
+          "tasks": [
+            {
+              "base_commit": "74227f900b05009d4eed62e34a166228788a32ca",
+              "fingerprint": "sha256:193756bde50ebd921ec61e573ed6ba2e83a9d32e06137149092e8db2046e4dc9",
+              "repo": "sympy/sympy",
+              "task_id": "sympy__sympy-18532"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "redaction": {
+    "absolute_paths": true,
+    "credentials": true,
+    "task_instruction": true,
+    "context_content": true,
+    "native_payload_refs": true
+  }
+}

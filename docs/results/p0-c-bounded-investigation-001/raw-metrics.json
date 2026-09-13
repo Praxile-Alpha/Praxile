@@ -1,0 +1,240 @@
+{
+  "schema_version": "praxile.public_experiment_metrics.v1",
+  "experiment_id": "p0-c-bounded-investigation-001",
+  "recorded_at": "2026-09-11T14:03:31+00:00",
+  "invariant_check": {
+    "valid": true,
+    "violations": [],
+    "changed_variable": "policy.context[0]",
+    "baseline_manifest_digest": "sha256:bb13cd542d448e552542aaf0b12499ae7fae9be55d39d57de357e3565ffbcf1b",
+    "candidate_manifest_digest": "sha256:90f47477abe5911516be12046fea24e7845a3f05ff73505cfeb9539351c8c65c"
+  },
+  "baseline": {
+    "eval_run_id": "p0-c-bounded-investigation-001.baseline",
+    "manifest_digest": "sha256:bb13cd542d448e552542aaf0b12499ae7fae9be55d39d57de357e3565ffbcf1b",
+    "metrics": {
+      "task_count": 1,
+      "completed_count": 0,
+      "resolved_count": 0,
+      "resolution_rate": null,
+      "unknown_evaluation_count": 1,
+      "tokens": {
+        "input": 695638,
+        "output": 6544,
+        "cache": 0
+      },
+      "cost": 0.0,
+      "latency_ms": 78553,
+      "tool_calls": 50,
+      "retries": 0,
+      "recoveries": 0,
+      "interventions": 0
+    },
+    "tasks": [
+      {
+        "task_id": "sympy__sympy-18532",
+        "status": "error",
+        "evaluator": {
+          "status": "not_run",
+          "resolved": null
+        },
+        "metrics": {
+          "task_success": null,
+          "tokens": {
+            "input": 695638,
+            "output": 6544,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 78553,
+          "reported_model_latency_ms": 0,
+          "model_calls": 50,
+          "tool_calls": 50,
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": null,
+        "error": {
+          "type": "EvalSchemaError",
+          "message": "adapter run run_47cef3bd8367 did not produce a patch artifact"
+        }
+      }
+    ],
+    "diagnoses": [
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_cc26a6f47ea30798",
+        "task_id": "sympy__sympy-18532",
+        "trace_id": "trace_42564f1d627b",
+        "run_id": "run_47cef3bd8367",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "POLICY_HARNESS",
+            "code": "execution_budget_exhausted",
+            "summary": "The configured execution budget ended the agent before completion.",
+            "evidence_refs": [
+              "event:run_47cef3bd8367:mini:154"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "POLICY_HARNESS",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_47cef3bd8367:mini:154"
+          ]
+        },
+        "created_at": "2026-09-11T14:03:31+00:00"
+      }
+    ]
+  },
+  "candidate": {
+    "eval_run_id": "p0-c-bounded-investigation-001.candidate",
+    "manifest_digest": "sha256:90f47477abe5911516be12046fea24e7845a3f05ff73505cfeb9539351c8c65c",
+    "metrics": {
+      "task_count": 1,
+      "completed_count": 0,
+      "resolved_count": 0,
+      "resolution_rate": null,
+      "unknown_evaluation_count": 1,
+      "tokens": {
+        "input": 663706,
+        "output": 3514,
+        "cache": 0
+      },
+      "cost": 0.0,
+      "latency_ms": 59605,
+      "tool_calls": 50,
+      "retries": 0,
+      "recoveries": 0,
+      "interventions": 0
+    },
+    "tasks": [
+      {
+        "task_id": "sympy__sympy-18532",
+        "status": "error",
+        "evaluator": {
+          "status": "not_run",
+          "resolved": null
+        },
+        "metrics": {
+          "task_success": null,
+          "tokens": {
+            "input": 663706,
+            "output": 3514,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 59605,
+          "reported_model_latency_ms": 0,
+          "model_calls": 50,
+          "tool_calls": 50,
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": null,
+        "error": {
+          "type": "EvalSchemaError",
+          "message": "adapter run run_b236226a785d did not produce a patch artifact"
+        }
+      }
+    ],
+    "diagnoses": [
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_ea9f5d3892126592",
+        "task_id": "sympy__sympy-18532",
+        "trace_id": "trace_12f6db018dd5",
+        "run_id": "run_b236226a785d",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "POLICY_HARNESS",
+            "code": "execution_budget_exhausted",
+            "summary": "The configured execution budget ended the agent before completion.",
+            "evidence_refs": [
+              "event:run_b236226a785d:mini:155"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "POLICY_HARNESS",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_b236226a785d:mini:155"
+          ]
+        },
+        "created_at": "2026-09-11T14:03:31+00:00"
+      }
+    ]
+  },
+  "comparison": {
+    "decision": "inconclusive",
+    "rationale": "At least one arm lacks an objective evaluator result.",
+    "task_results": [
+      {
+        "task_id": "sympy__sympy-18532",
+        "failure_category": "POLICY_HARNESS",
+        "baseline_resolved": null,
+        "candidate_resolved": null,
+        "transition": "unknown",
+        "token_delta": -34962,
+        "tool_call_delta": 0,
+        "latency_ms_delta": -18948,
+        "cost_delta": null
+      }
+    ],
+    "by_failure_category": {
+      "POLICY_HARNESS": {
+        "task_count": 1,
+        "gains": 0,
+        "regressions": 0,
+        "unchanged": 0,
+        "unknown": 1,
+        "token_delta": -34962,
+        "tool_call_delta": 0,
+        "cost_delta": null
+      }
+    },
+    "totals": {
+      "gains": 0,
+      "regressions": 0,
+      "token_delta": -34962,
+      "tool_call_delta": 0,
+      "latency_ms_delta": -18948,
+      "cost_delta": null
+    },
+    "trace_overhead": {
+      "instrumentation_mode": "identical_in_both_arms",
+      "attributed_to_candidate": false,
+      "baseline_event_count": 156,
+      "candidate_event_count": 157,
+      "event_count_delta": 1,
+      "baseline_serialized_bytes": 330380,
+      "candidate_serialized_bytes": 284684,
+      "serialized_bytes_delta": -45696,
+      "context_inject_event_delta": 1,
+      "explanation": "Both arms use identical trace instrumentation; deltas include changed agent behavior and the single context event, not tracer latency causality."
+    },
+    "cost_comparable": false
+  }
+}

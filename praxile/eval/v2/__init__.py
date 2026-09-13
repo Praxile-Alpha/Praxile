@@ -24,6 +24,11 @@ from .experiment import (
 from .loader import SWEbenchTaskLoader
 from .manifest import EVAL_MANIFEST_SCHEMA_VERSION, EvalRunManifest, ImmutableManifestStore
 from .metrics import aggregate_metrics, trace_metrics
+from .public import (
+    PUBLIC_MANIFEST_SCHEMA_VERSION,
+    PUBLIC_METRICS_SCHEMA_VERSION,
+    PublicExperimentExporter,
+)
 from .repository import BenchmarkRepositoryPreparer, PreparedRepository
 from .runner import BenchmarkEvalRunner
 from .schema import (
@@ -62,7 +67,10 @@ __all__ = [
     "FailureDiagnosis",
     "ImmutableManifestStore",
     "OfficialSWEbenchEvaluator",
+    "PUBLIC_MANIFEST_SCHEMA_VERSION",
+    "PUBLIC_METRICS_SCHEMA_VERSION",
     "PreparedRepository",
+    "PublicExperimentExporter",
     "RepositorySpec",
     "SWEbenchEvaluationSpec",
     "SWEbenchPrediction",

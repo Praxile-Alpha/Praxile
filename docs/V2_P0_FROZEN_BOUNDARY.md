@@ -216,10 +216,10 @@ No benchmark result, semantic judge, Reflect run, or candidate generator can act
 
 ### P0-D Public Result
 
-- [ ] Reproducible command and environment documentation.
-- [ ] Machine-readable experiment manifest, raw metrics, and redacted trace samples.
-- [ ] Baseline/candidate result table with limitations and failed-task breakdown.
-- [ ] README language that identifies the measured system as Base Agent plus Praxile Control Plane.
+- [x] Reproducible command and environment documentation: [P0 public result](V2_P0_PUBLIC_RESULT.md).
+- [x] Machine-readable experiment manifest, raw metrics, and redacted trace samples.
+- [x] Baseline/candidate result table with limitations and failed-task breakdown.
+- [x] README language that identifies the measured system as Base Agent plus Praxile Control Plane.
 
 ## Explicit P0 non-goals
 

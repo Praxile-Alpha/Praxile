@@ -47,6 +47,9 @@ def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
     parser = build_parser()
     diagnose = parser.parse_args(["eval", "diagnose", "baseline-1", "--json"])
     analyze = parser.parse_args(["eval", "ab-analyze", "p0-c-1", "--json"])
+    export = parser.parse_args(
+        ["eval", "export-public", "p0-c-1", "--output", "public-result", "--json"]
+    )
     experiment = parser.parse_args(
         [
             "eval",
@@ -66,6 +69,8 @@ def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
     assert diagnose.run_id == "baseline-1"
     assert analyze.func.__name__ == "cmd_eval_ab_analyze"
     assert analyze.experiment_id == "p0-c-1"
+    assert export.func.__name__ == "cmd_eval_export_public"
+    assert export.output == "public-result"
     assert experiment.func.__name__ == "cmd_eval_ab"
     assert experiment.experiment_id == "p0-c-1"
     assert experiment.step_limit == 50
