@@ -55,7 +55,10 @@ def test_fixture_adapter_conforms_and_emits_normalized_context(tmp_path: Path) -
     assert handle.metadata["protocol_version"] == AGENT_ADAPTER_PROTOCOL_VERSION
     assert capabilities.event_streaming is True
     assert [event.backend_sequence for event in events] == list(range(len(events)))
-    assert any(event.type == "CONTEXT_INJECT" for event in events)
+    context_event = next(event for event in events if event.type == "CONTEXT_INJECT")
+    assert context_event.payload["policy_version"] == policy.version
+    assert context_event.payload["budgets"] == policy.budgets
+    assert context_event.payload["settings"] == policy.settings
     assert events[0].type == "RUN_START"
     assert events[-1].type == "RUN_END"
     assert artifacts[0].producer_event_id in {event.event_id for event in events}

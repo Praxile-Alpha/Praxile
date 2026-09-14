@@ -96,7 +96,13 @@ class FixtureAgentAdapter:
                     sequence,
                     "CONTEXT_INJECT",
                     "praxile-control-plane",
-                    {"policy_id": policy.policy_id, "items": [dict(item) for item in policy.context]},
+                    {
+                        "policy_id": policy.policy_id,
+                        "policy_version": policy.version,
+                        "items": [dict(item) for item in policy.context],
+                        "budgets": dict(policy.budgets),
+                        "settings": dict(policy.settings),
+                    },
                 )
             )
             sequence += 1

@@ -73,6 +73,7 @@ def test_mini_swe_command_injects_context_and_budgets_without_shell(tmp_path: Pa
 
     assert command[:2] == ["python", "fake.py"]
     assert "<praxile_context" in command[command.index("--task") + 1]
+    assert 'policy_version="1"' in command[command.index("--task") + 1]
     assert command[command.index("--model") + 1] == "model-a"
     assert command[command.index("--model-class") + 1] == "litellm_textbased"
     assert command[command.index("--cost-limit") + 1] == "1.5"

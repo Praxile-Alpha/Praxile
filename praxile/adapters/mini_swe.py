@@ -275,7 +275,7 @@ class MiniSweAgentAdapter:
         return (
             f"{task.instruction}\n\n"
             "<praxile_context policy_id=\""
-            f"{policy.policy_id}\">\n{serialized}\n</praxile_context>"
+            f"{policy.policy_id}\" policy_version=\"{policy.version}\">\n{serialized}\n</praxile_context>"
         )
 
     def _finish_and_translate(self, handle: RunHandle, state: _MiniSweRun) -> list[AgentEvent]:
@@ -377,6 +377,7 @@ class MiniSweAgentAdapter:
                 {
                     "instruction": state.task.instruction,
                     "policy_id": state.policy.policy_id,
+                    "policy_version": state.policy.version,
                     "native_trajectory_format": trajectory.get("trajectory_format"),
                 },
                 timestamp=state.started_at,
@@ -391,7 +392,13 @@ class MiniSweAgentAdapter:
                     sequence,
                     "CONTEXT_INJECT",
                     "praxile-control-plane",
-                    {"policy_id": state.policy.policy_id, "items": [dict(item) for item in state.policy.context]},
+                    {
+                        "policy_id": state.policy.policy_id,
+                        "policy_version": state.policy.version,
+                        "items": [dict(item) for item in state.policy.context],
+                        "budgets": dict(state.policy.budgets),
+                        "settings": dict(state.policy.settings),
+                    },
                 )
             )
             sequence += 1
