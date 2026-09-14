@@ -171,18 +171,28 @@ class ContextPolicy:
         if self.status != "active" and not (evaluation and self.status == "candidate"):
             raise ControlPlaneSchemaError("only active policies may run outside an explicitly marked evaluation")
         allowed = {rule.source for rule in self.source_rules}
+        required = {rule.source for rule in self.source_rules if rule.required}
         compiled: list[Mapping[str, Any]] = []
         for index, item in enumerate(context_items):
             source = str(item.get("source") or "")
             if source not in allowed:
                 raise ControlPlaneSchemaError(f"context item {index} uses undeclared source: {source!r}")
             compiled.append(dict(item))
+        present = {str(item.get("source") or "") for item in compiled}
+        if required - present:
+            raise ControlPlaneSchemaError(f"required context sources are missing: {sorted(required - present)}")
         budgets = {item.stage: item.to_dict() for item in self.stage_budgets}
+        adapter_budgets: dict[str, Any] = {
+            "stages": budgets,
+            "wall_timeout_seconds": sum(item.time_limit_seconds for item in self.stage_budgets),
+        }
+        if all(item.cost_limit is not None for item in self.stage_budgets):
+            adapter_budgets["max_cost"] = sum(float(item.cost_limit or 0.0) for item in self.stage_budgets)
         return AdapterPolicy(
             policy_id=self.policy_id,
             version=self.version,
             context=tuple(compiled),
-            budgets={"stages": budgets},
+            budgets=adapter_budgets,
             settings={
                 "control_plane_schema": self.schema_version,
                 "evaluation_only": self.status != "active",

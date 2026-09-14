@@ -62,14 +62,15 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Candidate versus active compilation boundary.
 - [x] Explicit `AdapterPolicy` bridge and policy-use metadata.
 - [ ] Persist per-run source utilization and compression decisions in trace events.
-- [ ] Run at least two Context Policy ablations on the same fixed task set.
+- [x] Run two complete Context Policies under frozen task/model/adapter/evaluator invariants (fixture acceptance).
+- [ ] Publish a model-backed Context Policy ablation on a fixed task set.
 
 ### P1-B Skill Asset
 
 - [x] First-class versioned Skill Asset schema.
 - [x] Preconditions, tools, procedure, verification, failure modes, and eval cases are mandatory.
 - [x] Proposed skills cannot be injected into production runs.
-- [ ] Skill candidate evaluator and human-readable Markdown projection.
+- [x] Skill candidate evaluator and deterministic human-readable Markdown projection.
 - [ ] Measured Skill activation and attribution experiment.
 
 ### P1-C Subagent Control
@@ -77,7 +78,7 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Versioned Delegation Contract and context topology modes.
 - [x] Parent-child trace DAG validator.
 - [x] Isolated verifier Merge Decision gate.
-- [ ] Capability-negotiated delegation service for a subagent-capable adapter.
+- [x] Capability-negotiated delegation service for a subagent-capable adapter.
 - [ ] Controlled no-subagent/subagent or fresh/fork comparison.
 
 ### P1-D Harness Evolution
@@ -85,7 +86,29 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Versioned Candidate and six-gate Evaluation schemas.
 - [x] Atomic local candidate/promotion/rollback registry.
 - [x] Explicit human approval and one-command-equivalent registry rollback operation.
-- [ ] Eval Runner integration that automatically produces all gate inputs.
-- [ ] CLI commands for candidate list/evaluate/promote/rollback.
+- [x] Eval Runner integration that produces Evidence, Quality, Regression, Cost, Human, and Rollback gates.
+- [x] CLI commands for candidate register/list/evaluate/promote/rollback and Skill evaluation.
 - [ ] End-to-end candidate promotion and rollback evidence package.
 
+## CLI Entry Points
+
+```bash
+# Compare two complete Context Policies under the same benchmark invariants.
+praxile eval context-ablation policy-a.json policy-b.json tasks.json \
+  --context-a context-a.json --context-b context-b.json \
+  --experiment-id context-policy-v1-v2 --model MODEL
+
+# Evaluate a Skill Asset and render its deterministic review document.
+praxile harness skill-evaluate skill.json --results skill-results.json \
+  --markdown-output .praxile/reviews/skill.md
+
+# Register, gate, promote, inspect, and roll back one Harness Candidate.
+praxile harness candidate-register candidate.json
+praxile harness candidate-evaluate CANDIDATE_ID --ab-report report.json \
+  --reviewer MAINTAINER --approve-human
+praxile harness candidate-promote CANDIDATE_ID --approved-by MAINTAINER
+praxile harness candidate-list
+praxile harness candidate-rollback COMPONENT_KEY --approved-by MAINTAINER
+```
+
+`candidate-evaluate` does not imply promotion. Without `--approve-human`, the Human Gate remains false and the decision abstains. A later `candidate-promote` command succeeds only when all six persisted gates passed.

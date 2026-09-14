@@ -10,6 +10,7 @@ import pytest
 from praxile.adapters import AdapterPolicy, FixtureAgentAdapter, FixtureArtifact, FixtureEvent
 from praxile.config import Config
 from praxile.eval.v2 import (
+    ContextPolicyAblation,
     ContextCandidate,
     ControlledABExperiment,
     EvalTask,
@@ -20,6 +21,7 @@ from praxile.eval.v2 import (
     SWEbenchEvaluationSpec,
     SWEbenchPrediction,
 )
+from praxile.control_plane import ContextPolicy, ContextSourceRule, StageBudget
 from praxile.trace import AgentEvent, EventStore
 from praxile.utils import utc_now
 
@@ -138,3 +140,44 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     for line in trace_text.splitlines():
         event = AgentEvent.from_json(line)
         assert event.extensions["public_export"]["redacted"] is True
+
+
+def test_two_complete_context_policies_run_under_frozen_invariants(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    commit = _repo(source)
+    task = EvalTask(
+        task_id="owner__repo-context",
+        instruction="Fix the issue",
+        repository=RepositorySpec("owner/repo", commit, "https://invalid.example/owner/repo.git"),
+        evaluation=SWEbenchEvaluationSpec("fixture", "test"),
+    )
+    task_set = EvalTaskSet("context-held-out", "fixture", "test", (task,))
+    stage_budgets = tuple(
+        StageBudget(stage, token_limit=1000, tool_call_limit=10, time_limit_seconds=60)
+        for stage in ("exploration", "implementation", "verification")
+    )
+    common = {
+        "status": "candidate",
+        "source_rules": (ContextSourceRule("task_spec", ("exploration", "implementation", "verification")),),
+        "stage_budgets": stage_budgets,
+    }
+    policy_a = ContextPolicy("resident-history", "1", history={"mode": "full"}, **common)
+    policy_b = ContextPolicy("compact-history", "1", history={"mode": "compact", "compact_at_ratio": 0.8}, **common)
+    config = Config.load(tmp_path / "control")
+    state = tmp_path / "state"
+    report = ContextPolicyAblation(state, EventStore(config.paths)).run(
+        task_set,
+        adapter=FixtureAgentAdapter(),
+        evaluator=PassingEvaluator(),
+        policy_a=policy_a,
+        policy_b=policy_b,
+        context_a=({"source": "task_spec", "content": "Fix the issue"},),
+        context_b=({"source": "task_spec", "content": "Fix the issue"},),
+        model={"model_name_or_path": "fixture", "cost_tracking": "default"},
+        experiment_id="p1-context-ablation",
+        source_overrides={"owner/repo": source},
+    )
+    assert report["invariant_check"]["valid"] is True
+    assert report["baseline"]["policy_id"] == "resident-history"
+    assert report["candidate"]["policy_id"] == "compact-history"
+    assert (state / "eval" / "v2" / "context-ablations" / "p1-context-ablation" / "report.json").is_file()

@@ -1,4 +1,5 @@
 from .candidate import CONTEXT_CANDIDATE_SCHEMA_VERSION, ContextCandidate
+from .context_ablation import CONTEXT_ABLATION_SCHEMA_VERSION, ContextPolicyAblation
 from .diagnosis import (
     DIAGNOSIS_SCHEMA_VERSION,
     FAILURE_CATEGORIES,
@@ -48,7 +49,9 @@ __all__ = [
     "BenchmarkEvalRunner",
     "BenchmarkRepositoryPreparer",
     "CONTEXT_CANDIDATE_SCHEMA_VERSION",
+    "CONTEXT_ABLATION_SCHEMA_VERSION",
     "ContextCandidate",
+    "ContextPolicyAblation",
     "ControlledABExperiment",
     "CausalAttribution",
     "DIAGNOSIS_SCHEMA_VERSION",

@@ -16,11 +16,21 @@ from praxile.control_plane import (
     HarnessCandidate,
     HarnessEvolutionRegistry,
     MergeDecision,
+    PromotionGateEvaluator,
+    PromotionThresholds,
     SkillAsset,
+    SkillAssetEvaluator,
+    SkillCaseResult,
+    SkillMarkdownProjector,
     StageBudget,
+    SubagentControlService,
+    SubagentPolicy,
     validate_delegation_trace,
 )
 from praxile.trace import AgentEvent
+from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
+from praxile.config import Config
+from praxile.trace import EventStore, RunHandle
 
 
 def evidence(kind: str = "event", ref_id: str = "event_1") -> EvidenceRef:
@@ -167,6 +177,50 @@ def test_skill_asset_requires_verification_and_eval_cases() -> None:
         )
 
 
+def test_skill_evaluator_and_markdown_projection_require_all_declared_cases() -> None:
+    meta = AssetMeta(
+        asset_id="skill_eval",
+        type="skill",
+        source_evidence=(evidence(),),
+        scope={"repository": "example/project"},
+        applicable_conditions=("Parser regression",),
+        confidence=0.75,
+        version="1",
+        created_from_run="run_1",
+    )
+    skill = SkillAsset(
+        meta=meta,
+        name="Parser repair",
+        input_schema={"type": "object"},
+        preconditions=("Failure reproduced",),
+        context_requirements=("Parser source",),
+        allowed_tools=("read_file", "run_test"),
+        procedure=("Reproduce", "Repair"),
+        verification_contract=("Regression passes",),
+        failure_modes=("Tokenizer owns the defect",),
+        eval_cases=("case_a", "case_b"),
+    )
+    partial = SkillAssetEvaluator().evaluate(
+        skill,
+        {"case_a": SkillCaseResult("case_a", True, (evidence("eval", "eval_case_a"),))},
+    )
+    assert partial["eligible_for_promotion"] is False
+    assert partial["missing"] == ["case_b"]
+
+    complete = SkillAssetEvaluator().evaluate(
+        skill,
+        {
+            "case_a": SkillCaseResult("case_a", True, (evidence("eval", "eval_case_a"),)),
+            "case_b": SkillCaseResult("case_b", True, (evidence("eval", "eval_case_b"),)),
+        },
+    )
+    markdown = SkillMarkdownProjector.render(skill, complete)
+    assert complete["eligible_for_promotion"] is True
+    assert "## Verification Contract" in markdown
+    assert "`case_a`" in markdown
+    assert '"eligible_for_promotion": true' in markdown
+
+
 def delegation_contract() -> DelegationContract:
     return DelegationContract(
         contract_id="delegation_1",
@@ -183,6 +237,22 @@ def delegation_contract() -> DelegationContract:
         termination_criteria=("Verification result is conclusive",),
         verification_criteria=("Focused and regression tests pass",),
         return_schema={"type": "object", "required": ["verified"]},
+    )
+
+
+def subagent_policy(*, status: str = "active") -> SubagentPolicy:
+    return SubagentPolicy(
+        policy_id="isolated-verification",
+        version="1",
+        trigger_conditions=("Independent verification is required",),
+        allowed_backends=("fixture",),
+        allowed_context_modes=("isolated", "fresh"),
+        max_children=2,
+        max_parallel=1,
+        max_token_budget=4000,
+        max_time_budget_seconds=300,
+        max_cost_budget=2.0,
+        status=status,
     )
 
 
@@ -219,6 +289,75 @@ def test_merge_gate_requires_an_isolated_verifier() -> None:
             evidence=(evidence(),),
             rationale="Self verified",
         )
+
+
+def test_subagent_control_negotiates_capability_and_records_child_dag(tmp_path) -> None:
+    event_store = EventStore(Config.load(tmp_path).paths)
+    parent = RunHandle("fixture", "native_parent", "trace_sub", "parent_1", "task_1")
+    service = SubagentControlService(event_store)
+    result = service.delegate(
+        adapter=FixtureAgentAdapter(),
+        parent=parent,
+        project_root=tmp_path,
+        contract=delegation_contract(),
+        control_policy=subagent_policy(),
+        policy=AdapterPolicy(policy_id="subagent-policy"),
+    )
+    assert result.child.handle.run_id.startswith("subrun_")
+    assert all(event.parent_run_id == parent.run_id for event in result.child.events)
+    assert [event.type for event in event_store.list_events(trace_id=parent.trace_id)].count("SUBAGENT_START") == 1
+    assert [event.type for event in event_store.list_events(trace_id=parent.trace_id)].count("SUBAGENT_END") == 1
+
+
+def test_subagent_control_refuses_an_adapter_without_visibility(tmp_path) -> None:
+    adapter = FixtureAgentAdapter()
+    adapter.capabilities = lambda: replace(adapter.__class__().capabilities(), subagent_visibility=False)  # type: ignore[method-assign]
+    service = SubagentControlService(EventStore(Config.load(tmp_path).paths))
+    with pytest.raises(ControlPlaneSchemaError, match="does not expose subagent"):
+        service.delegate(
+            adapter=adapter,
+            parent=RunHandle("fixture", "native_parent", "trace_sub", "parent_1", "task_1"),
+            project_root=tmp_path,
+            contract=delegation_contract(),
+            control_policy=subagent_policy(),
+            policy=AdapterPolicy(),
+        )
+
+
+def test_subagent_policy_blocks_candidate_activation_and_budget_overrun() -> None:
+    with pytest.raises(ControlPlaneSchemaError, match="not active"):
+        subagent_policy(status="candidate").authorize(delegation_contract())
+    oversized = replace(delegation_contract(), token_budget=5000)
+    with pytest.raises(ControlPlaneSchemaError, match="token budget"):
+        subagent_policy().authorize(oversized)
+
+
+def test_subagent_merge_gate_persists_only_cited_verifier_evidence(tmp_path) -> None:
+    event_store = EventStore(Config.load(tmp_path).paths)
+    verification = AgentEvent.create(
+        trace_id="trace_merge",
+        run_id="verifier_1",
+        parent_run_id="parent_1",
+        task_id="task_1",
+        type="VERIFICATION",
+        actor="independent-verifier",
+        payload={"status": "passed"},
+    )
+    event_store.append(verification)
+    service = SubagentControlService(event_store)
+    decision = MergeDecision(
+        contract_id="delegation_1",
+        parent_run_id="parent_1",
+        child_run_id="child_1",
+        verifier_run_id="verifier_1",
+        decision="merge",
+        evidence=(EvidenceRef("event", verification.event_id),),
+        rationale="Independent verification passed.",
+    )
+    checkpoint = service.record_merge_decision(decision, task_id="task_1", trace_id="trace_merge")
+    assert checkpoint.type == "CHECKPOINT"
+    assert checkpoint.payload["checkpoint_type"] == "merge_gate"
+    assert checkpoint.evidence_refs == (verification.event_id,)
 
 
 def test_registry_requires_six_gates_and_supports_atomic_rollback(tmp_path) -> None:
@@ -277,3 +416,55 @@ def test_promotion_is_rejected_when_any_gate_fails() -> None:
             reviewer="human:maintainer",
             rollback_target={"version": "1"},
         )
+
+
+def test_promotion_gate_evaluator_produces_all_six_gates() -> None:
+    report = {
+        "baseline": {"eval_run_id": "baseline_1"},
+        "candidate": {"eval_run_id": "candidate_1"},
+        "invariant_check": {"valid": True},
+        "comparison": {"decision": "improve", "totals": {"regressions": 0, "cost_delta": 0.05}},
+    }
+    result = PromotionGateEvaluator().evaluate(
+        candidate(),
+        report,
+        reviewer="maintainer",
+        human_approved=True,
+        thresholds=PromotionThresholds(max_cost_increase=0.1),
+    )
+    assert result.decision == "promote"
+    assert {gate.gate for gate in result.gates} == {"evidence", "quality", "regression", "cost", "human", "rollback"}
+
+
+def test_promotion_gate_evaluator_abstains_without_human_approval() -> None:
+    report = {
+        "baseline": {"eval_run_id": "baseline_1"},
+        "candidate": {"eval_run_id": "candidate_1"},
+        "invariant_check": {"valid": True},
+        "comparison": {"decision": "improve", "totals": {"regressions": 0, "cost_delta": 0.0}},
+    }
+    result = PromotionGateEvaluator().evaluate(candidate(), report, reviewer="maintainer", human_approved=False)
+    assert result.decision == "abstain"
+    assert next(gate for gate in result.gates if gate.gate == "human").passed is False
+
+
+def test_quality_tie_never_promotes_unknown_objective_results() -> None:
+    report = {
+        "baseline": {"eval_run_id": "baseline_1"},
+        "candidate": {"eval_run_id": "candidate_1"},
+        "invariant_check": {"valid": True},
+        "comparison": {
+            "decision": "inconclusive",
+            "totals": {"regressions": 0, "cost_delta": 0.0},
+            "task_results": [{"task_id": "task_1", "transition": "unknown"}],
+        },
+    }
+    result = PromotionGateEvaluator().evaluate(
+        candidate(),
+        report,
+        reviewer="maintainer",
+        human_approved=True,
+        thresholds=PromotionThresholds(require_quality_improvement=False),
+    )
+    assert result.decision == "abstain"
+    assert next(gate for gate in result.gates if gate.gate == "quality").passed is False

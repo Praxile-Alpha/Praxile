@@ -85,7 +85,11 @@ class FixtureAgentAdapter:
             trace_id=trace_id,
             run_id=run_id,
             task_id=task.task_id,
-            metadata={"protocol_version": self.protocol_version, "policy_id": policy.policy_id},
+            metadata={
+                "protocol_version": self.protocol_version,
+                "policy_id": policy.policy_id,
+                "parent_run_id": task.metadata.get("parent_run_id"),
+            },
         )
         events = [self._event(handle, 0, "RUN_START", "fixture-runtime", {"instruction": task.instruction})]
         sequence = 1
@@ -198,6 +202,7 @@ class FixtureAgentAdapter:
             trace_id=handle.trace_id,
             run_id=handle.run_id,
             task_id=handle.task_id,
+            parent_run_id=(str(handle.metadata["parent_run_id"]) if handle.metadata.get("parent_run_id") else None),
             type=event_type,
             actor=actor,
             payload=payload,

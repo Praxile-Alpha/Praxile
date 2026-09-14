@@ -9,7 +9,97 @@ from .common import ControlPlaneSchemaError, EvidenceRef, evidence_refs, non_emp
 
 DELEGATION_CONTRACT_SCHEMA_VERSION = "praxile.delegation_contract.v1"
 MERGE_DECISION_SCHEMA_VERSION = "praxile.merge_decision.v1"
+SUBAGENT_POLICY_SCHEMA_VERSION = "praxile.subagent_policy.v1"
 CONTEXT_MODES = frozenset({"fresh", "isolated", "fork", "retrieved_only", "hybrid"})
+
+
+@dataclass(frozen=True)
+class SubagentPolicy:
+    policy_id: str
+    version: str
+    trigger_conditions: tuple[str, ...]
+    allowed_backends: tuple[str, ...]
+    allowed_context_modes: tuple[str, ...]
+    max_children: int
+    max_parallel: int
+    max_token_budget: int
+    max_time_budget_seconds: int
+    max_cost_budget: float
+    require_isolated_verifier: bool = True
+    status: str = "candidate"
+    schema_version: str = SUBAGENT_POLICY_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != SUBAGENT_POLICY_SCHEMA_VERSION:
+            raise ControlPlaneSchemaError(f"unsupported subagent policy schema: {self.schema_version}")
+        safe_id(self.policy_id, "subagent policy_id")
+        non_empty(self.version, "subagent policy version")
+        strings(self.trigger_conditions, "trigger_conditions", required=True)
+        strings(self.allowed_backends, "allowed_backends", required=True)
+        modes = strings(self.allowed_context_modes, "allowed_context_modes", required=True)
+        if any(mode not in CONTEXT_MODES for mode in modes):
+            raise ControlPlaneSchemaError("subagent policy contains an unsupported context mode")
+        for name in ("max_children", "max_parallel", "max_token_budget", "max_time_budget_seconds"):
+            strict_int(getattr(self, name), name, minimum=1)
+        if self.max_parallel > self.max_children:
+            raise ControlPlaneSchemaError("max_parallel cannot exceed max_children")
+        if self.max_cost_budget < 0:
+            raise ControlPlaneSchemaError("max_cost_budget must be non-negative")
+        if not isinstance(self.require_isolated_verifier, bool):
+            raise ControlPlaneSchemaError("require_isolated_verifier must be a boolean")
+        if self.status not in {"candidate", "approved", "active", "deprecated", "rolled_back"}:
+            raise ControlPlaneSchemaError(f"unsupported subagent policy status: {self.status!r}")
+
+    def authorize(self, contract: "DelegationContract", *, evaluation: bool = False) -> None:
+        if self.status != "active" and not (evaluation and self.status == "candidate"):
+            raise ControlPlaneSchemaError("subagent policy is not active outside evaluation")
+        if contract.backend not in self.allowed_backends:
+            raise ControlPlaneSchemaError(f"delegation backend is not allowed by policy: {contract.backend}")
+        if contract.context_mode not in self.allowed_context_modes:
+            raise ControlPlaneSchemaError(f"delegation context mode is not allowed by policy: {contract.context_mode}")
+        limits = (
+            (contract.token_budget, self.max_token_budget, "token"),
+            (contract.time_budget_seconds, self.max_time_budget_seconds, "time"),
+            (contract.cost_budget, self.max_cost_budget, "cost"),
+        )
+        for requested, maximum, name in limits:
+            if requested > maximum:
+                raise ControlPlaneSchemaError(f"delegation {name} budget exceeds subagent policy")
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "SubagentPolicy":
+        return cls(
+            schema_version=str(value.get("schema_version") or ""),
+            policy_id=str(value.get("policy_id") or ""),
+            version=str(value.get("version") or ""),
+            trigger_conditions=strings(value.get("trigger_conditions"), "trigger_conditions", required=True),
+            allowed_backends=strings(value.get("allowed_backends"), "allowed_backends", required=True),
+            allowed_context_modes=strings(value.get("allowed_context_modes"), "allowed_context_modes", required=True),
+            max_children=strict_int(value.get("max_children"), "max_children", minimum=1),
+            max_parallel=strict_int(value.get("max_parallel"), "max_parallel", minimum=1),
+            max_token_budget=strict_int(value.get("max_token_budget"), "max_token_budget", minimum=1),
+            max_time_budget_seconds=strict_int(value.get("max_time_budget_seconds"), "max_time_budget_seconds", minimum=1),
+            max_cost_budget=float(value.get("max_cost_budget", 0.0)),
+            require_isolated_verifier=value.get("require_isolated_verifier", True),
+            status=str(value.get("status") or ""),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "policy_id": self.policy_id,
+            "version": self.version,
+            "trigger_conditions": list(self.trigger_conditions),
+            "allowed_backends": list(self.allowed_backends),
+            "allowed_context_modes": list(self.allowed_context_modes),
+            "max_children": self.max_children,
+            "max_parallel": self.max_parallel,
+            "max_token_budget": self.max_token_budget,
+            "max_time_budget_seconds": self.max_time_budget_seconds,
+            "max_cost_budget": self.max_cost_budget,
+            "require_isolated_verifier": self.require_isolated_verifier,
+            "status": self.status,
+        }
 
 
 @dataclass(frozen=True)

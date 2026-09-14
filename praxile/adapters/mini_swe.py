@@ -185,6 +185,7 @@ class MiniSweAgentAdapter:
                 "native_runtime": "mini-swe-agent",
                 "trajectory_uri": self._uri(task.root, trajectory_path),
                 "stream_mode": "post_run_trajectory",
+                "parent_run_id": task.metadata.get("parent_run_id"),
             },
         )
         self._runs[native_run_id] = _MiniSweRun(
@@ -639,6 +640,7 @@ class MiniSweAgentAdapter:
             trace_id=handle.trace_id,
             run_id=handle.run_id,
             task_id=handle.task_id,
+            parent_run_id=(str(handle.metadata["parent_run_id"]) if handle.metadata.get("parent_run_id") else None),
             type=event_type,
             actor=actor,
             payload=payload,

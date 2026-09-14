@@ -7,11 +7,22 @@ from ..adapters import AdapterPolicy, MiniSweAgentAdapter
 from ..eval.v2 import (
     BenchmarkEvalRunner,
     ContextCandidate,
+    ContextPolicyAblation,
     ControlledABExperiment,
     FailureDiagnoser,
     OfficialSWEbenchEvaluator,
     PublicExperimentExporter,
     SWEbenchTaskLoader,
+)
+from ..control_plane import (
+    ContextPolicy,
+    HarnessCandidate,
+    HarnessEvolutionRegistry,
+    PromotionThresholds,
+    SkillAsset,
+    SkillAssetEvaluator,
+    SkillCaseResult,
+    SkillMarkdownProjector,
 )
 from ..trace import EventStore
 
@@ -319,6 +330,89 @@ def cmd_eval_ab_analyze(args: argparse.Namespace, project_root: Path) -> int:
     return 1 if report["comparison"]["decision"] == "regress" else 0
 
 
+def cmd_eval_context_ablation(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    policy_a = ContextPolicy.from_dict(_json_object(Path(args.policy_a), "policy A"))
+    policy_b = ContextPolicy.from_dict(_json_object(Path(args.policy_b), "policy B"))
+    context_a = _context_items(Path(args.context_a))
+    context_b = _context_items(Path(args.context_b))
+    adapter = MiniSweAgentAdapter(
+        model=args.model,
+        model_class=args.model_class,
+        config_specs=args.adapter_config,
+        environment=({"MSWEA_COST_TRACKING": args.cost_tracking} if args.cost_tracking != "default" else None),
+        default_timeout_seconds=args.timeout,
+    )
+    evaluator = OfficialSWEbenchEvaluator(timeout_seconds=args.timeout)
+    adapter_available, adapter_detail = adapter.availability()
+    if not adapter_available:
+        raise RuntimeError(f"mini-SWE-agent is unavailable: {adapter_detail}; install praxile[benchmark]")
+    evaluator_available, evaluator_detail = evaluator.availability()
+    if not evaluator_available:
+        raise RuntimeError(f"SWE-bench evaluator is unavailable: {evaluator_detail}")
+    loader = SWEbenchTaskLoader(dataset_name=args.dataset_name, split=args.split)
+    selection = {"instance_ids": args.instance_id, "development_size": args.development_size, "seed": args.seed}
+    task_set = loader.load(Path(args.tasks).expanduser().resolve(), **selection) if args.tasks else loader.load_huggingface(**selection)
+    source_overrides: dict[str, Path] = {}
+    for raw in args.source:
+        repo, separator, path = raw.partition("=")
+        if not separator or not repo.strip() or not path.strip():
+            raise ValueError(f"invalid --source {raw!r}; expected REPO=PATH")
+        source_overrides[repo.strip()] = Path(path).expanduser().resolve()
+    adapter_config_identity = []
+    for spec in args.adapter_config:
+        path = Path(spec).expanduser()
+        adapter_config_identity.append(
+            {"path": str(path.resolve()), "content_digest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()}
+            if path.is_file()
+            else {"spec": spec}
+        )
+    with adapter:
+        report = ContextPolicyAblation(config.paths.state, EventStore(config.paths)).run(
+            task_set,
+            adapter=adapter,
+            evaluator=evaluator,
+            policy_a=policy_a,
+            policy_b=policy_b,
+            context_a=context_a,
+            context_b=context_b,
+            model={
+                "model_name_or_path": args.model,
+                "provider": args.model.partition("/")[0] if "/" in args.model else None,
+                "model_class": args.model_class,
+                "cost_tracking": args.cost_tracking,
+                "adapter_config": adapter_config_identity,
+            },
+            experiment_id=args.experiment_id,
+            execution_policy=AdapterPolicy(
+                policy_id="p1-context-ablation-execution",
+                budgets={
+                    "wall_timeout_seconds": args.timeout,
+                    **({"max_cost": args.max_cost} if args.max_cost is not None else {}),
+                },
+                settings={
+                    "allow_unattended_execution": True,
+                    "workspace_isolated": True,
+                    "seed": args.seed,
+                    "step_limit": args.step_limit,
+                },
+            ),
+            resume=args.resume,
+            keep_workspaces=args.keep_workspaces,
+            source_overrides=source_overrides,
+        )
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        comparison = report["comparison"]
+        print(f"Context Policy ablation: {report['experiment_id']}")
+        print(f"A: {report['baseline']['policy_id']}@{report['baseline']['policy_version']}")
+        print(f"B: {report['candidate']['policy_id']}@{report['candidate']['policy_version']}")
+        print(f"Decision: {comparison['decision']} - {comparison['rationale']}")
+    return 1 if report["comparison"]["decision"] == "regress" else 0
+
+
 def cmd_eval_export_public(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
@@ -425,6 +519,94 @@ def cmd_harness_export(args: argparse.Namespace, project_root: Path) -> int:
     )
     print(f"Experiment bundle: {output}")
     return 0
+
+
+def cmd_harness_candidate_register(args: argparse.Namespace, project_root: Path) -> int:
+    candidate = HarnessCandidate.from_dict(_json_object(Path(args.candidate), "harness candidate"))
+    registry = HarnessEvolutionRegistry(project_root)
+    registry.register(candidate)
+    print(json.dumps(candidate.to_dict(), indent=2, ensure_ascii=False) if args.json else f"Registered {candidate.candidate_id} ({candidate.type})")
+    return 0
+
+
+def cmd_harness_candidate_list(args: argparse.Namespace, project_root: Path) -> int:
+    state = HarnessEvolutionRegistry(project_root).snapshot()
+    rows = []
+    for candidate_id, record in sorted(state["candidates"].items()):
+        candidate = record["candidate"]
+        rows.append({"candidate_id": candidate_id, "type": candidate["type"], "component_key": candidate["component_key"], "version": candidate["candidate_version"], "status": record["status"]})
+    if args.json:
+        print(json.dumps({"candidates": rows, "active": state["active"]}, indent=2, ensure_ascii=False))
+    elif not rows:
+        print("No V2 harness candidates.")
+    else:
+        for row in rows:
+            print(f"{row['candidate_id']}  type={row['type']} component={row['component_key']} version={row['version']} status={row['status']}")
+    return 0
+
+
+def cmd_harness_candidate_evaluate(args: argparse.Namespace, project_root: Path) -> int:
+    registry = HarnessEvolutionRegistry(project_root)
+    state = registry.snapshot()
+    record = state["candidates"].get(args.candidate_id)
+    if not record:
+        raise ValueError(f"Candidate not found: {args.candidate_id}")
+    candidate = HarnessCandidate.from_dict(record["candidate"])
+    ab_report = _json_object(Path(args.ab_report), "A/B report")
+    config, store = load(project_root)
+    store.initialize(config)
+    evaluation = BenchmarkEvalRunner(config.paths.state, EventStore(config.paths)).build_promotion_evaluation(
+        candidate,
+        ab_report,
+        reviewer=args.reviewer,
+        human_approved=bool(args.approve_human),
+        thresholds=PromotionThresholds(args.max_regressions, args.max_cost_increase, not args.allow_quality_tie),
+    )
+    registry.record_evaluation(evaluation)
+    print(json.dumps(evaluation.to_dict(), indent=2, ensure_ascii=False) if args.json else f"Candidate {args.candidate_id}: {evaluation.decision}")
+    return 0 if evaluation.decision == "promote" else 1
+
+
+def cmd_harness_candidate_promote(args: argparse.Namespace, project_root: Path) -> int:
+    HarnessEvolutionRegistry(project_root).promote(args.candidate_id, approved_by=args.approved_by)
+    print(f"Promoted {args.candidate_id}")
+    return 0
+
+
+def cmd_harness_candidate_rollback(args: argparse.Namespace, project_root: Path) -> int:
+    HarnessEvolutionRegistry(project_root).rollback(args.component_key, approved_by=args.approved_by)
+    print(f"Rolled back {args.component_key}")
+    return 0
+
+
+def cmd_harness_skill_evaluate(args: argparse.Namespace, project_root: Path) -> int:
+    skill = SkillAsset.from_dict(_json_object(Path(args.skill), "skill asset"))
+    raw_results = _json_object(Path(args.results), "skill case results")
+    if any(not isinstance(value, dict) for value in raw_results.values()):
+        raise ValueError("every skill case result must be a JSON object")
+    results = {key: SkillCaseResult.from_dict(value) for key, value in raw_results.items()}
+    report = SkillAssetEvaluator().evaluate(skill, results)
+    if args.markdown_output:
+        output = Path(args.markdown_output).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(SkillMarkdownProjector.render(skill, report), encoding="utf-8")
+        report["markdown_path"] = str(output)
+    print(json.dumps(report, indent=2, ensure_ascii=False) if args.json else f"Skill {skill.meta.asset_id}: {'eligible' if report['eligible_for_promotion'] else 'not eligible'}")
+    return 0 if report["eligible_for_promotion"] else 1
+
+
+def _json_object(path: Path, name: str) -> dict[str, Any]:
+    value = read_json(path.expanduser().resolve(), None)
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object: {path}")
+    return value
+
+
+def _context_items(path: Path) -> tuple[dict[str, Any], ...]:
+    value = read_json(path.expanduser().resolve(), None)
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"context items must be a JSON array of objects: {path}")
+    return tuple(value)
 
 
 def cmd_judge_calibrate(args: argparse.Namespace, project_root: Path) -> int:

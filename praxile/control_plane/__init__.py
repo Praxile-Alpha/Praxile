@@ -8,14 +8,19 @@ from .evolution import (
     GateResult,
     HarnessCandidate,
 )
+from .gates import PromotionGateEvaluator, PromotionThresholds
 from .registry import REGISTRY_SCHEMA_VERSION, HarnessEvolutionRegistry
+from .skill_eval import SKILL_EVALUATION_SCHEMA_VERSION, SkillAssetEvaluator, SkillCaseResult, SkillMarkdownProjector
 from .subagent import (
     DELEGATION_CONTRACT_SCHEMA_VERSION,
     MERGE_DECISION_SCHEMA_VERSION,
+    SUBAGENT_POLICY_SCHEMA_VERSION,
     DelegationContract,
     MergeDecision,
+    SubagentPolicy,
     validate_delegation_trace,
 )
+from .subagent_service import DelegationResult, SubagentControlService
 
 __all__ = [
     "ASSET_META_SCHEMA_VERSION",
@@ -27,18 +32,28 @@ __all__ = [
     "MERGE_DECISION_SCHEMA_VERSION",
     "REGISTRY_SCHEMA_VERSION",
     "SKILL_ASSET_SCHEMA_VERSION",
+    "SKILL_EVALUATION_SCHEMA_VERSION",
+    "SUBAGENT_POLICY_SCHEMA_VERSION",
     "AssetMeta",
     "CandidateEvaluation",
     "ContextPolicy",
     "ContextSourceRule",
     "ControlPlaneSchemaError",
     "DelegationContract",
+    "DelegationResult",
     "EvidenceRef",
     "GateResult",
     "HarnessCandidate",
     "HarnessEvolutionRegistry",
     "MergeDecision",
+    "PromotionGateEvaluator",
+    "PromotionThresholds",
     "SkillAsset",
+    "SkillAssetEvaluator",
+    "SkillCaseResult",
+    "SkillMarkdownProjector",
     "StageBudget",
+    "SubagentControlService",
+    "SubagentPolicy",
     "validate_delegation_trace",
 ]

@@ -123,6 +123,26 @@ class BenchmarkEvalRunner:
         write_json(self._run_root(run_id) / "report.json", report)
         return report
 
+    def build_promotion_evaluation(
+        self,
+        candidate: Any,
+        ab_report: Mapping[str, Any],
+        *,
+        reviewer: str,
+        human_approved: bool,
+        thresholds: Any = None,
+    ) -> Any:
+        """Build the six-gate governance decision from a completed A/B report."""
+        from ...control_plane.gates import PromotionGateEvaluator
+
+        return PromotionGateEvaluator().evaluate(
+            candidate,
+            ab_report,
+            reviewer=reviewer,
+            human_approved=human_approved,
+            thresholds=thresholds,
+        )
+
     def _run_task(
         self,
         task: EvalTask,
