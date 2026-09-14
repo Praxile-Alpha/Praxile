@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..trace import AgentEvent, ArtifactRecord, EventStore, RunHandle
+from ..utils import utc_now
 from .v2 import AdapterPolicy, AdapterProtocolError, AdapterTask, AgentAdapterV2, validate_adapter_v2
 
 
@@ -28,6 +29,7 @@ class AdapterRunner:
 
         events: list[AgentEvent] = []
         last_sequence: int | None = None
+        activation_emitted = False
         for event in adapter.stream_events(handle):
             self._validate_event(event, handle)
             if event.backend_sequence is not None:
@@ -36,6 +38,26 @@ class AdapterRunner:
                 last_sequence = event.backend_sequence
             self.event_store.append(event)
             events.append(event)
+            activation = task.metadata.get("context_activation")
+            if (
+                not activation_emitted
+                and event.run_id == handle.run_id
+                and event.type == "RUN_START"
+                and isinstance(activation, dict)
+            ):
+                decision_event = AgentEvent.create(
+                    event_id=f"{handle.run_id}:praxile:context-activation",
+                    timestamp=utc_now(),
+                    trace_id=handle.trace_id,
+                    run_id=handle.run_id,
+                    task_id=handle.task_id,
+                    type="CONTEXT_ACTIVATION",
+                    actor="praxile-control-plane",
+                    payload=activation,
+                )
+                self.event_store.append(decision_event)
+                events.append(decision_event)
+                activation_emitted = True
 
         root_events = [event for event in events if event.run_id == handle.run_id]
         if not root_events or root_events[0].type != "RUN_START" or root_events[-1].type != "RUN_END":

@@ -23,7 +23,7 @@ from praxile.eval.v2 import (
 )
 from praxile.control_plane import ContextPolicy, ContextSourceRule, StageBudget
 from praxile.trace import AgentEvent, EventStore
-from praxile.utils import utc_now
+from praxile.utils import read_json, utc_now
 
 
 pytestmark = [pytest.mark.resource, pytest.mark.sqlite_resource]
@@ -108,6 +108,15 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     assert report["invariant_check"]["valid"] is True
     assert report["comparison"]["decision"] == "inconclusive"
     assert report["comparison"]["trace_overhead"]["context_inject_event_delta"] == 1
+    assert report["activation_gate"]["activated_count"] == 1
+    assert report["activation_gate"]["abstained_count"] == 0
+    assert report["comparison"]["totals"]["candidate_context_activated"] == 1
+    candidate_run = report["candidate"]["eval_run_id"]
+    candidate_report = read_json(state / "eval" / "v2" / "runs" / candidate_run / "report.json", {})
+    candidate_trace = candidate_report["tasks"][0]["trace_id"]
+    candidate_events = store.list_events(trace_id=candidate_trace)
+    assert any(event.type == "CONTEXT_ACTIVATION" for event in candidate_events)
+    assert any(event.type == "CONTEXT_INJECT" for event in candidate_events)
     assert report["diagnoses"]["baseline"][0]["outcome"] == "no_failure"
     assert report["diagnoses"]["candidate"][0]["attribution"]["abstained"] is True
     root = state / "eval" / "v2" / "experiments" / "p0-c-fixture"
@@ -140,6 +149,76 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     for line in trace_text.splitlines():
         event = AgentEvent.from_json(line)
         assert event.extensions["public_export"]["redacted"] is True
+
+
+def test_controlled_ab_injects_candidate_only_for_semantically_matching_tasks(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    commit = _repo(source)
+    repository = RepositorySpec(
+        "owner/repo", commit, "https://invalid.example/owner/repo.git"
+    )
+    evaluation = SWEbenchEvaluationSpec("fixture", "test")
+    task_set = EvalTaskSet(
+        "semantic-held-out",
+        "fixture",
+        "test",
+        (
+            EvalTask("owner__repo-match", "Fix the parser regression", repository, evaluation),
+            EvalTask("owner__repo-abstain", "Improve documentation headings", repository, evaluation),
+        ),
+    )
+    digest = "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest()
+    candidate = ContextCandidate(
+        candidate_id="parser-context",
+        version="1",
+        title="Focus parser regressions",
+        candidate_type="experience_activation",
+        context_item={"content": "Start from one focused parser regression."},
+        confidence=0.7,
+        evidence_refs=("event:event-training",),
+        expected_effect={"tool_calls": "decrease"},
+        source_task_ids=("training-task",),
+        applies_to={"repositories": ["owner/repo"], "task_signals": ["parser regression"]},
+    )
+    config = Config.load(tmp_path / "control")
+    state = tmp_path / "state"
+    store = EventStore(config.paths)
+
+    report = ControlledABExperiment(state, store).run(
+        task_set,
+        adapter=FixtureAgentAdapter(
+            artifacts=[FixtureArtifact("workspace_patch", "candidate.patch", digest)]
+        ),
+        evaluator=PassingEvaluator(),
+        baseline_policy=AdapterPolicy(
+            policy_id="baseline", settings={"workspace_isolated": True}
+        ),
+        candidate=candidate,
+        model={"model_name_or_path": "fixture", "cost_tracking": "default"},
+        experiment_id="semantic-activation-fixture",
+        source_overrides={"owner/repo": source},
+    )
+
+    assert report["activation_gate"]["activated_count"] == 1
+    assert report["activation_gate"]["abstained_count"] == 1
+    assert report["comparison"]["totals"]["candidate_context_activated"] == 1
+    assert report["comparison"]["totals"]["candidate_context_abstained"] == 1
+    run_report = read_json(
+        state / "eval" / "v2" / "runs" / report["candidate"]["eval_run_id"] / "report.json",
+        {},
+    )
+    task_results = {item["task_id"]: item for item in run_report["tasks"]}
+    assert task_results["owner__repo-match"]["context_activation"]["status"] == "activated"
+    assert task_results["owner__repo-abstain"]["context_activation"]["status"] == "abstained"
+    for task_id, expected_injections in (
+        ("owner__repo-match", 1),
+        ("owner__repo-abstain", 0),
+    ):
+        events = store.list_events(trace_id=task_results[task_id]["trace_id"])
+        assert sum(event.type == "CONTEXT_ACTIVATION" for event in events) == 1
+        assert sum(event.type == "CONTEXT_INJECT" for event in events) == expected_injections
 
 
 def test_two_complete_context_policies_run_under_frozen_invariants(tmp_path: Path) -> None:

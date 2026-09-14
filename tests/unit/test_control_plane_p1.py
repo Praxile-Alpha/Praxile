@@ -423,7 +423,11 @@ def test_promotion_gate_evaluator_produces_all_six_gates() -> None:
         "baseline": {"eval_run_id": "baseline_1"},
         "candidate": {"eval_run_id": "candidate_1"},
         "invariant_check": {"valid": True},
-        "comparison": {"decision": "improve", "totals": {"regressions": 0, "cost_delta": 0.05}},
+        "comparison": {
+            "decision": "improve",
+            "totals": {"regressions": 0, "cost_delta": 0.05},
+            "task_results": [{"diff_scope": {"candidate_status": "passed", "passed": True}}],
+        },
     }
     result = PromotionGateEvaluator().evaluate(
         candidate(),
@@ -441,7 +445,11 @@ def test_promotion_gate_evaluator_abstains_without_human_approval() -> None:
         "baseline": {"eval_run_id": "baseline_1"},
         "candidate": {"eval_run_id": "candidate_1"},
         "invariant_check": {"valid": True},
-        "comparison": {"decision": "improve", "totals": {"regressions": 0, "cost_delta": 0.0}},
+        "comparison": {
+            "decision": "improve",
+            "totals": {"regressions": 0, "cost_delta": 0.0},
+            "task_results": [{"diff_scope": {"candidate_status": "passed", "passed": True}}],
+        },
     }
     result = PromotionGateEvaluator().evaluate(candidate(), report, reviewer="maintainer", human_approved=False)
     assert result.decision == "abstain"
@@ -456,7 +464,13 @@ def test_quality_tie_never_promotes_unknown_objective_results() -> None:
         "comparison": {
             "decision": "inconclusive",
             "totals": {"regressions": 0, "cost_delta": 0.0},
-            "task_results": [{"task_id": "task_1", "transition": "unknown"}],
+            "task_results": [
+                {
+                    "task_id": "task_1",
+                    "transition": "unknown",
+                    "diff_scope": {"candidate_status": "passed", "passed": True},
+                }
+            ],
         },
     }
     result = PromotionGateEvaluator().evaluate(
@@ -468,3 +482,31 @@ def test_quality_tie_never_promotes_unknown_objective_results() -> None:
     )
     assert result.decision == "abstain"
     assert next(gate for gate in result.gates if gate.gate == "quality").passed is False
+
+
+def test_diff_scope_review_blocks_quality_gate_even_when_ab_improves() -> None:
+    report = {
+        "baseline": {"eval_run_id": "baseline_1"},
+        "candidate": {"eval_run_id": "candidate_1"},
+        "invariant_check": {"valid": True},
+        "comparison": {
+            "decision": "improve",
+            "totals": {"regressions": 0, "cost_delta": 0.0},
+            "task_results": [
+                {
+                    "task_id": "task_1",
+                    "transition": "unchanged",
+                    "diff_scope": {"candidate_status": "review_required", "passed": False},
+                }
+            ],
+        },
+    }
+
+    result = PromotionGateEvaluator().evaluate(
+        candidate(), report, reviewer="maintainer", human_approved=True
+    )
+
+    quality = next(gate for gate in result.gates if gate.gate == "quality")
+    assert quality.passed is False
+    assert "diff_scope_passed=False" in quality.summary
+    assert result.decision == "reject"

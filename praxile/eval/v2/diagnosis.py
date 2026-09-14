@@ -218,6 +218,15 @@ class FailureDiagnoser:
                 payload.get("truncated") or payload.get("missing") or status in {"failed", "rejected", "missing"}
             ):
                 found.append(FailureDetection("CONTEXT", "context_delivery_degraded", "Injected context was missing, truncated, or rejected.", refs))
+            if event.type == "PREFLIGHT" and status == "failed":
+                found.append(
+                    FailureDetection(
+                        "ENVIRONMENT",
+                        "workspace_preflight_failed",
+                        "The adapter rejected the execution workspace before launching the agent.",
+                        refs,
+                    )
+                )
             if event.type == "TOOL_RESULT":
                 returncode = payload.get("returncode")
                 failed = status in {"failed", "error", "timeout", "timed_out"} or (

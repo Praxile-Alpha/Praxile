@@ -29,6 +29,15 @@ A policy declares context sources, stage applicability, source budgets, retrieva
 
 Context sources are task/spec, repository map, current state/checkpoint, recent trajectory, retrieved experience, retrieved skill, tool result, subagent result, and artifact/diff/test evidence.
 
+Experience candidates with `applies_to.repositories`, `task_signals`, or
+`does_not_apply_when` pass a deterministic semantic activation gate before
+execution. The gate requires repository scope plus a configured task-signal
+coverage threshold, gives anti-scope precedence, and abstains when evidence is
+missing. The immutable experiment manifest stores the complete activation plan;
+each run emits `CONTEXT_ACTIVATION`, while only activated tasks emit
+`CONTEXT_INJECT`. Activation uses task text and metadata but persists only
+matched terms, scores, thresholds, and reasons.
+
 ### Skill Asset
 
 A V2 Skill is not a `SKILL.md` prompt. It contains typed inputs, preconditions, context requirements, allowed tools, procedure, verification contract, known failure modes, scope, version, and eval cases. A human-readable Markdown projection may be added later, but the versioned JSON contract is authoritative.
@@ -48,6 +57,14 @@ Candidate types are Prompt, Context Policy, Retrieval, Skill, Tool Policy, Model
 5. Human
 6. Rollback
 
+Quality includes a mandatory diff-scope/minimality sub-gate for benchmark
+evidence. Every candidate task result records changed files and lines, source and
+test component scopes, threshold policy, and explicit review reasons. Missing
+scope evidence or a candidate marked `review_required` fails Quality even when
+resolution, token, or latency metrics improve. This does not create a seventh
+gate or silently modify the A/B outcome; it makes the existing Quality gate
+explainable and resistant to broad incidental patches.
+
 The local registry stores candidate, evaluation, active pointer, and history in one atomically replaced state file. Rollback restores the previous active pointer and never deletes evidence.
 
 ## Migration and rollback
@@ -61,9 +78,13 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Versioned context source and stage-budget schemas.
 - [x] Candidate versus active compilation boundary.
 - [x] Explicit `AdapterPolicy` bridge and policy-use metadata.
+- [x] Repository-, semantic-signal-, and anti-scope-aware candidate activation
+  with auditable abstention.
 - [ ] Persist per-run source utilization and compression decisions in trace events.
 - [x] Run two complete Context Policies under frozen task/model/adapter/evaluator invariants (fixture acceptance).
-- [ ] Publish a model-backed Context Policy ablation on a fixed task set.
+- [x] Publish a model-backed Context/Experience ablation on a fixed five-task
+  held-out set ([MiniMax M3 held-out result](baselines/P1_MINIMAX_M3_HELDOUT5_STOPPING_V1/README.md));
+  the result is inconclusive and explicitly not promoted.
 
 ### P1-B Skill Asset
 

@@ -124,7 +124,12 @@ class ContextCandidate:
                 f"clean-track candidate source tasks overlap evaluation tasks: {overlap}"
             )
 
-    def policy(self, baseline: AdapterPolicy) -> AdapterPolicy:
+    def policy(
+        self,
+        baseline: AdapterPolicy,
+        *,
+        activation_plan: Mapping[str, Any] | None = None,
+    ) -> AdapterPolicy:
         if baseline.context:
             raise EvalSchemaError("P0 baseline policy must not contain context")
         item = {
@@ -133,6 +138,8 @@ class ContextCandidate:
             "candidate_version": self.version,
             "candidate_digest": self.digest,
         }
+        if activation_plan is not None:
+            item["activation_gate"] = dict(activation_plan)
         return AdapterPolicy(
             policy_id=self.candidate_id,
             version=self.version,

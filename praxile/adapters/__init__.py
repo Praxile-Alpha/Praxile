@@ -2,6 +2,11 @@ from .base import AgentAdapter
 from .fixture import FixtureAgentAdapter, FixtureArtifact, FixtureEvent
 from .jsonl_adapter import GenericJSONLAdapter
 from .mini_swe import MiniSweAgentAdapter
+from .mini_swe_preflight import (
+    MINI_SWE_PREFLIGHT_SCHEMA_VERSION,
+    MiniSwePreflightReport,
+    run_mini_swe_preflight,
+)
 from .runner import AdapterRunResult, AdapterRunner
 from .v2 import (
     AGENT_ADAPTER_PROTOCOL_VERSION,
@@ -34,5 +39,8 @@ __all__ = [
     "FixtureEvent",
     "GenericJSONLAdapter",
     "MiniSweAgentAdapter",
+    "MINI_SWE_PREFLIGHT_SCHEMA_VERSION",
+    "MiniSwePreflightReport",
+    "run_mini_swe_preflight",
     "validate_adapter_v2",
 ]

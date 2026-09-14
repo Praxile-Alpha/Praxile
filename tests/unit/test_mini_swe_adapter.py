@@ -57,6 +57,19 @@ def test_mini_swe_requires_unattended_isolated_policy(tmp_path: Path) -> None:
         adapter.run(task, AdapterPolicy(settings={"allow_unattended_execution": True}))
 
 
+def test_mini_swe_rejects_missing_root_without_creating_it(tmp_path: Path) -> None:
+    root = tmp_path / "missing"
+    adapter = MiniSweAgentAdapter(command_prefix=[sys.executable])
+    policy = AdapterPolicy(
+        settings={"allow_unattended_execution": True, "workspace_isolated": True}
+    )
+
+    with pytest.raises(AdapterPolicyError, match="project root does not exist"):
+        adapter.run(AdapterTask("task_missing", "Fix it", str(root)), policy)
+
+    assert not root.exists()
+
+
 def test_mini_swe_command_injects_context_and_budgets_without_shell(tmp_path: Path) -> None:
     adapter = MiniSweAgentAdapter(
         command_prefix=["python", "fake.py"], model="model-a", model_class="litellm_textbased"
@@ -78,7 +91,11 @@ def test_mini_swe_command_injects_context_and_budgets_without_shell(tmp_path: Pa
     assert command[command.index("--model-class") + 1] == "litellm_textbased"
     assert command[command.index("--cost-limit") + 1] == "1.5"
     config_values = [command[index + 1] for index, value in enumerate(command) if value == "--config"]
-    assert config_values == ["mini.yaml", "agent.step_limit=50"]
+    assert config_values == ["mini.yaml", f"environment.cwd={tmp_path.resolve()}", "agent.step_limit=50"]
+    assert command[command.index("--environment-class") + 1] == "local"
+    instruction = command[command.index("--task") + 1]
+    assert str(tmp_path.resolve()) in instruction
+    assert "Do not search for or switch to /testbed" in instruction
 
 
 def test_mini_swe_rejects_existing_non_yaml_config_file(tmp_path: Path) -> None:
@@ -89,3 +106,40 @@ def test_mini_swe_rejects_existing_non_yaml_config_file(tmp_path: Path) -> None:
 
     with pytest.raises(AdapterPolicyError, match="must use the .yaml suffix"):
         adapter.run(AdapterTask("task_config", "Fix it", str(tmp_path)), policy)
+
+
+def test_mini_swe_preflight_rejects_container_swebench_config_in_local_mode(tmp_path: Path) -> None:
+    config = tmp_path / "swebench.yaml"
+    config.write_text('environment:\n  cwd: "/testbed"\n', encoding="utf-8")
+    adapter = MiniSweAgentAdapter(command_prefix=[sys.executable], config_specs=[str(config)])
+    policy = AdapterPolicy(
+        settings={"allow_unattended_execution": True, "workspace_isolated": True}
+    )
+
+    handle = adapter.run(AdapterTask("task_preflight", "Fix it", str(tmp_path)), policy)
+    events = list(adapter.stream_events(handle))
+
+    preflight = next(event for event in events if event.type == "PREFLIGHT")
+    assert preflight.payload["status"] == "failed"
+    assert "/testbed" in preflight.payload["blocking_reasons"][0]
+    assert events[-2].payload["native_exit_status"] == "PreflightFailed"
+    assert events[-1].payload["status"] == "failed"
+    adapter.close()
+
+
+def test_mini_swe_progress_distinguishes_tmp_scripts_from_repo_patch(tmp_path: Path) -> None:
+    trajectory = {
+        "messages": [
+            {"role": "assistant", "extra": {"actions": [{"command": "pwd"}]}},
+            {"role": "assistant", "extra": {"actions": [{"command": "cat > /tmp/repro.py"}]}},
+            {"role": "assistant", "extra": {"actions": [{"command": "sed -i 's/a/b/' source.py"}]}},
+        ]
+    }
+    patch = tmp_path / "workspace.patch"
+    patch.write_text("diff --git a/source.py b/source.py\n", encoding="utf-8")
+
+    progress = MiniSweAgentAdapter._progress(trajectory, tmp_path, patch)
+
+    assert progress["environment_probe_count"] == 1
+    assert progress["first_repo_write_action_heuristic"] == 3
+    assert progress["patch_created"] is True

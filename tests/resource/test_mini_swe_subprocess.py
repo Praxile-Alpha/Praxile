@@ -29,6 +29,8 @@ parser.add_argument("--exit-immediately", action="store_true")
 parser.add_argument("--model")
 parser.add_argument("--model-class")
 parser.add_argument("--cost-limit")
+parser.add_argument("--config", action="append")
+parser.add_argument("--environment-class")
 args = parser.parse_args()
 assert os.environ["MSWEA_CONFIGURED"] == "true"
 assert os.environ["MSWEA_SILENT_STARTUP"] == "1"
@@ -63,7 +65,12 @@ payload = {
                 "actions": [{"id": "native_call_1", "command": "pytest -q"}],
             },
         },
-        {"role": "tool", "content": "{\"returncode\": 0, \"output\": \"1 passed\"}", "tool_call_id": "native_call_1"},
+        {
+            "role": "tool",
+            "content": "{\"returncode\": 0, \"output\": \"1 passed\"}",
+            "tool_call_id": "native_call_1",
+            "extra": {"raw_output": "x" * 100000},
+        },
         {"role": "exit", "content": "Submitted", "extra": {"exit_status": "Submitted", "submission": "fixed parser"}},
     ],
 }
@@ -101,6 +108,8 @@ def test_mini_swe_subprocess_is_translated_and_committed(tmp_path: Path) -> None
     assert "TOOL_CALL" in event_types
     assert "TOOL_RESULT" in event_types
     assert "VERIFICATION" in event_types
+    assert "PREFLIGHT" in event_types
+    assert "PROGRESS" in event_types
     assert event_types[-1] == "RUN_END"
     model_event = next(event for event in result.events if event.type == "MODEL_CALL")
     assert model_event.payload["parse_status"] == "rejected"
@@ -114,10 +123,74 @@ def test_mini_swe_subprocess_is_translated_and_committed(tmp_path: Path) -> None
     assert successful_model_event.cost == 0.03
     verification = next(event for event in result.events if event.type == "VERIFICATION")
     assert verification.payload["status"] == "passed"
-    assert {item.type for item in result.artifacts} == {"native_trajectory", "process_stdout"}
+    tool_result = next(event for event in result.events if event.type == "TOOL_RESULT")
+    native_extra = tool_result.payload["native_message"]["extra"]
+    assert "raw_output" not in native_extra
+    assert native_extra["raw_output_meta"]["original_chars"] == 100000
+    assert len(tool_result.to_json().encode("utf-8")) < 10_000
+    assert {item.type for item in result.artifacts} == {
+        "adapter_preflight",
+        "native_trajectory",
+        "process_stdout",
+    }
     replay = runner.event_store.replay(result.handle.trace_id)
     assert replay["runs"][0]["status"] == "completed"
-    assert len(replay["artifacts"]) == 2
+    assert len(replay["artifacts"]) == 3
+    native_trajectory = next(item for item in result.artifacts if item.type == "native_trajectory")
+    native_path = tmp_path / native_trajectory.uri.removeprefix("project://")
+    assert "x" * 100000 in native_path.read_text(encoding="utf-8")
+    adapter.close()
+
+
+def test_stopping_policy_terminates_running_subprocess(tmp_path: Path) -> None:
+    fake = tmp_path / "incremental_mini.py"
+    fake.write_text(
+        """import argparse, json, time
+from pathlib import Path
+p = argparse.ArgumentParser()
+p.add_argument('--output')
+p.add_argument('--task')
+p.add_argument('--yolo', action='store_true')
+p.add_argument('--exit-immediately', action='store_true')
+p.add_argument('--config', action='append')
+p.add_argument('--environment-class')
+a, _ = p.parse_known_args()
+messages = []
+for i in range(2):
+    messages += [
+        {'role': 'assistant', 'extra': {'actions': [{'command': f'echo {i}'}]}},
+        {'role': 'tool', 'content': '<returncode>0</returncode>'},
+    ]
+    Path(a.output).write_text(json.dumps({'messages': messages, 'info': {}}))
+    time.sleep(0.3)
+time.sleep(30)
+""",
+        encoding="utf-8",
+    )
+    adapter = MiniSweAgentAdapter(command_prefix=[sys.executable, str(fake)])
+    policy = AdapterPolicy(
+        settings={
+            "allow_unattended_execution": True,
+            "workspace_isolated": True,
+            "stopping_policy": {
+                "enabled": True,
+                "max_steps_without_patch": 2,
+                "poll_interval_seconds": 0.1,
+            },
+        },
+        budgets={"wall_timeout_seconds": 10},
+    )
+
+    result = AdapterRunner(EventStore(Config.load(tmp_path).paths)).execute(
+        adapter,
+        AdapterTask("task_stop", "Investigate", str(tmp_path)),
+        policy,
+    )
+
+    stop = next(event for event in result.events if event.type == "STOP_DECISION")
+    assert stop.payload["reason"] == "exploration_budget_exhausted"
+    final = next(event for event in result.events if event.type == "FINAL_RESULT")
+    assert final.payload["status"] == "policy_stopped"
     adapter.close()
 
 

@@ -125,8 +125,12 @@ def cmd_eval_benchmark(args: argparse.Namespace, project_root: Path) -> int:
         settings={
             "allow_unattended_execution": True,
             "workspace_isolated": True,
+            "workspace_mode": "local",
+            "require_git_workspace": True,
             "seed": args.seed,
             "step_limit": args.step_limit,
+            "stopping_policy": _stopping_policy_settings(args.step_limit),
+            "diff_scope_policy": _diff_scope_policy_settings(),
         },
     )
     adapter_config_identity: list[dict[str, Any]] = []
@@ -264,8 +268,12 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
         settings={
             "allow_unattended_execution": True,
             "workspace_isolated": True,
+            "workspace_mode": "local",
+            "require_git_workspace": True,
             "seed": args.seed,
             "step_limit": args.step_limit,
+            "stopping_policy": _stopping_policy_settings(args.step_limit),
+            "diff_scope_policy": _diff_scope_policy_settings(),
         },
     )
     adapter_config_identity: list[dict[str, Any]] = []
@@ -394,8 +402,12 @@ def cmd_eval_context_ablation(args: argparse.Namespace, project_root: Path) -> i
                 settings={
                     "allow_unattended_execution": True,
                     "workspace_isolated": True,
+                    "workspace_mode": "local",
+                    "require_git_workspace": True,
                     "seed": args.seed,
                     "step_limit": args.step_limit,
+                    "stopping_policy": _stopping_policy_settings(args.step_limit),
+                    "diff_scope_policy": _diff_scope_policy_settings(),
                 },
             ),
             resume=args.resume,
@@ -681,5 +693,28 @@ def cmd_proposal_validate(args: argparse.Namespace, project_root: Path) -> int:
         elif report.get("error"):
             print(report["error"])
     return 0 if report["status"] == "validated" else 1
+
+def _stopping_policy_settings(step_limit: Any) -> dict[str, Any]:
+    try:
+        total_steps = max(1, int(step_limit))
+    except (TypeError, ValueError):
+        total_steps = 150
+    return {
+        "enabled": True,
+        "max_steps_without_patch": max(1, int(total_steps * 0.8)),
+        "max_steps_after_patch": max(5, int(total_steps * 0.14)),
+        "verified_grace_steps": 5,
+        "repeated_command_limit": 3,
+        "poll_interval_seconds": 0.5,
+    }
+
+
+def _diff_scope_policy_settings() -> dict[str, Any]:
+    return {
+        "max_files_changed": 8,
+        "max_changed_lines": 400,
+        "allow_cross_scope_tests": False,
+    }
+
 
 __all__ = [name for name in globals() if name.startswith("cmd_")]

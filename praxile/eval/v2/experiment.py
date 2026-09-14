@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from ...adapters import AdapterPolicy, AgentAdapterV2
 from ...trace import EventStore
 from ...utils import file_lock, read_json, utc_now, write_json
+from .activation import ContextActivationGate
 from .candidate import ContextCandidate
 from .diagnosis import FailureDiagnoser
 from .evaluator import TaskEvaluator
@@ -47,7 +48,10 @@ class ControlledABExperiment:
         if baseline_policy.context:
             raise EvalSchemaError("controlled P0 baseline policy must have empty context")
         candidate.validate_clean_track({task.task_id for task in task_set.tasks})
-        candidate_policy = candidate.policy(baseline_policy)
+        activation_plan = ContextActivationGate().plan(candidate, task_set.tasks)
+        candidate_policy = candidate.policy(
+            baseline_policy, activation_plan=activation_plan
+        )
         baseline_run_id = f"{experiment_id}.baseline"
         candidate_run_id = f"{experiment_id}.candidate"
         manifest_path = self._root(experiment_id) / "manifest.json"
@@ -64,6 +68,7 @@ class ControlledABExperiment:
             "candidate_run_id": candidate_run_id,
             "candidate": candidate.to_dict(),
             "candidate_digest": candidate.digest,
+            "activation_gate": activation_plan,
             "changed_variable": "policy.context[0]",
             "frozen_invariants": [
                 "task_set",
@@ -126,7 +131,13 @@ class ControlledABExperiment:
             raise EvalSchemaError("both A/B arm reports must exist before analysis")
         baseline_manifest = self.manifests.load(baseline_run_id)
         candidate_manifest = self.manifests.load(candidate_run_id)
-        invariant_check = check_ab_invariants(baseline_manifest, candidate_manifest, candidate)
+        activation_plan = plan.get("activation_gate")
+        invariant_check = check_ab_invariants(
+            baseline_manifest,
+            candidate_manifest,
+            candidate,
+            activation_plan=activation_plan if isinstance(activation_plan, Mapping) else None,
+        )
         if not invariant_check["valid"]:
             raise EvalSchemaError(f"A/B invariants changed: {invariant_check['violations']}")
         diagnoses = {
@@ -147,6 +158,7 @@ class ControlledABExperiment:
             "track": "clean",
             "candidate_id": candidate.candidate_id,
             "candidate_digest": candidate.digest,
+            "activation_gate": dict(activation_plan) if isinstance(activation_plan, Mapping) else None,
             "invariant_check": invariant_check,
             "baseline": _arm_summary(baseline_report),
             "candidate": _arm_summary(candidate_report),
@@ -184,6 +196,8 @@ def check_ab_invariants(
     baseline: EvalRunManifest,
     candidate: EvalRunManifest,
     context_candidate: ContextCandidate,
+    *,
+    activation_plan: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     left = dict(baseline.reproducibility)
     right = dict(candidate.reproducibility)
@@ -202,7 +216,8 @@ def check_ab_invariants(
             version=str(left_policy.get("version") or "1"),
             budgets=dict(left_policy.get("budgets") or {}),
             settings=dict(left_policy.get("settings") or {}),
-        )
+        ),
+        activation_plan=activation_plan,
     ).to_dict()
     if right_policy != expected:
         for key in sorted(set(right_policy) | set(expected)):
@@ -266,6 +281,14 @@ def compare_ab_reports(
                 if cost_comparable
                 else None
             ),
+            "progress": _progress_comparison(left, right),
+            "context_activation": right.get("context_activation"),
+            "diff_scope": {
+                "baseline": left.get("diff_scope"),
+                "candidate": right.get("diff_scope"),
+                "candidate_status": _diff_scope_status(right),
+                "passed": _diff_scope_status(right) == "passed",
+            },
         }
         task_rows.append(row)
         categories[category].append(row)
@@ -284,6 +307,20 @@ def compare_ab_reports(
                 if cost_comparable
                 else None
             ),
+            "progress": {
+                "baseline_patches_created": sum(
+                    bool(item["progress"]["baseline"].get("patch_created")) for item in task_rows
+                ),
+                "candidate_patches_created": sum(
+                    bool(item["progress"]["candidate"].get("patch_created")) for item in task_rows
+                ),
+                "environment_probe_delta": sum(
+                    int(item["progress"]["environment_probe_delta"]) for item in task_rows
+                ),
+                "repeated_command_delta": sum(
+                    int(item["progress"]["repeated_command_delta"]) for item in task_rows
+                ),
+            },
         }
     trace_overhead = _trace_overhead(baseline_tasks, candidate_tasks, event_store)
     decision, rationale = _decision(task_rows)
@@ -302,6 +339,19 @@ def compare_ab_reports(
                 round(sum(float(item["cost_delta"] or 0.0) for item in task_rows), 8)
                 if cost_comparable
                 else None
+            ),
+            "candidate_diff_scope_passed": sum(
+                bool(item["diff_scope"]["passed"]) for item in task_rows
+            ),
+            "candidate_diff_scope_review_required": sum(
+                item["diff_scope"]["candidate_status"] == "review_required"
+                for item in task_rows
+            ),
+            "candidate_context_activated": sum(
+                _activation_status(item) == "activated" for item in candidate_tasks.values()
+            ),
+            "candidate_context_abstained": sum(
+                _activation_status(item) == "abstained" for item in candidate_tasks.values()
             ),
         },
         "trace_overhead": trace_overhead,
@@ -367,6 +417,20 @@ def _transition(left: Any, right: Any) -> str:
     return "unchanged"
 
 
+def _diff_scope_status(result: Mapping[str, Any]) -> str:
+    scope = result.get("diff_scope")
+    if not isinstance(scope, Mapping):
+        return "missing"
+    return str(scope.get("status") or "missing")
+
+
+def _activation_status(result: Mapping[str, Any]) -> str:
+    activation = result.get("context_activation")
+    if not isinstance(activation, Mapping):
+        return "not_gated"
+    return str(activation.get("status") or "not_gated")
+
+
 def _tokens(result: Mapping[str, Any]) -> int:
     values = result.get("metrics", {}).get("tokens", {})
     return sum(int(values.get(key, 0)) for key in ("input", "output", "cache"))
@@ -378,6 +442,21 @@ def _metric(result: Mapping[str, Any], name: str) -> int:
 
 def _metric_float(result: Mapping[str, Any], name: str) -> float:
     return float(result.get("metrics", {}).get(name, 0.0))
+
+
+def _progress_comparison(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[str, Any]:
+    left_progress = left.get("metrics", {}).get("progress", {})
+    right_progress = right.get("metrics", {}).get("progress", {})
+    left_progress = dict(left_progress) if isinstance(left_progress, Mapping) else {}
+    right_progress = dict(right_progress) if isinstance(right_progress, Mapping) else {}
+    return {
+        "baseline": left_progress,
+        "candidate": right_progress,
+        "environment_probe_delta": int(right_progress.get("environment_probe_count", 0))
+        - int(left_progress.get("environment_probe_count", 0)),
+        "repeated_command_delta": int(right_progress.get("repeated_command_count", 0))
+        - int(left_progress.get("repeated_command_count", 0)),
+    }
 
 
 def _cost_comparable(left: EvalRunManifest, right: EvalRunManifest) -> bool:

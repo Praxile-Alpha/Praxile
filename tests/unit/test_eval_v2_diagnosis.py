@@ -100,6 +100,24 @@ def test_native_budget_exhaustion_is_policy_harness_evidence() -> None:
     assert diagnosis.detections[0].code == "execution_budget_exhausted"
 
 
+def test_failed_adapter_preflight_is_environment_evidence() -> None:
+    diagnosis = FailureDiagnoser().diagnose(
+        _result(resolved=None, status="error"),
+        [
+            _event(
+                "event-preflight",
+                "PREFLIGHT",
+                {"status": "failed", "blocking_reasons": ["workspace root mismatch"]},
+            ),
+            _event("event-end", "RUN_END", {"status": "failed"}),
+        ],
+    )
+
+    assert diagnosis.attribution.category == "ENVIRONMENT"
+    assert diagnosis.attribution.abstained is False
+    assert diagnosis.detections[0].code == "workspace_preflight_failed"
+
+
 def test_context_candidate_is_exactly_one_item_and_preserves_invariants() -> None:
     candidate = ContextCandidate(
         candidate_id="bounded-investigation",

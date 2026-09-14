@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import unquote, urlparse
 
-from ...adapters import AdapterPolicy, AdapterRunner, AgentAdapterV2
+from ...adapters import AdapterPolicy, AdapterRunner, AdapterTask, AgentAdapterV2
 from ...trace import AgentEvent, ArtifactRecord, EventStore
 from ...utils import new_id, path_is_relative_to, read_json, utc_now, write_json
 from .evaluator import TaskEvaluator, prediction_from_adapter_result
+from .diff_scope import analyze_diff_scope
+from .activation import resolve_task_policy
 from .manifest import EvalRunManifest, ImmutableManifestStore
 from .metrics import aggregate_metrics, trace_metrics
 from .repository import BenchmarkRepositoryPreparer
@@ -162,7 +164,9 @@ class BenchmarkEvalRunner:
         adapter_result = None
         prediction = None
         prediction_path = None
+        diff_scope = None
         preserved_artifacts: list[ArtifactRecord] = []
+        context_activation = None
         try:
             prepared = self.repositories.prepare(
                 task, eval_run_id=eval_run_id, source_override=source_override
@@ -172,7 +176,20 @@ class BenchmarkEvalRunner:
             adapter_task = task.to_adapter_task(
                 str(prepared.workspace_root), trace_id=trace_id, run_id=agent_run_id
             )
-            adapter_result = AdapterRunner(self.event_store).execute(adapter, adapter_task, policy)
+            effective_policy, context_activation = resolve_task_policy(policy, task.task_id)
+            if context_activation is not None:
+                adapter_task = AdapterTask(
+                    task_id=adapter_task.task_id,
+                    instruction=adapter_task.instruction,
+                    project_root=adapter_task.project_root,
+                    metadata={
+                        **dict(adapter_task.metadata),
+                        "context_activation": context_activation,
+                    },
+                )
+            adapter_result = AdapterRunner(self.event_store).execute(
+                adapter, adapter_task, effective_policy
+            )
             task_root = self._task_root(eval_run_id, task.task_id)
             preserved_artifacts = self._materialize_artifacts(
                 adapter_result.artifacts,
@@ -188,6 +205,11 @@ class BenchmarkEvalRunner:
                 model_name_or_path=model_name,
             )
             prediction_path = prediction.write_jsonl(task_root / "prediction.jsonl")
+            raw_diff_scope_policy = policy.settings.get("diff_scope_policy", {})
+            diff_scope_policy = (
+                raw_diff_scope_policy if isinstance(raw_diff_scope_policy, Mapping) else {}
+            )
+            diff_scope = analyze_diff_scope(task, prediction.model_patch, diff_scope_policy)
             evaluator_result = evaluator.evaluate(task, prediction, task_root / "evaluator")
             evaluator_event, evaluator_artifacts = self._record_evaluator_evidence(
                 task,
@@ -217,6 +239,8 @@ class BenchmarkEvalRunner:
                 "agent_run_id": adapter_result.handle.run_id,
                 "prediction_path": str(prediction_path),
                 "prediction_digest": "sha256:" + hashlib.sha256(prediction.model_patch.encode("utf-8")).hexdigest(),
+                "diff_scope": diff_scope,
+                "context_activation": context_activation,
                 "artifacts": [artifact.to_dict() for artifact in preserved_artifacts],
                 "evaluator": evaluator_result.to_dict(),
                 "metrics": metrics,
@@ -241,6 +265,8 @@ class BenchmarkEvalRunner:
                     if prediction
                     else None
                 ),
+                "diff_scope": diff_scope,
+                "context_activation": context_activation,
                 "artifacts": [artifact.to_dict() for artifact in preserved_artifacts],
                 "evaluator": {"status": "not_run", "resolved": None},
                 "metrics": trace_metrics(

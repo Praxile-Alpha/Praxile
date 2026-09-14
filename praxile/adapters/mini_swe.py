@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence, TextIO
@@ -23,13 +24,18 @@ from .v2 import (
     AdapterTask,
     AdapterUnavailableError,
 )
+from .mini_swe_preflight import MiniSwePreflightReport, run_mini_swe_preflight
+from .mini_swe_stopping import MiniSweStoppingDecision, MiniSweStoppingMonitor, MiniSweStoppingPolicy
+from .trace_normalization import bounded_native_message
 
 
 @dataclass
 class _MiniSweRun:
     task: AdapterTask
     policy: AdapterPolicy
-    process: subprocess.Popen[Any]
+    process: subprocess.Popen[Any] | None
+    preflight: MiniSwePreflightReport
+    preflight_path: Path
     trajectory_path: Path
     stdout_path: Path
     stderr_path: Path
@@ -40,6 +46,7 @@ class _MiniSweRun:
     events: list[AgentEvent] | None = None
     artifacts: list[ArtifactRecord] = field(default_factory=list)
     cancelled: bool = False
+    stopping_decision: MiniSweStoppingDecision | None = None
 
 
 class MiniSweAgentAdapter:
@@ -86,7 +93,7 @@ class MiniSweAgentAdapter:
             native_event_types=("messages", "extra.actions", "info.model_stats"),
             metadata={
                 "protocol_version": self.protocol_version,
-                "adapter_version": "1",
+                "adapter_version": "3",
                 "native_runtime": "mini-swe-agent>=2,<3",
                 "native_runtime_version": native_version,
                 "stream_mode": "post_run_trajectory",
@@ -139,11 +146,21 @@ class MiniSweAgentAdapter:
         run_id = str(task.metadata.get("run_id") or new_id("run"))
         run_root = task.root / ".praxile" / "trace" / "native" / run_id
         run_root.mkdir(parents=True, exist_ok=False)
+        preflight_path = run_root / "preflight.json"
         trajectory_path = run_root / "trajectory.traj.json"
         stdout_path = run_root / "stdout.log"
         stderr_path = run_root / "stderr.log"
         stdout_handle = stdout_path.open("w", encoding="utf-8")
         stderr_handle = stderr_path.open("w", encoding="utf-8")
+        preflight = run_mini_swe_preflight(
+            task.root,
+            settings=policy.settings,
+            config_specs=self.config_specs,
+        )
+        preflight_path.write_text(
+            json.dumps(preflight.to_dict(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
         command = self._command(task, policy, trajectory_path, resolved_executable=resolved)
         env = os.environ.copy()
         env.update(self.environment)
@@ -158,21 +175,26 @@ class MiniSweAgentAdapter:
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         else:
             kwargs["start_new_session"] = True
-        try:
-            process = subprocess.Popen(
-                command,
-                cwd=task.root,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                env=env,
-                shell=False,
-                **kwargs,
-            )
-        except Exception:
+        process: subprocess.Popen[Any] | None = None
+        if preflight.passed:
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=task.root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    env=env,
+                    shell=False,
+                    **kwargs,
+                )
+            except Exception:
+                stdout_handle.close()
+                stderr_handle.close()
+                raise
+        else:
             stdout_handle.close()
             stderr_handle.close()
-            raise
 
         handle = RunHandle(
             adapter=self.name,
@@ -186,12 +208,17 @@ class MiniSweAgentAdapter:
                 "trajectory_uri": self._uri(task.root, trajectory_path),
                 "stream_mode": "post_run_trajectory",
                 "parent_run_id": task.metadata.get("parent_run_id"),
+                "workspace_mode": preflight.workspace_mode,
+                "workspace_root": preflight.workspace_root,
+                "preflight_uri": self._uri(task.root, preflight_path),
             },
         )
         self._runs[native_run_id] = _MiniSweRun(
             task=task,
             policy=policy,
             process=process,
+            preflight=preflight,
+            preflight_path=preflight_path,
             trajectory_path=trajectory_path,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
@@ -219,12 +246,13 @@ class MiniSweAgentAdapter:
         if state.events is not None:
             return
         state.cancelled = True
-        self._terminate(state.process)
+        if state.process is not None:
+            self._terminate(state.process)
         self._close_handles(state)
 
     def close(self) -> None:
         for state in self._runs.values():
-            if state.process.poll() is None:
+            if state.process is not None and state.process.poll() is None:
                 self._terminate(state.process)
             self._close_handles(state)
 
@@ -250,8 +278,11 @@ class MiniSweAgentAdapter:
         model_class = str(policy.settings.get("model_class") or self.model_class or "").strip()
         if model_class:
             command.extend(["--model-class", model_class])
-        for spec in self.config_specs:
+        effective_specs = list(self.config_specs or ("mini.yaml",))
+        effective_specs.append(f"environment.cwd={task.root.resolve()}")
+        for spec in effective_specs:
             command.extend(["--config", spec])
+        command.extend(["--environment-class", "local"])
         step_limit = policy.settings.get("step_limit")
         if step_limit is not None:
             try:
@@ -260,8 +291,6 @@ class MiniSweAgentAdapter:
                 raise AdapterPolicyError("step_limit must be an integer") from exc
             if parsed_step_limit <= 0:
                 raise AdapterPolicyError("step_limit must be greater than zero")
-            if not self.config_specs:
-                command.extend(["--config", "mini.yaml"])
             command.extend(["--config", f"agent.step_limit={parsed_step_limit}"])
         max_cost = policy.budgets.get("max_cost")
         if max_cost is not None:
@@ -270,24 +299,32 @@ class MiniSweAgentAdapter:
 
     @staticmethod
     def _instruction(task: AdapterTask, policy: AdapterPolicy) -> str:
-        if not policy.context:
-            return task.instruction
-        serialized = json.dumps([dict(item) for item in policy.context], ensure_ascii=False, sort_keys=True)
-        return (
-            f"{task.instruction}\n\n"
-            "<praxile_context policy_id=\""
-            f"{policy.policy_id}\" policy_version=\"{policy.version}\">\n{serialized}\n</praxile_context>"
-        )
+        root = task.root.resolve()
+        parts = [
+            task.instruction,
+            (
+                "<praxile_workspace_contract mode=\"local\">\n"
+                f"The repository root is exactly: {root}\n"
+                "Every command starts in that directory. Use repository-relative paths. "
+                "Do not search for or switch to /testbed. Do not install project dependencies globally.\n"
+                "The harness has already validated the workspace. Spend the bounded step budget on "
+                "reproduction, the smallest evidence-backed repository change, and verification. "
+                "If half the budget is consumed without a repository change, stop repeating environment "
+                "or repository census commands and either implement the best-supported patch or finish "
+                "with an explicit blocker.\n"
+                "</praxile_workspace_contract>"
+            ),
+        ]
+        if policy.context:
+            serialized = json.dumps([dict(item) for item in policy.context], ensure_ascii=False, sort_keys=True)
+            parts.append(
+                "<praxile_context policy_id=\""
+                f"{policy.policy_id}\" policy_version=\"{policy.version}\">\n{serialized}\n</praxile_context>"
+            )
+        return "\n\n".join(parts)
 
     def _finish_and_translate(self, handle: RunHandle, state: _MiniSweRun) -> list[AgentEvent]:
-        timed_out = False
-        try:
-            state.process.wait(timeout=state.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            self._terminate(state.process)
-        finally:
-            self._close_handles(state)
+        timed_out = self._wait_for_process(state)
 
         trajectory: dict[str, Any] = {}
         parse_error: str | None = None
@@ -303,9 +340,25 @@ class MiniSweAgentAdapter:
 
         events = self._translate_messages(handle, state, trajectory)
         patch_path = state.trajectory_path.parent / "workspace.patch"
-        self._capture_workspace_patch(state.task.root, patch_path)
+        if state.preflight.passed:
+            self._capture_workspace_patch(state.task.root, patch_path)
+        progress = self._progress(trajectory, state.task.root, patch_path)
         sequence = len(events)
+        events.append(self._event(handle, sequence, "PROGRESS", "mini-swe-adapter", progress))
+        sequence += 1
+        if state.stopping_decision is not None:
+            events.append(
+                self._event(
+                    handle,
+                    sequence,
+                    "STOP_DECISION",
+                    "praxile-control-plane",
+                    state.stopping_decision.to_dict(),
+                )
+            )
+            sequence += 1
         for path, artifact_type, media_type in (
+            (state.preflight_path, "adapter_preflight", "application/json"),
             (state.trajectory_path, "native_trajectory", "application/json"),
             (patch_path, "workspace_patch", "text/x-diff"),
             (state.stdout_path, "process_stdout", "text/plain"),
@@ -342,11 +395,17 @@ class MiniSweAgentAdapter:
 
         info = trajectory.get("info", {}) if isinstance(trajectory.get("info"), Mapping) else {}
         native_status = str(info.get("exit_status") or "")
-        if state.cancelled:
+        if not state.preflight.passed:
+            status = "failed"
+            native_status = "PreflightFailed"
+        elif state.cancelled:
             status = "cancelled"
         elif timed_out:
             status = "timed_out"
-        elif state.process.returncode == 0 and trajectory:
+        elif state.stopping_decision is not None:
+            status = "policy_stopped"
+            native_status = "PraxileStoppingPolicy"
+        elif state.process is not None and state.process.returncode == 0 and trajectory:
             status = "completed" if native_status in {"", "Submitted", "Success", "completed"} else "failed"
         else:
             status = "failed"
@@ -354,8 +413,12 @@ class MiniSweAgentAdapter:
             "status": status,
             "native_exit_status": native_status,
             "submission": info.get("submission", ""),
-            "process_returncode": state.process.returncode,
+            "process_returncode": state.process.returncode if state.process is not None else None,
+            "preflight_status": state.preflight.status,
+            "patch_created": progress["patch_created"],
         }
+        if state.stopping_decision is not None:
+            final_payload["stopping_decision"] = state.stopping_decision.to_dict()
         if parse_error:
             final_payload["trajectory_parse_error"] = parse_error
         events.append(self._event(handle, sequence, "FINAL_RESULT", "mini-swe-agent", final_payload))
@@ -386,6 +449,17 @@ class MiniSweAgentAdapter:
             )
         ]
         sequence = 1
+        events.append(
+            self._event(
+                handle,
+                sequence,
+                "PREFLIGHT",
+                "mini-swe-adapter",
+                state.preflight.to_dict(),
+                native_payload_ref=self._uri(state.task.root, state.preflight_path),
+            )
+        )
+        sequence += 1
         if state.policy.context:
             events.append(
                 self._event(
@@ -427,13 +501,18 @@ class MiniSweAgentAdapter:
             if role == "assistant" or actions or is_rejected_model_call:
                 usage = self._token_usage(message, extra)
                 cost = self._float_or_none(extra.get("cost"))
-                payload: dict[str, Any] = {"message_index": index, "native_message": message}
+                payload: dict[str, Any] = {
+                    "message_index": index,
+                    "native_message": bounded_native_message(message),
+                }
                 if is_rejected_model_call:
                     payload.update(
                         {
                             "parse_status": "rejected",
                             "parse_error_type": extra.get("interrupt_type", "FormatError"),
-                            "model_response": rejected_model_response,
+                            "model_response": bounded_native_message(
+                                {"value": rejected_model_response}
+                            )["value"],
                         }
                     )
                 events.append(
@@ -459,7 +538,10 @@ class MiniSweAgentAdapter:
                         sequence,
                         "TOOL_CALL",
                         "mini-swe-agent",
-                        {"message_index": index, "action": action},
+                        {
+                            "message_index": index,
+                            "action": bounded_native_message(action),
+                        },
                         tool_call_id=tool_call_id,
                         native_payload_ref=native_ref,
                     )
@@ -478,7 +560,10 @@ class MiniSweAgentAdapter:
                         sequence,
                         "TOOL_RESULT",
                         "mini-swe-agent:environment",
-                        {"message_index": index, "native_message": message},
+                        {
+                            "message_index": index,
+                            "native_message": bounded_native_message(message),
+                        },
                         tool_call_id=observed_call_id or None,
                         native_payload_ref=native_ref,
                     )
@@ -505,6 +590,134 @@ class MiniSweAgentAdapter:
                     )
                     sequence += 1
         return events
+
+    def _wait_for_process(self, state: _MiniSweRun) -> bool:
+        if state.process is None:
+            return False
+        deadline = time.monotonic() + state.timeout_seconds
+        policy = MiniSweStoppingPolicy.from_settings(state.policy.settings)
+        monitor = MiniSweStoppingMonitor(policy)
+        timed_out = False
+        try:
+            while state.process.poll() is None:
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    self._terminate(state.process)
+                    break
+                if policy.enabled:
+                    trajectory = self._read_partial_trajectory(state.trajectory_path)
+                    if trajectory:
+                        decision = monitor.evaluate(
+                            trajectory,
+                            patch_present=self._workspace_has_patch(state.task.root),
+                        )
+                        if decision is not None:
+                            state.stopping_decision = decision
+                            self._terminate(state.process)
+                            break
+                time.sleep(policy.poll_interval_seconds if policy.enabled else min(0.5, state.timeout_seconds))
+            if state.process.poll() is None:
+                self._terminate(state.process)
+        finally:
+            self._close_handles(state)
+        return timed_out
+
+    @staticmethod
+    def _read_partial_trajectory(path: Path) -> dict[str, Any]:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+        return dict(value) if isinstance(value, Mapping) else {}
+
+    @staticmethod
+    def _workspace_has_patch(root: Path) -> bool:
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all",
+                    "--",
+                    ".",
+                    ":(exclude).praxile",
+                    ":(exclude).praxile/**",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+                shell=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return result.returncode == 0 and bool(result.stdout.strip())
+
+    @classmethod
+    def _progress(cls, trajectory: Mapping[str, Any], root: Path, patch_path: Path) -> dict[str, Any]:
+        commands: list[str] = []
+        messages = trajectory.get("messages", [])
+        if isinstance(messages, list):
+            for raw in messages:
+                if not isinstance(raw, Mapping):
+                    continue
+                extra = raw.get("extra")
+                extra = extra if isinstance(extra, Mapping) else {}
+                for action in cls._actions(raw, extra):
+                    command = action.get("command")
+                    if isinstance(command, str) and command.strip():
+                        commands.append(command.strip())
+        normalized = [re.sub(r"\s+", " ", item).strip() for item in commands]
+        seen: set[str] = set()
+        repeated = 0
+        first_write: int | None = None
+        environment_probes = 0
+        for index, command in enumerate(normalized, start=1):
+            if command in seen:
+                repeated += 1
+            seen.add(command)
+            if cls._is_environment_probe(command):
+                environment_probes += 1
+            if first_write is None and cls._is_likely_repo_write(command, root):
+                first_write = index
+        patch_created = patch_path.is_file() and patch_path.stat().st_size > 0
+        return {
+            "workspace_root": str(root.resolve()),
+            "tool_action_count": len(commands),
+            "environment_probe_count": environment_probes,
+            "repeated_command_count": repeated,
+            "first_repo_write_action_heuristic": first_write,
+            "patch_created": patch_created,
+            "patch_created_after_action": first_write if patch_created else None,
+            "measurement_notes": [
+                "write timing is inferred from shell command shape",
+                "patch_created is measured from the final Git workspace diff",
+            ],
+        }
+
+    @staticmethod
+    def _is_environment_probe(command: str) -> bool:
+        return bool(
+            re.search(r"(^|[;&|]\s*)(pwd|git\s+rev-parse|which\s+python|python\s+--version)(\s|$)", command)
+            or "/testbed" in command
+        )
+
+    @staticmethod
+    def _is_likely_repo_write(command: str, root: Path) -> bool:
+        if re.search(r"(?:^|\s)(?:/tmp|\$TMPDIR|\$\{TMPDIR\})(?:/|\s|$)", command):
+            return False
+        root_text = re.escape(str(root.resolve()))
+        write_operator = rf"(?:>|>>|\btee\b|\bsed\s+-i\b|\bapply_patch\b|\bpatch\s+-p\d|\bgit\s+apply\b)"
+        if not re.search(write_operator, command):
+            return False
+        absolute_targets = re.findall(r"(?:>|>>|\btee(?:\s+-a)?\s+)(/[^\s;&|]+)", command)
+        if absolute_targets and not any(re.match(rf"^{root_text}(?:/|$)", item) for item in absolute_targets):
+            return False
+        return True
 
     @staticmethod
     def _actions(message: Mapping[str, Any], extra: Mapping[str, Any]) -> list[dict[str, Any]]:

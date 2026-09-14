@@ -66,19 +66,29 @@ allowed to evaluate on its source task.
 
 ```bash
 praxile eval ab docs/candidates/P0_C_BOUNDED_INVESTIGATION.json \
-  --experiment-id p0-c-bounded-investigation-001 \
+  --experiment-id p0-c-bounded-investigation-budget150-001 \
   --dataset-name SWE-bench/SWE-bench_Lite \
   --instance-id sympy__sympy-18532 \
   --model dashscope/qwen3-coder-next \
   --cost-tracking ignore_errors \
-  --timeout 900 \
-  --step-limit 50
+  --timeout 1800 \
+  --step-limit 150
 ```
+
+This command is a new experiment input, not a continuation of the checked-in
+50-step result. The 150-step default is calibrated above the observed
+128-iteration patch-producing baseline. Both arms receive the same explicit
+local workspace contract, Git-root preflight, timeout, and step budget. Always
+use a new experiment ID when changing either budget.
 
 Use `--resume` after interruption. The pair manifest freezes task-set digest,
 adapter, model, evaluator, execution configuration, budgets, settings, and the
 single changed path `policy.context[0]`. Both run manifests are checked again
-after execution. A mismatch invalidates the experiment.
+after execution. A mismatch invalidates the experiment. Both arms also receive
+the same hard stopping policy and
+diff-scope policy. A/B outcome comparison remains based on objective resolution
+and measured efficiency; promotion separately requires every candidate task's
+diff-scope evidence to pass the Quality Gate.
 
 Recompute diagnoses and the comparison from persisted evidence without calling
 the model or evaluator again:

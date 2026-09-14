@@ -10,6 +10,7 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
     model_calls = [event for event in rows if event.type == "MODEL_CALL"]
     verifications = [event for event in rows if event.type == "VERIFICATION"]
     verification_states = [str(event.payload.get("status") or "unknown") for event in verifications]
+    progress = next((event.payload for event in reversed(rows) if event.type == "PROGRESS"), {})
     recovery_count = 0
     failed_interval = False
     for state in verification_states:
@@ -30,6 +31,7 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
         "reported_model_latency_ms": sum(int(event.latency_ms or 0) for event in model_calls),
         "model_calls": len(model_calls),
         "tool_calls": sum(1 for event in rows if event.type == "TOOL_CALL"),
+        "progress": dict(progress),
         "retries": sum(
             1
             for event in model_calls
@@ -52,6 +54,7 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
 
 def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
     metrics = [item.get("metrics", {}) for item in task_results]
+    progress = [item.get("progress", {}) for item in metrics]
     resolved = [item for item in task_results if item.get("evaluator", {}).get("resolved") is True]
     known = [item for item in task_results if item.get("evaluator", {}).get("resolved") is not None]
     return {
@@ -67,6 +70,14 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
         "cost": round(sum(float(item.get("cost", 0.0)) for item in metrics), 8),
         "latency_ms": sum(int(item.get("latency_ms", 0)) for item in metrics),
         "tool_calls": sum(int(item.get("tool_calls", 0)) for item in metrics),
+        "progress": {
+            "patch_created_count": sum(bool(item.get("patch_created")) for item in progress),
+            "environment_probe_count": sum(int(item.get("environment_probe_count", 0)) for item in progress),
+            "repeated_command_count": sum(int(item.get("repeated_command_count", 0)) for item in progress),
+            "repo_write_observed_count": sum(
+                item.get("first_repo_write_action_heuristic") is not None for item in progress
+            ),
+        },
         "retries": sum(int(item.get("retries", 0)) for item in metrics),
         "recoveries": sum(int(item.get("recoveries", 0)) for item in metrics),
         "interventions": sum(int(item.get("interventions", 0)) for item in metrics),

@@ -1,0 +1,2016 @@
+{
+  "schema_version": "praxile.public_experiment_metrics.v1",
+  "experiment_id": "p1-bounded-investigation-minimax-m3-heldout5-stopping-v1",
+  "recorded_at": "2026-09-14T08:51:41+00:00",
+  "invariant_check": {
+    "valid": true,
+    "violations": [],
+    "changed_variable": "policy.context[0]",
+    "baseline_manifest_digest": "sha256:7fae3b5a166141dcd7c9e4b3f9c225547c3659e22b8b92b4006a9fe6184384e7",
+    "candidate_manifest_digest": "sha256:282c1fe6bfc21e5a4e812b7063ff3f88a3f0dfe0b7ba402aece26f706b4dd317"
+  },
+  "baseline": {
+    "eval_run_id": "p1-bounded-investigation-minimax-m3-heldout5-stopping-v1.baseline",
+    "manifest_digest": "sha256:7fae3b5a166141dcd7c9e4b3f9c225547c3659e22b8b92b4006a9fe6184384e7",
+    "metrics": {
+      "task_count": 5,
+      "completed_count": 5,
+      "resolved_count": 0,
+      "resolution_rate": 0.0,
+      "unknown_evaluation_count": 0,
+      "tokens": {
+        "input": 4391708,
+        "output": 85552,
+        "cache": 0
+      },
+      "cost": 0.0,
+      "latency_ms": 1580778,
+      "tool_calls": 227,
+      "progress": {
+        "patch_created_count": 5,
+        "environment_probe_count": 2,
+        "repeated_command_count": 13,
+        "repo_write_observed_count": 4
+      },
+      "retries": 0,
+      "recoveries": 0,
+      "interventions": 0
+    },
+    "tasks": [
+      {
+        "task_id": "sympy__sympy-13031",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T07:59:45+00:00",
+          "ended_at": "2026-09-14T08:00:12+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-13031",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-13031-sympy__sympy-13031",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 1564342,
+            "output": 18800,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 254483,
+          "reported_model_latency_ms": 0,
+          "model_calls": 67,
+          "tool_calls": 67,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 67,
+            "environment_probe_count": 0,
+            "repeated_command_count": 3,
+            "first_repo_write_action_heuristic": 67,
+            "patch_created": true,
+            "patch_created_after_action": 67,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:0508d4dc464fe02f118774383428e9ccc2abc3f744c65dbc031cb10eca50d529",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-13031",
+          "patch_digest": "sha256:0508d4dc464fe02f118774383428e9ccc2abc3f744c65dbc031cb10eca50d529",
+          "changed_files": [
+            "sympy/matrices/sparse.py"
+          ],
+          "source_files": [
+            "sympy/matrices/sparse.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/matrices"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 6,
+          "deleted_lines": 4,
+          "changed_lines": 10,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-15609",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:04:19+00:00",
+          "ended_at": "2026-09-14T08:04:43+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-15609",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-15609-sympy__sympy-15609",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 653520,
+            "output": 8287,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 271140,
+          "reported_model_latency_ms": 0,
+          "model_calls": 46,
+          "tool_calls": 46,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": 39,
+            "patch_created": true,
+            "patch_created_after_action": 39,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:5118a0aca28f83c1b997ced1a1e2b4f35536793f6ea65371cc867badfdf3fc90",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-15609",
+          "patch_digest": "sha256:5118a0aca28f83c1b997ced1a1e2b4f35536793f6ea65371cc867badfdf3fc90",
+          "changed_files": [
+            "sympy/printing/latex.py"
+          ],
+          "source_files": [
+            "sympy/printing/latex.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "changed_lines": 2,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-16281",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:08:50+00:00",
+          "ended_at": "2026-09-14T08:09:15+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-16281",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-16281-sympy__sympy-16281",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 499112,
+            "output": 9973,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 271611,
+          "reported_model_latency_ms": 0,
+          "model_calls": 33,
+          "tool_calls": 33,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 33,
+            "environment_probe_count": 1,
+            "repeated_command_count": 2,
+            "first_repo_write_action_heuristic": 25,
+            "patch_created": true,
+            "patch_created_after_action": 25,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:9bc0dbf7e0ce823b954a32cabd496e27c706a6b12ca31733bedc6607c327b71a",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-16281",
+          "patch_digest": "sha256:9bc0dbf7e0ce823b954a32cabd496e27c706a6b12ca31733bedc6607c327b71a",
+          "changed_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "source_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing/pretty"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "changed_lines": 2,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-20049",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:18:57+00:00",
+          "ended_at": "2026-09-14T08:19:23+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-20049",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-20049-sympy__sympy-20049",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 1127660,
+            "output": 39243,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 607306,
+          "reported_model_latency_ms": 0,
+          "model_calls": 39,
+          "tool_calls": 39,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 39,
+            "environment_probe_count": 0,
+            "repeated_command_count": 5,
+            "first_repo_write_action_heuristic": null,
+            "patch_created": true,
+            "patch_created_after_action": null,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:59c5716a4a4fb437521e83111be0f80d3e8ac81c453d9a08ac7d052fe24aaf35",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-20049",
+          "patch_digest": "sha256:59c5716a4a4fb437521e83111be0f80d3e8ac81c453d9a08ac7d052fe24aaf35",
+          "changed_files": [
+            "sympy/physics/vector/point.py"
+          ],
+          "source_files": [
+            "sympy/physics/vector/point.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/physics/vector"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 33,
+          "deleted_lines": 0,
+          "changed_lines": 33,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-20639",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:21:53+00:00",
+          "ended_at": "2026-09-14T08:22:19+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-20639",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-20639-sympy__sympy-20639",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 547074,
+            "output": 9249,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 176238,
+          "reported_model_latency_ms": 0,
+          "model_calls": 42,
+          "tool_calls": 42,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 42,
+            "environment_probe_count": 1,
+            "repeated_command_count": 2,
+            "first_repo_write_action_heuristic": 21,
+            "patch_created": true,
+            "patch_created_after_action": 21,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:0ade2143c544640cc22e0af48d449cc72768349d0d8fdb2008424bc1c837787a",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-20639",
+          "patch_digest": "sha256:0ade2143c544640cc22e0af48d449cc72768349d0d8fdb2008424bc1c837787a",
+          "changed_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "source_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing/pretty"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "changed_lines": 2,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      }
+    ],
+    "diagnoses": [
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_640dc2e40de34b49",
+        "task_id": "sympy__sympy-13031",
+        "trace_id": "trace_bff9695bb4f5",
+        "run_id": "run_58fc0cec308e",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_58fc0cec308e:praxile-evaluator",
+              "artifact:eval-evidence_59f63bbfa0a5",
+              "artifact:eval-evidence_ed9ebbdc7b5a",
+              "artifact:eval-evidence_2209458e9c88",
+              "artifact:eval-evidence_b8fa94d0cbaf"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_58fc0cec308e:praxile-evaluator",
+            "artifact:eval-evidence_59f63bbfa0a5",
+            "artifact:eval-evidence_ed9ebbdc7b5a",
+            "artifact:eval-evidence_2209458e9c88",
+            "artifact:eval-evidence_b8fa94d0cbaf"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_d926b5b393800d7e",
+        "task_id": "sympy__sympy-15609",
+        "trace_id": "trace_017de6ad8782",
+        "run_id": "run_21cbb25af024",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_21cbb25af024:praxile-evaluator",
+              "artifact:eval-evidence_9857e56e158e",
+              "artifact:eval-evidence_4ca30d224eef",
+              "artifact:eval-evidence_a5854a0537d0",
+              "artifact:eval-evidence_dd57ab6f2d63"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_21cbb25af024:praxile-evaluator",
+            "artifact:eval-evidence_9857e56e158e",
+            "artifact:eval-evidence_4ca30d224eef",
+            "artifact:eval-evidence_a5854a0537d0",
+            "artifact:eval-evidence_dd57ab6f2d63"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_368bd57c97b4eea7",
+        "task_id": "sympy__sympy-16281",
+        "trace_id": "trace_b8cedff10fd7",
+        "run_id": "run_9c6413cd0aa7",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_9c6413cd0aa7:praxile-evaluator",
+              "artifact:eval-evidence_39da1b88bca4",
+              "artifact:eval-evidence_4668e7df9c92",
+              "artifact:eval-evidence_91c7bdd54fc3",
+              "artifact:eval-evidence_74218f8c9ca0"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_9c6413cd0aa7:praxile-evaluator",
+            "artifact:eval-evidence_39da1b88bca4",
+            "artifact:eval-evidence_4668e7df9c92",
+            "artifact:eval-evidence_91c7bdd54fc3",
+            "artifact:eval-evidence_74218f8c9ca0"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_44e3c9c8bdf1c0f4",
+        "task_id": "sympy__sympy-20049",
+        "trace_id": "trace_c562e8232567",
+        "run_id": "run_c14a5b34ee5d",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_c14a5b34ee5d:praxile-evaluator",
+              "artifact:eval-evidence_19d4bc457f9d",
+              "artifact:eval-evidence_042bc1eb83dd",
+              "artifact:eval-evidence_0e055cba9a6e",
+              "artifact:eval-evidence_2f51e6cb5949"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_c14a5b34ee5d:praxile-evaluator",
+            "artifact:eval-evidence_19d4bc457f9d",
+            "artifact:eval-evidence_042bc1eb83dd",
+            "artifact:eval-evidence_0e055cba9a6e",
+            "artifact:eval-evidence_2f51e6cb5949"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_f7cda4f643a5f1f7",
+        "task_id": "sympy__sympy-20639",
+        "trace_id": "trace_e55e53987513",
+        "run_id": "run_5c7452d13138",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_5c7452d13138:praxile-evaluator",
+              "artifact:eval-evidence_507a84584093",
+              "artifact:eval-evidence_62eb6452a569",
+              "artifact:eval-evidence_610f7847cd59",
+              "artifact:eval-evidence_7ac5033537d0"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_5c7452d13138:praxile-evaluator",
+            "artifact:eval-evidence_507a84584093",
+            "artifact:eval-evidence_62eb6452a569",
+            "artifact:eval-evidence_610f7847cd59",
+            "artifact:eval-evidence_7ac5033537d0"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      }
+    ]
+  },
+  "candidate": {
+    "eval_run_id": "p1-bounded-investigation-minimax-m3-heldout5-stopping-v1.candidate",
+    "manifest_digest": "sha256:282c1fe6bfc21e5a4e812b7063ff3f88a3f0dfe0b7ba402aece26f706b4dd317",
+    "metrics": {
+      "task_count": 5,
+      "completed_count": 5,
+      "resolved_count": 0,
+      "resolution_rate": 0.0,
+      "unknown_evaluation_count": 0,
+      "tokens": {
+        "input": 5638246,
+        "output": 87111,
+        "cache": 0
+      },
+      "cost": 0.0,
+      "latency_ms": 1760927,
+      "tool_calls": 229,
+      "progress": {
+        "patch_created_count": 5,
+        "environment_probe_count": 0,
+        "repeated_command_count": 2,
+        "repo_write_observed_count": 4
+      },
+      "retries": 0,
+      "recoveries": 0,
+      "interventions": 0
+    },
+    "tasks": [
+      {
+        "task_id": "sympy__sympy-13031",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:26:32+00:00",
+          "ended_at": "2026-09-14T08:26:56+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-13031",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-13031-sympy__sympy-13031",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 896262,
+            "output": 9881,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 276589,
+          "reported_model_latency_ms": 0,
+          "model_calls": 46,
+          "tool_calls": 46,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": 16,
+            "patch_created": true,
+            "patch_created_after_action": 16,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:38d1c713b5a6c569173cb8e7fbdd2cee5e830cb8e1be5fab766a5813301981c4",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-13031",
+          "patch_digest": "sha256:38d1c713b5a6c569173cb8e7fbdd2cee5e830cb8e1be5fab766a5813301981c4",
+          "changed_files": [
+            "sympy/matrices/sparse.py",
+            "sympy/matrices/tests/test_sparse.py"
+          ],
+          "source_files": [
+            "sympy/matrices/sparse.py"
+          ],
+          "test_files": [
+            "sympy/matrices/tests/test_sparse.py"
+          ],
+          "source_scopes": [
+            "sympy/matrices"
+          ],
+          "test_scopes": [
+            "sympy/matrices"
+          ],
+          "cross_scope_test_files": [],
+          "added_lines": 14,
+          "deleted_lines": 4,
+          "changed_lines": 18,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-15609",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:28:28+00:00",
+          "ended_at": "2026-09-14T08:28:52+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-15609",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-15609-sympy__sympy-15609",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 189986,
+            "output": 5230,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 116459,
+          "reported_model_latency_ms": 0,
+          "model_calls": 23,
+          "tool_calls": 23,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 23,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 14,
+            "patch_created": true,
+            "patch_created_after_action": 14,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:e9e9585ae5a0d9e63e72a27f2f3108aea8ad4347cf2b4299a4efbc7e480ea7f7",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-15609",
+          "patch_digest": "sha256:e9e9585ae5a0d9e63e72a27f2f3108aea8ad4347cf2b4299a4efbc7e480ea7f7",
+          "changed_files": [
+            "sympy/printing/latex.py"
+          ],
+          "source_files": [
+            "sympy/printing/latex.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 4,
+          "deleted_lines": 1,
+          "changed_lines": 5,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-16281",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:40:56+00:00",
+          "ended_at": "2026-09-14T08:41:24+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-16281",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-16281-sympy__sympy-16281",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 2794109,
+            "output": 37110,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 751001,
+          "reported_model_latency_ms": 0,
+          "model_calls": 71,
+          "tool_calls": 71,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 71,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 21,
+            "patch_created": true,
+            "patch_created_after_action": 21,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:ed1f584651009b35ea97eeb826962941f16d717343686daea27b7b9fd2d2072b",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "review_required",
+          "task_id": "sympy__sympy-16281",
+          "patch_digest": "sha256:ed1f584651009b35ea97eeb826962941f16d717343686daea27b7b9fd2d2072b",
+          "changed_files": [
+            "sympy/printing/pretty/pretty.py",
+            "sympy/printing/pretty/pretty.py.bak"
+          ],
+          "source_files": [
+            "sympy/printing/pretty/pretty.py",
+            "sympy/printing/pretty/pretty.py.bak"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing/pretty"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 2560,
+          "deleted_lines": 3,
+          "changed_lines": 2563,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": [
+            "changed_lines=2563 exceeds 400"
+          ]
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-20049",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:48:00+00:00",
+          "ended_at": "2026-09-14T08:48:25+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-20049",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-20049-sympy__sympy-20049",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 1048894,
+            "output": 23600,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 421440,
+          "reported_model_latency_ms": 0,
+          "model_calls": 43,
+          "tool_calls": 43,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 43,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 43,
+            "patch_created": true,
+            "patch_created_after_action": 43,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:ddec608d93110c18fef3f3d1fafda7b763800b42a866b8032baab59986351d6e",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-20049",
+          "patch_digest": "sha256:ddec608d93110c18fef3f3d1fafda7b763800b42a866b8032baab59986351d6e",
+          "changed_files": [
+            "sympy/physics/vector/point.py"
+          ],
+          "source_files": [
+            "sympy/physics/vector/point.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/physics/vector"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 33,
+          "deleted_lines": 2,
+          "changed_lines": 35,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      },
+      {
+        "task_id": "sympy__sympy-20639",
+        "status": "completed",
+        "evaluator": {
+          "status": "completed",
+          "resolved": false,
+          "started_at": "2026-09-14T08:51:17+00:00",
+          "ended_at": "2026-09-14T08:51:41+00:00",
+          "evidence_paths": [
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>",
+            "<redacted:absolute-path>"
+          ],
+          "details": {
+            "command": [
+              "<redacted:absolute-path>",
+              "-m",
+              "swebench.harness.run_evaluation",
+              "--dataset_name",
+              "SWE-bench/SWE-bench_Lite",
+              "--split",
+              "test",
+              "--predictions_path",
+              "<redacted:absolute-path>",
+              "--instance_ids",
+              "sympy__sympy-20639",
+              "--max_workers",
+              "1",
+              "--run_id",
+              "sympy__sympy-20639-sympy__sympy-20639",
+              "--timeout",
+              "1800"
+            ],
+            "returncode": 0
+          }
+        },
+        "metrics": {
+          "task_success": false,
+          "tokens": {
+            "input": 708995,
+            "output": 11290,
+            "cache": 0
+          },
+          "cost": 0.0,
+          "latency_ms": 195438,
+          "reported_model_latency_ms": 0,
+          "model_calls": 46,
+          "tool_calls": 46,
+          "progress": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": null,
+            "patch_created": true,
+            "patch_created_after_action": null,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "retries": 0,
+          "recoveries": 0,
+          "interventions": 0,
+          "verification": {
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "unknown": 0
+          }
+        },
+        "prediction_digest": "sha256:78bb0aa68ca079cfc035d28ed032f5a3f51c74822c65209ea8bff29d22b3343d",
+        "diff_scope": {
+          "schema_version": "praxile.diff_scope.v1",
+          "status": "passed",
+          "task_id": "sympy__sympy-20639",
+          "patch_digest": "sha256:78bb0aa68ca079cfc035d28ed032f5a3f51c74822c65209ea8bff29d22b3343d",
+          "changed_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "source_files": [
+            "sympy/printing/pretty/pretty.py"
+          ],
+          "test_files": [],
+          "source_scopes": [
+            "sympy/printing/pretty"
+          ],
+          "test_scopes": [],
+          "cross_scope_test_files": [],
+          "added_lines": 2,
+          "deleted_lines": 4,
+          "changed_lines": 6,
+          "policy": {
+            "max_files_changed": 8,
+            "max_changed_lines": 400,
+            "allow_cross_scope_tests": false
+          },
+          "reasons": []
+        },
+        "error": {}
+      }
+    ],
+    "diagnoses": [
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_a0c2cae813748d50",
+        "task_id": "sympy__sympy-13031",
+        "trace_id": "trace_8218af7f530e",
+        "run_id": "run_6ce8041632bf",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_6ce8041632bf:praxile-evaluator",
+              "artifact:eval-evidence_1d9214ced3a7",
+              "artifact:eval-evidence_9db7cee22dd9",
+              "artifact:eval-evidence_d23fc42ea599",
+              "artifact:eval-evidence_8558faa8c6e8"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_6ce8041632bf:praxile-evaluator",
+            "artifact:eval-evidence_1d9214ced3a7",
+            "artifact:eval-evidence_9db7cee22dd9",
+            "artifact:eval-evidence_d23fc42ea599",
+            "artifact:eval-evidence_8558faa8c6e8"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_4c7ca38ed141f10e",
+        "task_id": "sympy__sympy-15609",
+        "trace_id": "trace_f4b76874307f",
+        "run_id": "run_a9b10c3996ee",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_a9b10c3996ee:praxile-evaluator",
+              "artifact:eval-evidence_9d120b9a6685",
+              "artifact:eval-evidence_ea6ee0012097",
+              "artifact:eval-evidence_9a2755c237f1",
+              "artifact:eval-evidence_32edb6d2003b"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_a9b10c3996ee:praxile-evaluator",
+            "artifact:eval-evidence_9d120b9a6685",
+            "artifact:eval-evidence_ea6ee0012097",
+            "artifact:eval-evidence_9a2755c237f1",
+            "artifact:eval-evidence_32edb6d2003b"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_244fbeac80faa52a",
+        "task_id": "sympy__sympy-16281",
+        "trace_id": "trace_0d417335e1f4",
+        "run_id": "run_aa527206c4e1",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_aa527206c4e1:praxile-evaluator",
+              "artifact:eval-evidence_2bb3a6e3e24a",
+              "artifact:eval-evidence_abed7b0927c9",
+              "artifact:eval-evidence_1ee72f4de964",
+              "artifact:eval-evidence_76a7f9446475"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_aa527206c4e1:praxile-evaluator",
+            "artifact:eval-evidence_2bb3a6e3e24a",
+            "artifact:eval-evidence_abed7b0927c9",
+            "artifact:eval-evidence_1ee72f4de964",
+            "artifact:eval-evidence_76a7f9446475"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_2e7ec11fcad997b8",
+        "task_id": "sympy__sympy-20049",
+        "trace_id": "trace_815e93f86fd4",
+        "run_id": "run_8ebafb8cf927",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_8ebafb8cf927:praxile-evaluator",
+              "artifact:eval-evidence_3b3a46083be8",
+              "artifact:eval-evidence_563c89143dd2",
+              "artifact:eval-evidence_5807491c6e6b",
+              "artifact:eval-evidence_bf479e3fcfdc"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_8ebafb8cf927:praxile-evaluator",
+            "artifact:eval-evidence_3b3a46083be8",
+            "artifact:eval-evidence_563c89143dd2",
+            "artifact:eval-evidence_5807491c6e6b",
+            "artifact:eval-evidence_bf479e3fcfdc"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      },
+      {
+        "schema_version": "praxile.failure_diagnosis.v1",
+        "diagnosis_id": "diagnosis_cad509ab4836e07f",
+        "task_id": "sympy__sympy-20639",
+        "trace_id": "trace_bd4a3d065c59",
+        "run_id": "run_14f3fe9544b2",
+        "outcome": "failure",
+        "detections": [
+          {
+            "category": "VERIFICATION",
+            "code": "verification_failed",
+            "summary": "Objective verification reported failure.",
+            "evidence_refs": [
+              "event:run_14f3fe9544b2:praxile-evaluator",
+              "artifact:eval-evidence_ffb73f2225de",
+              "artifact:eval-evidence_7082e55ea16c",
+              "artifact:eval-evidence_95ceb7a1cbf8",
+              "artifact:eval-evidence_8a90f3264a55"
+            ]
+          }
+        ],
+        "attribution": {
+          "category": "VERIFICATION",
+          "confidence": 0.8,
+          "abstained": false,
+          "rationale": "A single directly observed failure category is supported by normalized evidence.",
+          "evidence_refs": [
+            "event:run_14f3fe9544b2:praxile-evaluator",
+            "artifact:eval-evidence_ffb73f2225de",
+            "artifact:eval-evidence_7082e55ea16c",
+            "artifact:eval-evidence_95ceb7a1cbf8",
+            "artifact:eval-evidence_8a90f3264a55"
+          ]
+        },
+        "created_at": "2026-09-14T08:51:41+00:00"
+      }
+    ]
+  },
+  "comparison": {
+    "decision": "inconclusive",
+    "rationale": "Resolution was unchanged and efficiency did not improve monotonically.",
+    "task_results": [
+      {
+        "task_id": "sympy__sympy-13031",
+        "failure_category": "VERIFICATION",
+        "baseline_resolved": false,
+        "candidate_resolved": false,
+        "transition": "unchanged",
+        "token_delta": -676999,
+        "tool_call_delta": -21,
+        "latency_ms_delta": 22106,
+        "cost_delta": null,
+        "progress": {
+          "baseline": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 67,
+            "environment_probe_count": 0,
+            "repeated_command_count": 3,
+            "first_repo_write_action_heuristic": 67,
+            "patch_created": true,
+            "patch_created_after_action": 67,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "candidate": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": 16,
+            "patch_created": true,
+            "patch_created_after_action": 16,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "environment_probe_delta": 0,
+          "repeated_command_delta": -2
+        },
+        "diff_scope": {
+          "baseline": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-13031",
+            "patch_digest": "sha256:0508d4dc464fe02f118774383428e9ccc2abc3f744c65dbc031cb10eca50d529",
+            "changed_files": [
+              "sympy/matrices/sparse.py"
+            ],
+            "source_files": [
+              "sympy/matrices/sparse.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/matrices"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 6,
+            "deleted_lines": 4,
+            "changed_lines": 10,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-13031",
+            "patch_digest": "sha256:38d1c713b5a6c569173cb8e7fbdd2cee5e830cb8e1be5fab766a5813301981c4",
+            "changed_files": [
+              "sympy/matrices/sparse.py",
+              "sympy/matrices/tests/test_sparse.py"
+            ],
+            "source_files": [
+              "sympy/matrices/sparse.py"
+            ],
+            "test_files": [
+              "sympy/matrices/tests/test_sparse.py"
+            ],
+            "source_scopes": [
+              "sympy/matrices"
+            ],
+            "test_scopes": [
+              "sympy/matrices"
+            ],
+            "cross_scope_test_files": [],
+            "added_lines": 14,
+            "deleted_lines": 4,
+            "changed_lines": 18,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate_status": "passed",
+          "passed": true
+        }
+      },
+      {
+        "task_id": "sympy__sympy-15609",
+        "failure_category": "VERIFICATION",
+        "baseline_resolved": false,
+        "candidate_resolved": false,
+        "transition": "unchanged",
+        "token_delta": -466591,
+        "tool_call_delta": -23,
+        "latency_ms_delta": -154681,
+        "cost_delta": null,
+        "progress": {
+          "baseline": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": 39,
+            "patch_created": true,
+            "patch_created_after_action": 39,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "candidate": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 23,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 14,
+            "patch_created": true,
+            "patch_created_after_action": 14,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "environment_probe_delta": 0,
+          "repeated_command_delta": -1
+        },
+        "diff_scope": {
+          "baseline": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-15609",
+            "patch_digest": "sha256:5118a0aca28f83c1b997ced1a1e2b4f35536793f6ea65371cc867badfdf3fc90",
+            "changed_files": [
+              "sympy/printing/latex.py"
+            ],
+            "source_files": [
+              "sympy/printing/latex.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 1,
+            "deleted_lines": 1,
+            "changed_lines": 2,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-15609",
+            "patch_digest": "sha256:e9e9585ae5a0d9e63e72a27f2f3108aea8ad4347cf2b4299a4efbc7e480ea7f7",
+            "changed_files": [
+              "sympy/printing/latex.py"
+            ],
+            "source_files": [
+              "sympy/printing/latex.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 4,
+            "deleted_lines": 1,
+            "changed_lines": 5,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate_status": "passed",
+          "passed": true
+        }
+      },
+      {
+        "task_id": "sympy__sympy-16281",
+        "failure_category": "VERIFICATION",
+        "baseline_resolved": false,
+        "candidate_resolved": false,
+        "transition": "unchanged",
+        "token_delta": 2322134,
+        "tool_call_delta": 38,
+        "latency_ms_delta": 479390,
+        "cost_delta": null,
+        "progress": {
+          "baseline": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 33,
+            "environment_probe_count": 1,
+            "repeated_command_count": 2,
+            "first_repo_write_action_heuristic": 25,
+            "patch_created": true,
+            "patch_created_after_action": 25,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "candidate": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 71,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 21,
+            "patch_created": true,
+            "patch_created_after_action": 21,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "environment_probe_delta": -1,
+          "repeated_command_delta": -2
+        },
+        "diff_scope": {
+          "baseline": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-16281",
+            "patch_digest": "sha256:9bc0dbf7e0ce823b954a32cabd496e27c706a6b12ca31733bedc6607c327b71a",
+            "changed_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "source_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing/pretty"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 1,
+            "deleted_lines": 1,
+            "changed_lines": 2,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "review_required",
+            "task_id": "sympy__sympy-16281",
+            "patch_digest": "sha256:ed1f584651009b35ea97eeb826962941f16d717343686daea27b7b9fd2d2072b",
+            "changed_files": [
+              "sympy/printing/pretty/pretty.py",
+              "sympy/printing/pretty/pretty.py.bak"
+            ],
+            "source_files": [
+              "sympy/printing/pretty/pretty.py",
+              "sympy/printing/pretty/pretty.py.bak"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing/pretty"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 2560,
+            "deleted_lines": 3,
+            "changed_lines": 2563,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": [
+              "changed_lines=2563 exceeds 400"
+            ]
+          },
+          "candidate_status": "review_required",
+          "passed": false
+        }
+      },
+      {
+        "task_id": "sympy__sympy-20049",
+        "failure_category": "VERIFICATION",
+        "baseline_resolved": false,
+        "candidate_resolved": false,
+        "transition": "unchanged",
+        "token_delta": -94409,
+        "tool_call_delta": 4,
+        "latency_ms_delta": -185866,
+        "cost_delta": null,
+        "progress": {
+          "baseline": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 39,
+            "environment_probe_count": 0,
+            "repeated_command_count": 5,
+            "first_repo_write_action_heuristic": null,
+            "patch_created": true,
+            "patch_created_after_action": null,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "candidate": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 43,
+            "environment_probe_count": 0,
+            "repeated_command_count": 0,
+            "first_repo_write_action_heuristic": 43,
+            "patch_created": true,
+            "patch_created_after_action": 43,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "environment_probe_delta": 0,
+          "repeated_command_delta": -5
+        },
+        "diff_scope": {
+          "baseline": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-20049",
+            "patch_digest": "sha256:59c5716a4a4fb437521e83111be0f80d3e8ac81c453d9a08ac7d052fe24aaf35",
+            "changed_files": [
+              "sympy/physics/vector/point.py"
+            ],
+            "source_files": [
+              "sympy/physics/vector/point.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/physics/vector"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 33,
+            "deleted_lines": 0,
+            "changed_lines": 33,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-20049",
+            "patch_digest": "sha256:ddec608d93110c18fef3f3d1fafda7b763800b42a866b8032baab59986351d6e",
+            "changed_files": [
+              "sympy/physics/vector/point.py"
+            ],
+            "source_files": [
+              "sympy/physics/vector/point.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/physics/vector"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 33,
+            "deleted_lines": 2,
+            "changed_lines": 35,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate_status": "passed",
+          "passed": true
+        }
+      },
+      {
+        "task_id": "sympy__sympy-20639",
+        "failure_category": "VERIFICATION",
+        "baseline_resolved": false,
+        "candidate_resolved": false,
+        "transition": "unchanged",
+        "token_delta": 163962,
+        "tool_call_delta": 4,
+        "latency_ms_delta": 19200,
+        "cost_delta": null,
+        "progress": {
+          "baseline": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 42,
+            "environment_probe_count": 1,
+            "repeated_command_count": 2,
+            "first_repo_write_action_heuristic": 21,
+            "patch_created": true,
+            "patch_created_after_action": 21,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "candidate": {
+            "workspace_root": "<redacted:absolute-path>",
+            "tool_action_count": 46,
+            "environment_probe_count": 0,
+            "repeated_command_count": 1,
+            "first_repo_write_action_heuristic": null,
+            "patch_created": true,
+            "patch_created_after_action": null,
+            "measurement_notes": [
+              "write timing is inferred from shell command shape",
+              "patch_created is measured from the final Git workspace diff"
+            ]
+          },
+          "environment_probe_delta": -1,
+          "repeated_command_delta": -1
+        },
+        "diff_scope": {
+          "baseline": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-20639",
+            "patch_digest": "sha256:0ade2143c544640cc22e0af48d449cc72768349d0d8fdb2008424bc1c837787a",
+            "changed_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "source_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing/pretty"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 1,
+            "deleted_lines": 1,
+            "changed_lines": 2,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate": {
+            "schema_version": "praxile.diff_scope.v1",
+            "status": "passed",
+            "task_id": "sympy__sympy-20639",
+            "patch_digest": "sha256:78bb0aa68ca079cfc035d28ed032f5a3f51c74822c65209ea8bff29d22b3343d",
+            "changed_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "source_files": [
+              "sympy/printing/pretty/pretty.py"
+            ],
+            "test_files": [],
+            "source_scopes": [
+              "sympy/printing/pretty"
+            ],
+            "test_scopes": [],
+            "cross_scope_test_files": [],
+            "added_lines": 2,
+            "deleted_lines": 4,
+            "changed_lines": 6,
+            "policy": {
+              "max_files_changed": 8,
+              "max_changed_lines": 400,
+              "allow_cross_scope_tests": false
+            },
+            "reasons": []
+          },
+          "candidate_status": "passed",
+          "passed": true
+        }
+      }
+    ],
+    "by_failure_category": {
+      "VERIFICATION": {
+        "task_count": 5,
+        "gains": 0,
+        "regressions": 0,
+        "unchanged": 5,
+        "unknown": 0,
+        "token_delta": 1248097,
+        "tool_call_delta": 2,
+        "cost_delta": null,
+        "progress": {
+          "baseline_patches_created": 5,
+          "candidate_patches_created": 5,
+          "environment_probe_delta": -2,
+          "repeated_command_delta": -11
+        }
+      }
+    },
+    "totals": {
+      "gains": 0,
+      "regressions": 0,
+      "token_delta": 1248097,
+      "tool_call_delta": 2,
+      "latency_ms_delta": 180149,
+      "cost_delta": null,
+      "candidate_diff_scope_passed": 4,
+      "candidate_diff_scope_review_required": 1
+    },
+    "trace_overhead": {
+      "instrumentation_mode": "identical_in_both_arms",
+      "attributed_to_candidate": false,
+      "baseline_event_count": 741,
+      "candidate_event_count": 752,
+      "event_count_delta": 11,
+      "baseline_serialized_bytes": 1999511,
+      "candidate_serialized_bytes": 2081999,
+      "serialized_bytes_delta": 82488,
+      "context_inject_event_delta": 5,
+      "explanation": "Both arms use identical trace instrumentation; deltas include changed agent behavior and the single context event, not tracer latency causality."
+    },
+    "cost_comparable": false
+  }
+}

@@ -29,7 +29,7 @@ def test_eval_benchmark_parser_exposes_reproducibility_controls() -> None:
     assert args.seed == "fixed"
     assert args.run_id == "baseline-1"
     assert args.cost_tracking == "ignore_errors"
-    assert args.step_limit == 50
+    assert args.step_limit == 150
     assert args.resume is True
     assert args.func.__name__ == "cmd_eval_benchmark"
 
@@ -40,7 +40,7 @@ def test_eval_benchmark_tasks_file_is_optional_for_huggingface_loading() -> None
     assert args.tasks is None
     assert args.dataset_name == "SWE-bench/SWE-bench_Lite"
     assert args.cost_tracking == "default"
-    assert args.step_limit == 50
+    assert args.step_limit == 150
 
 
 def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
@@ -73,5 +73,5 @@ def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
     assert export.output == "public-result"
     assert experiment.func.__name__ == "cmd_eval_ab"
     assert experiment.experiment_id == "p0-c-1"
-    assert experiment.step_limit == 50
+    assert experiment.step_limit == 150
     assert experiment.resume is True

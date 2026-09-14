@@ -103,6 +103,57 @@ This adapter is an execution and evidence bridge. The separate P0-B benchmark co
 
 For a local model that does not support native tool calling, select mini-SWE-agent's text protocol explicitly, for example `MiniSweAgentAdapter(model="ollama/deepseek-coder:6.7b", model_class="litellm_textbased", config_specs=["mini_textbased.yaml"])`. If the local model has no price metadata, its run environment may explicitly set `MSWEA_COST_TRACKING=ignore_errors`; do not apply that override to priced cloud-model runs because it could hide a real cost-accounting failure.
 
+### Local workspace contract and preflight
+
+`MiniSweAgentAdapter` invokes the local `mini` CLI. It now pins mini-SWE-agent's
+environment class and `environment.cwd` to the isolated repository root and
+injects the same root into the task instruction. A benchmark config that binds
+the agent to `/testbed` is rejected in this mode; use a future dedicated
+container adapter instead of combining a container prompt with local execution.
+
+Before model execution, the adapter writes `preflight.json` and emits a
+`PREFLIGHT` event. Benchmark commands require the prepared workspace to be the
+exact Git root so patch capture cannot escape into a parent monorepo. A failed
+preflight does not launch the model, but still produces a bounded trace and is
+diagnosed as `ENVIRONMENT / workspace_preflight_failed`.
+
+Each completed run also emits `PROGRESS` with environment-probe count, repeated
+command count, an explicitly heuristic first repository-write action, and the
+objectively measured final patch presence. These fields explain whether a step
+limit was spent on setup, exploration, implementation, or patch materialization.
+
+### Bounded events and full native evidence
+
+The native `trajectory.traj.json` artifact remains byte-for-byte audit evidence.
+Normalized `MODEL_CALL` and `TOOL_RESULT` events are intentionally bounded:
+large strings are shortened, and `extra.raw_output` becomes a small
+`raw_output_meta` record containing its original size, preview, and a pointer to
+the native trajectory artifact. Event Store replay therefore stays usable even
+when a base agent records multi-megabyte command output, without deleting the
+full evidence needed for forensic review.
+
+### Runtime stopping control
+
+Benchmark policies enable a hard stopping monitor around the mini-SWE-agent
+process. The adapter reads each atomically readable trajectory update and checks
+the isolated Git workspace. It terminates the process when the no-patch
+exploration budget is exhausted, the post-patch budget is exhausted, a patch has
+been successfully verified and consumed its grace steps, or an already verified
+command repeats beyond policy. The decision is persisted as `STOP_DECISION` and
+the final adapter status is `policy_stopped`. This status is not task success:
+the official evaluator still decides whether the captured patch resolves the
+benchmark task.
+
+### Context activation boundary
+
+Praxile resolves candidate context before invoking an adapter. A versioned
+activation plan compares the task repository and semantic terms with the
+candidate's `applies_to.repositories`, `task_signals`, and
+`does_not_apply_when`. The shared `AdapterRunner` records the decision as
+`CONTEXT_ACTIVATION`; an abstained task receives an empty effective context and
+therefore no `CONTEXT_INJECT`. Adapters never decide for themselves whether a
+candidate applies.
+
 ## Verification
 
 Fast protocol tests:

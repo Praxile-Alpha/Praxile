@@ -46,7 +46,13 @@ def test_candidate_cli_register_evaluate_promote_list_and_rollback(tmp_path: Pat
             "baseline": {"eval_run_id": "baseline_1"},
             "candidate": {"eval_run_id": "candidate_1"},
             "invariant_check": {"valid": True},
-            "comparison": {"decision": "improve", "totals": {"regressions": 0, "cost_delta": 0.0}},
+                "comparison": {
+                    "decision": "improve",
+                    "totals": {"regressions": 0, "cost_delta": 0.0},
+                    "task_results": [
+                        {"diff_scope": {"candidate_status": "passed", "passed": True}}
+                    ],
+                },
         },
     )
     assert cmd_harness_candidate_register(argparse.Namespace(candidate=str(candidate_path), json=False), tmp_path) == 0
@@ -126,4 +132,3 @@ def test_parser_exposes_p1_commands() -> None:
         ]
     )
     assert args.eval_command == "context-ablation"
-

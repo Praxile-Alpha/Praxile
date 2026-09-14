@@ -16,6 +16,8 @@ PUBLIC_METRICS_SCHEMA_VERSION = "praxile.public_experiment_metrics.v1"
 _PUBLIC_EVENT_TYPES = {
     "RUN_START",
     "CONTEXT_INJECT",
+    "CONTEXT_ACTIVATION",
+    "STOP_DECISION",
     "ARTIFACT_CHANGE",
     "VERIFICATION",
     "FINAL_RESULT",
@@ -69,6 +71,7 @@ class PublicExperimentExporter:
             "task_set_digest": experiment.get("task_set_digest"),
             "candidate": _redact(experiment.get("candidate") or {}, redact_content=True),
             "candidate_digest": experiment.get("candidate_digest"),
+            "activation_gate": _redact(experiment.get("activation_gate") or {}),
             "arms": {
                 "baseline": _public_manifest_arm(baseline_manifest.to_dict()),
                 "candidate": _public_manifest_arm(candidate_manifest.to_dict()),
@@ -150,6 +153,8 @@ def _public_run_metrics(report: Mapping[str, Any], diagnoses: Any) -> dict[str, 
                 "evaluator": _redact(task.get("evaluator") or {}),
                 "metrics": _redact(task.get("metrics") or {}),
                 "prediction_digest": task.get("prediction_digest"),
+                "diff_scope": _redact(task.get("diff_scope") or {}),
+                "context_activation": _redact(task.get("context_activation") or {}),
                 "error": _redact(task.get("error") or {}),
             }
         )

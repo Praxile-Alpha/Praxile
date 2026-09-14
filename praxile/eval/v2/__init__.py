@@ -1,3 +1,9 @@
+from .activation import (
+    CONTEXT_ACTIVATION_SCHEMA_VERSION,
+    ContextActivationDecision,
+    ContextActivationGate,
+    resolve_task_policy,
+)
 from .candidate import CONTEXT_CANDIDATE_SCHEMA_VERSION, ContextCandidate
 from .context_ablation import CONTEXT_ABLATION_SCHEMA_VERSION, ContextPolicyAblation
 from .diagnosis import (
@@ -8,6 +14,7 @@ from .diagnosis import (
     FailureDiagnoser,
     FailureDiagnosis,
 )
+from .diff_scope import DEFAULT_DIFF_SCOPE_POLICY, analyze_diff_scope
 from .evaluator import (
     EvaluatorResult,
     OfficialSWEbenchEvaluator,
@@ -49,12 +56,16 @@ __all__ = [
     "BenchmarkEvalRunner",
     "BenchmarkRepositoryPreparer",
     "CONTEXT_CANDIDATE_SCHEMA_VERSION",
+    "CONTEXT_ACTIVATION_SCHEMA_VERSION",
     "CONTEXT_ABLATION_SCHEMA_VERSION",
     "ContextCandidate",
+    "ContextActivationDecision",
+    "ContextActivationGate",
     "ContextPolicyAblation",
     "ControlledABExperiment",
     "CausalAttribution",
     "DIAGNOSIS_SCHEMA_VERSION",
+    "DEFAULT_DIFF_SCOPE_POLICY",
     "EVAL_MANIFEST_SCHEMA_VERSION",
     "EVAL_RESULT_SCHEMA_VERSION",
     "EVAL_TASK_SCHEMA_VERSION",
@@ -80,8 +91,10 @@ __all__ = [
     "SWEbenchTaskLoader",
     "TaskEvaluator",
     "aggregate_metrics",
+    "analyze_diff_scope",
     "check_ab_invariants",
     "compare_ab_reports",
     "prediction_from_adapter_result",
+    "resolve_task_policy",
     "trace_metrics",
 ]

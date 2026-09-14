@@ -575,7 +575,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_eval_benchmark.add_argument("--adapter-config", action="append", default=[], help="mini-SWE-agent config spec")
     p_eval_benchmark.add_argument("--timeout", type=int, default=1800, help="Per-task agent and evaluator timeout")
-    p_eval_benchmark.add_argument("--step-limit", type=int, default=50, help="Maximum mini-SWE-agent steps per task")
+    p_eval_benchmark.add_argument(
+        "--step-limit",
+        type=int,
+        default=150,
+        help="Maximum mini-SWE-agent steps per task (150 is calibrated above the 128-step patch-producing baseline)",
+    )
     p_eval_benchmark.add_argument("--max-cost", type=float, default=None, help="Optional per-task agent cost limit")
     p_eval_benchmark.add_argument("--run-id", default=None, help="Stable run ID required when resuming")
     p_eval_benchmark.add_argument("--resume", action="store_true", help="Reuse completed task results from the same manifest")
@@ -607,7 +612,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval_ab.add_argument("--cost-tracking", choices=("default", "ignore_errors"), default="default")
     p_eval_ab.add_argument("--adapter-config", action="append", default=[])
     p_eval_ab.add_argument("--timeout", type=int, default=1800)
-    p_eval_ab.add_argument("--step-limit", type=int, default=50)
+    p_eval_ab.add_argument("--step-limit", type=int, default=150)
     p_eval_ab.add_argument("--max-cost", type=float, default=None)
     p_eval_ab.add_argument("--resume", action="store_true")
     p_eval_ab.add_argument("--keep-workspaces", action="store_true")
@@ -637,7 +642,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval_context.add_argument("--cost-tracking", choices=("default", "ignore_errors"), default="default")
     p_eval_context.add_argument("--adapter-config", action="append", default=[])
     p_eval_context.add_argument("--timeout", type=int, default=1800)
-    p_eval_context.add_argument("--step-limit", type=int, default=50)
+    p_eval_context.add_argument("--step-limit", type=int, default=150)
     p_eval_context.add_argument("--max-cost", type=float, default=None)
     p_eval_context.add_argument("--resume", action="store_true")
     p_eval_context.add_argument("--keep-workspaces", action="store_true")

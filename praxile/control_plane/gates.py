@@ -52,15 +52,34 @@ class PromotionGateEvaluator:
         has_unknown = any(
             isinstance(item, Mapping) and item.get("transition") == "unknown" for item in task_results
         )
-        quality_passed = decision == "improve" or (
+        scope_results = [
+            item.get("diff_scope")
+            for item in task_results
+            if isinstance(item, Mapping)
+        ]
+        diff_scope_known = bool(task_results) and all(
+            isinstance(item, Mapping) and item.get("candidate_status") != "missing"
+            for item in scope_results
+        )
+        diff_scope_passed = diff_scope_known and all(
+            isinstance(item, Mapping) and item.get("passed") is True
+            for item in scope_results
+        )
+        outcome_quality_passed = decision == "improve" or (
             not limits.require_quality_improvement and decision == "inconclusive" and not has_unknown
         )
+        quality_passed = outcome_quality_passed and diff_scope_passed
         regression_passed = bool(invariants.get("valid")) and regressions <= limits.max_regressions
         cost_passed = cost_delta is not None and float(cost_delta) <= limits.max_cost_increase
         approval_ref = "approval_" + hashlib.sha256(reviewer.encode("utf-8")).hexdigest()[:16]
         gates = (
             GateResult("evidence", bool(candidate.source_evidence), candidate.source_evidence, "Candidate has typed source evidence."),
-            GateResult("quality", quality_passed, eval_refs, f"A/B decision is {decision}."),
+            GateResult(
+                "quality",
+                quality_passed,
+                eval_refs,
+                f"A/B decision is {decision}; diff_scope_known={diff_scope_known}, diff_scope_passed={diff_scope_passed}.",
+            ),
             GateResult("regression", regression_passed, eval_refs, f"Regressions={regressions}, budget={limits.max_regressions}, invariants_valid={bool(invariants.get('valid'))}."),
             GateResult("cost", cost_passed, eval_refs, f"Cost delta={cost_delta!r}, allowed increase={limits.max_cost_increase}."),
             GateResult("human", human_approved, (EvidenceRef("user_feedback", approval_ref, "Explicit promotion review"),), "Human approval recorded." if human_approved else "Human approval is still required."),
@@ -80,6 +99,8 @@ class PromotionGateEvaluator:
                 "regressions": regressions,
                 "cost_delta": cost_delta,
                 "unknown_task_result": has_unknown,
+                "diff_scope_known": diff_scope_known,
+                "diff_scope_passed": diff_scope_passed,
             },
             rollback_target={"component_key": candidate.component_key, "version": candidate.base_version},
         )
