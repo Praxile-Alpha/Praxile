@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from praxile.adapters.mini_swe_stopping import MiniSweStoppingMonitor, MiniSweStoppingPolicy
+
+
+pytestmark = pytest.mark.mini_swe
 
 
 def _trajectory(commands: list[str], returncodes: list[int] | None = None) -> dict:

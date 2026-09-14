@@ -19,6 +19,15 @@ RESOURCE_MARKER_RULES: tuple[tuple[str, tuple[str, ...], int, bool], ...] = (
     ("sqlite_resource", ("store_", "reindex", "index_", "retrieval", "trajectory"), 20, False),
 )
 
+
+def _mini_swe_tests_requested(config: pytest.Config) -> bool:
+    if os.environ.get("PRAXILE_RUN_MINI_SWE_TESTS") == "1":
+        return True
+    mark_expression = str(config.getoption("markexpr") or "")
+    if "mini_swe" in mark_expression:
+        return True
+    return any("tests/mini_swe" in str(argument).replace("\\", "/") for argument in config.args)
+
 @pytest.fixture(autouse=True)
 def praxile_isolated_process_state():
     old_cwd = os.getcwd()
@@ -78,6 +87,12 @@ def praxile_hang_watchdog(request: pytest.FixtureRequest):
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if not _mini_swe_tests_requested(config):
+        deselected = [item for item in items if item.get_closest_marker("mini_swe")]
+        if deselected:
+            items[:] = [item for item in items if item not in deselected]
+            config.hook.pytest_deselected(items=deselected)
+
     for item in items:
         # \u79fb\u9664\u901a\u8fc7\u6d4b\u8bd5\u540d\u81ea\u52a8\u52a0 marker \u7684\u903b\u8f91\u3002\u8981\u6c42\u5f00\u53d1\u8005\u663e\u5f0f\u52a0 @pytest.mark.resource
         # \u5982\u679c\u4f9d\u7136\u60f3\u4fdd\u7559 timeout \u5206\u914d\uff0c\u53ef\u4ee5\u901a\u8fc7\u67e5\u627e\u5df2\u7ecf\u5b58\u5728\u7684 marker \u6765\u5206\u914d

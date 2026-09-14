@@ -156,14 +156,19 @@ candidate applies.
 
 ## Verification
 
-Fast protocol tests:
+The generic adapter protocol tests remain in the default suite:
 
 ```bash
-python -B -m pytest -q tests/unit/test_adapter_v2.py tests/unit/test_mini_swe_adapter.py
+python -B -m pytest -q tests/unit/test_adapter_v2.py
 ```
 
-Subprocess and SQLite integration tests:
+All mini-SWE-agent adapter, fixture subprocess, and published-evidence tests are
+kept behind a separate opt-in target:
 
 ```bash
-python -B -m pytest -q tests/resource/test_adapter_runner.py tests/resource/test_mini_swe_subprocess.py
+make test-mini-swe
 ```
+
+This target does not contact a model provider or run the real SWE-bench
+evaluator. Real A/B experiments are manual operations and must use an isolated
+workspace.

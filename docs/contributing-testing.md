@@ -23,6 +23,17 @@ Run slow or integration checks in isolated subprocesses:
 make test-integration
 ```
 
+Run the optional mini-SWE-agent adapter and published-evidence checks separately:
+
+```bash
+make test-mini-swe
+```
+
+Plain `pytest` and the normal fast/resource/integration groups actively deselect
+the `mini_swe` marker. The opt-in target uses fixture subprocesses and static
+redacted files only; it does not call a model, launch Docker, run SWE-bench, or
+spend API quota. Real A/B runs remain manual experiments in isolated workspaces.
+
 Run the full local release-style suite:
 
 ```bash
@@ -58,6 +69,8 @@ Use the most specific marker that applies:
 - `runtime_resource` for model action loops, checkpoints, or runtime execution.
 - `http_resource` for HTTP client or streaming transport lifecycle.
 - `sqlite_resource` for store, index, retrieval, or trajectory persistence.
+- `mini_swe` for the optional adapter, its fixture processes, and published
+  mini-SWE experiment evidence. Keep these tests under `tests/mini_swe/`.
 
 ## Hang Debugging
 

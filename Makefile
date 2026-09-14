@@ -1,7 +1,7 @@
 PYTHON ?= python
 PYTEST ?= $(PYTHON) -B -m pytest
 
-.PHONY: test-fast test-fast-repeat test-resource test-integration test-full test-release check-forked
+.PHONY: test-fast test-fast-repeat test-resource test-integration test-mini-swe test-full test-release check-forked
 
 test-fast:
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PRAXILE_TEST_TIMEOUT_SECONDS=15 $(PYTEST) -q -m "not slow and not integration and not resource"
@@ -30,6 +30,9 @@ test-resource: check-forked
 test-integration: check-forked
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PRAXILE_TEST_TIMEOUT_SECONDS=300 $(PYTEST) -p pytest_forked -q -m "(slow or integration) and not resource" --forked
 
+test-mini-swe: check-forked
+	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PRAXILE_RUN_MINI_SWE_TESTS=1 PRAXILE_TEST_TIMEOUT_SECONDS=120 $(PYTEST) -p pytest_forked -q tests/mini_swe --forked
+
 test-full: check-forked
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PRAXILE_TEST_TIMEOUT_SECONDS=300 $(PYTEST) -p pytest_forked -q --forked
 
@@ -38,5 +41,6 @@ test-release:
 	$(MAKE) test-fast-repeat
 	$(MAKE) test-resource
 	$(MAKE) test-integration
+	$(MAKE) test-mini-swe
 	$(PYTHON) scripts/clean_release.py
 	$(PYTHON) scripts/clean_release.py --check

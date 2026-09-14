@@ -12,7 +12,12 @@ from praxile.config import Config
 from praxile.trace import EventStore
 
 
-pytestmark = [pytest.mark.resource, pytest.mark.shell_resource, pytest.mark.sqlite_resource]
+pytestmark = [
+    pytest.mark.mini_swe,
+    pytest.mark.resource,
+    pytest.mark.shell_resource,
+    pytest.mark.sqlite_resource,
+]
 
 
 _FAKE_MINI = r'''from __future__ import annotations

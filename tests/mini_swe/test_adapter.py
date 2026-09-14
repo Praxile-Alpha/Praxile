@@ -8,6 +8,9 @@ import pytest
 from praxile.adapters import AdapterPolicy, AdapterPolicyError, AdapterTask, MiniSweAgentAdapter
 
 
+pytestmark = pytest.mark.mini_swe
+
+
 def test_mini_swe_capabilities_are_honest_about_post_run_streaming() -> None:
     capabilities = MiniSweAgentAdapter(executable="definitely-not-installed-mini").capabilities()
 

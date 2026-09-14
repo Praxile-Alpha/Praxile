@@ -83,7 +83,7 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [ ] Persist per-run source utilization and compression decisions in trace events.
 - [x] Run two complete Context Policies under frozen task/model/adapter/evaluator invariants (fixture acceptance).
 - [x] Publish a model-backed Context/Experience ablation on a fixed five-task
-  held-out set ([MiniMax M3 held-out result](baselines/P1_MINIMAX_M3_HELDOUT5_STOPPING_V1/README.md));
+  held-out set ([MiniMax M3 held-out result](../experiments/mini_swe/P1_MINIMAX_M3_HELDOUT5_STOPPING_V1/README.md));
   the result is inconclusive and explicitly not promoted.
 
 ### P1-B Skill Asset

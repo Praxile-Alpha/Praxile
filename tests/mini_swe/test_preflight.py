@@ -3,7 +3,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from praxile.adapters.mini_swe_preflight import run_mini_swe_preflight
+
+
+pytestmark = pytest.mark.mini_swe
 
 
 def _git_init(root: Path) -> None:
