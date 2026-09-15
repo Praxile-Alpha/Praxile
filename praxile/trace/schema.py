@@ -16,6 +16,8 @@ KNOWN_EVENT_TYPES = frozenset(
     {
         "RUN_START",
         "MODEL_CALL",
+        "CONTEXT_ACTIVATION",
+        "CONTEXT_SOURCE_USAGE",
         "CONTEXT_INJECT",
         "TOOL_CALL",
         "TOOL_RESULT",
@@ -24,6 +26,7 @@ KNOWN_EVENT_TYPES = frozenset(
         "CHECKPOINT",
         "SUBAGENT_START",
         "SUBAGENT_END",
+        "SKILL_REFERENCE",
         "FINAL_RESULT",
         "RUN_END",
     }

@@ -1,0 +1,74 @@
+{
+  "activation": {
+    "injected": true,
+    "injection_event_ids": [
+      "skill_inject"
+    ],
+    "reference_event_ids": [
+      "skill_reference"
+    ],
+    "referenced": true
+  },
+  "attribution": {
+    "causal_credit": true,
+    "evidence_refs": [
+      "skill_inject",
+      "skill_reference"
+    ],
+    "reason": "The skill was injected, explicitly referenced, and the frozen comparison improved.",
+    "status": "credited"
+  },
+  "baseline": {
+    "adapter": "fixture",
+    "arm_id": "skill-baseline",
+    "cost": 0.1,
+    "evaluator": "fixture-evaluator-v1",
+    "input_tokens": 1000,
+    "latency_ms": 1000,
+    "model": "fixture-model-v1",
+    "output_tokens": 100,
+    "resolved_count": 0,
+    "task_count": 1,
+    "task_set_digest": "sha256:p1-fixture-task-set",
+    "tool_calls": 10
+  },
+  "candidate": {
+    "adapter": "fixture",
+    "arm_id": "skill-candidate",
+    "cost": 0.1,
+    "evaluator": "fixture-evaluator-v1",
+    "input_tokens": 800,
+    "latency_ms": 1000,
+    "model": "fixture-model-v1",
+    "output_tokens": 100,
+    "resolved_count": 1,
+    "task_count": 1,
+    "task_set_digest": "sha256:p1-fixture-task-set",
+    "tool_calls": 10
+  },
+  "comparison": {
+    "cost_delta": 0.0,
+    "decision": "improve",
+    "input_token_delta": -200,
+    "latency_ms_delta": 0,
+    "output_token_delta": 0,
+    "resolved_delta": 1,
+    "tool_call_delta": 0
+  },
+  "invariant_check": {
+    "frozen": [
+      "task_set_digest",
+      "adapter",
+      "model",
+      "evaluator"
+    ],
+    "valid": true,
+    "violations": []
+  },
+  "result_digest": "sha256:18935205852cb3bc02a6b367286e15e4efbf4e3ce65de3cd581f3b84ec3cd0f9",
+  "schema_version": "praxile.skill_activation_experiment.v1",
+  "skill": {
+    "asset_id": "skill_focused_parser",
+    "version": "1"
+  }
+}

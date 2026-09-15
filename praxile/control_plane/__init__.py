@@ -9,6 +9,11 @@ from .evolution import (
     HarnessCandidate,
 )
 from .gates import PromotionGateEvaluator, PromotionThresholds
+from .experiments import (
+    ControlledArmMeasurement,
+    SkillActivationExperiment,
+    SubagentComparisonExperiment,
+)
 from .registry import REGISTRY_SCHEMA_VERSION, HarnessEvolutionRegistry
 from .skill_eval import SKILL_EVALUATION_SCHEMA_VERSION, SkillAssetEvaluator, SkillCaseResult, SkillMarkdownProjector
 from .subagent import (
@@ -48,6 +53,9 @@ __all__ = [
     "MergeDecision",
     "PromotionGateEvaluator",
     "PromotionThresholds",
+    "ControlledArmMeasurement",
+    "SkillActivationExperiment",
+    "SubagentComparisonExperiment",
     "SkillAsset",
     "SkillAssetEvaluator",
     "SkillCaseResult",

@@ -560,6 +560,7 @@ Not included in the first release:
 - [V2 mini-SWE-agent Acceptance](docs/V2_MINI_SWE_ACCEPTANCE.md)
 - [V2 P0 Public Result](docs/V2_P0_PUBLIC_RESULT.md)
 - [V2 P1 Frozen Boundary and Checklist](docs/V2_P1_FROZEN_BOUNDARY.md)
+- [V2 P1 Control-Plane Acceptance Evidence](experiments/control_plane/P1_FIXTURE_ACCEPTANCE_V1/README.md)
 - [Web Console](docs/WEB_CONSOLE.md)
 - [P0 Engineering Checklist](docs/P0_ENGINEERING_CHECKLIST.md)
 - [Praxile Reflect](docs/REFLECT.md)

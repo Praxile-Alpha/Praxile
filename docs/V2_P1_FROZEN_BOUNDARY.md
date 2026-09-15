@@ -1,6 +1,6 @@
 # Praxile V2 P1 Frozen Boundary
 
-Status: frozen  
+Status: P1 contract acceptance complete
 Effective date: 2026-09-13  
 Decision type: architecture boundary
 
@@ -80,7 +80,8 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Explicit `AdapterPolicy` bridge and policy-use metadata.
 - [x] Repository-, semantic-signal-, and anti-scope-aware candidate activation
   with auditable abstention.
-- [ ] Persist per-run source utilization and compression decisions in trace events.
+- [x] Persist per-run source utilization and compression decisions in trace
+  events ([fixture evidence](../experiments/control_plane/P1_FIXTURE_ACCEPTANCE_V1/context-source-trace.json)).
 - [x] Run two complete Context Policies under frozen task/model/adapter/evaluator invariants (fixture acceptance).
 - [x] Publish a model-backed Context/Experience ablation on a fixed five-task
   held-out set ([MiniMax M3 held-out result](../experiments/mini_swe/P1_MINIMAX_M3_HELDOUT5_STOPPING_V1/README.md));
@@ -92,7 +93,8 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Preconditions, tools, procedure, verification, failure modes, and eval cases are mandatory.
 - [x] Proposed skills cannot be injected into production runs.
 - [x] Skill candidate evaluator and deterministic human-readable Markdown projection.
-- [ ] Measured Skill activation and attribution experiment.
+- [x] Measured Skill activation and conservative attribution experiment
+  ([deterministic fixture evidence](../experiments/control_plane/P1_FIXTURE_ACCEPTANCE_V1/skill-activation-ab.json)).
 
 ### P1-C Subagent Control
 
@@ -100,7 +102,9 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Parent-child trace DAG validator.
 - [x] Isolated verifier Merge Decision gate.
 - [x] Capability-negotiated delegation service for a subagent-capable adapter.
-- [ ] Controlled no-subagent/subagent or fresh/fork comparison.
+- [x] Controlled no-subagent/subagent comparison with complete delegation and
+  isolated merge evidence
+  ([deterministic fixture evidence](../experiments/control_plane/P1_FIXTURE_ACCEPTANCE_V1/subagent-ab.json)).
 
 ### P1-D Harness Evolution
 
@@ -109,7 +113,13 @@ This phase is additive. It introduces `praxile.control_plane` and `.praxile/cont
 - [x] Explicit human approval and one-command-equivalent registry rollback operation.
 - [x] Eval Runner integration that produces Evidence, Quality, Regression, Cost, Human, and Rollback gates.
 - [x] CLI commands for candidate register/list/evaluate/promote/rollback and Skill evaluation.
-- [ ] End-to-end candidate promotion and rollback evidence package.
+- [x] End-to-end candidate promotion and rollback evidence package
+  ([registry evidence](../experiments/control_plane/P1_FIXTURE_ACCEPTANCE_V1/promotion-rollback.json)).
+
+P1 completion means the control-plane contracts and deterministic acceptance
+loop are complete. The Skill and Subagent evidence uses the Fixture Adapter and
+does not claim real-model task-quality improvement or native mini-SWE-agent
+subagent support. Those external-validity benchmarks remain later-phase work.
 
 ## CLI Entry Points
 

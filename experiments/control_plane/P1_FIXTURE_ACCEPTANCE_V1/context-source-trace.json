@@ -1,0 +1,89 @@
+{
+  "events": [
+    {
+      "event_id": "run_p1_context_fixture:praxile:context-source:0",
+      "payload": {
+        "compression": [
+          {
+            "asset_id": null,
+            "decision": "passthrough",
+            "input_tokens": 16,
+            "output_tokens": 16,
+            "profile": "none",
+            "reason": "context passed through without compression",
+            "token_measurement": "estimated"
+          }
+        ],
+        "input_tokens": 16,
+        "max_tokens": 120,
+        "mode": "resident",
+        "output_tokens": 16,
+        "policy_id": "p1-context-fixture",
+        "policy_version": "1",
+        "required": true,
+        "selected_items": 1,
+        "source": "task_spec",
+        "stages": [
+          "exploration"
+        ],
+        "status": "used",
+        "utilization_ratio": 0.1333
+      },
+      "type": "CONTEXT_SOURCE_USAGE"
+    },
+    {
+      "event_id": "run_p1_context_fixture:praxile:context-source:1",
+      "payload": {
+        "compression": [
+          {
+            "asset_id": null,
+            "decision": "compressed",
+            "input_tokens": 80,
+            "output_tokens": 20,
+            "profile": "trajectory-compact-v1",
+            "reason": "history crossed the configured context ratio",
+            "token_measurement": "reported"
+          }
+        ],
+        "input_tokens": 80,
+        "max_tokens": 100,
+        "mode": "retrieved",
+        "output_tokens": 20,
+        "policy_id": "p1-context-fixture",
+        "policy_version": "1",
+        "required": false,
+        "selected_items": 1,
+        "source": "recent_trajectory",
+        "stages": [
+          "exploration"
+        ],
+        "status": "used",
+        "utilization_ratio": 0.2
+      },
+      "type": "CONTEXT_SOURCE_USAGE"
+    },
+    {
+      "event_id": "run_p1_context_fixture:praxile:context-source:2",
+      "payload": {
+        "compression": [],
+        "input_tokens": 0,
+        "max_tokens": 80,
+        "mode": "retrieved",
+        "output_tokens": 0,
+        "policy_id": "p1-context-fixture",
+        "policy_version": "1",
+        "required": false,
+        "selected_items": 0,
+        "source": "retrieved_skill",
+        "stages": [
+          "implementation"
+        ],
+        "status": "not_selected",
+        "utilization_ratio": 0.0
+      },
+      "type": "CONTEXT_SOURCE_USAGE"
+    }
+  ],
+  "policy_id": "p1-context-fixture",
+  "schema_version": "praxile.p1_context_trace_acceptance.v1"
+}

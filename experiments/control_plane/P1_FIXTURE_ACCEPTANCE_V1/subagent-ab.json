@@ -1,0 +1,78 @@
+{
+  "attribution": {
+    "causal_credit": true,
+    "reason": "The isolated delegated arm has complete merge evidence and improved.",
+    "status": "credited"
+  },
+  "baseline": {
+    "adapter": "fixture",
+    "arm_id": "no-subagent",
+    "cost": 0.1,
+    "evaluator": "fixture-evaluator-v1",
+    "input_tokens": 1000,
+    "latency_ms": 1000,
+    "model": "fixture-model-v1",
+    "output_tokens": 100,
+    "resolved_count": 0,
+    "task_count": 1,
+    "task_set_digest": "sha256:p1-fixture-task-set",
+    "tool_calls": 10
+  },
+  "candidate": {
+    "adapter": "fixture",
+    "arm_id": "isolated-subagent",
+    "cost": 0.1,
+    "evaluator": "fixture-evaluator-v1",
+    "input_tokens": 900,
+    "latency_ms": 1000,
+    "model": "fixture-model-v1",
+    "output_tokens": 100,
+    "resolved_count": 1,
+    "task_count": 1,
+    "task_set_digest": "sha256:p1-fixture-task-set",
+    "tool_calls": 10
+  },
+  "comparison": {
+    "cost_delta": 0.0,
+    "decision": "improve",
+    "input_token_delta": -100,
+    "latency_ms_delta": 0,
+    "output_token_delta": 0,
+    "resolved_delta": 1,
+    "tool_call_delta": 0
+  },
+  "delegation": {
+    "completed_delegations": [
+      {
+        "child_run_id": "child_fixture",
+        "contract_id": "delegation_fixture",
+        "end_event_id": "subagent_end",
+        "merge_gate_event_id": "subagent_merge",
+        "start_event_id": "subagent_start",
+        "verifier_run_id": "verifier_fixture"
+      }
+    ],
+    "end_event_ids": [
+      "subagent_end"
+    ],
+    "merge_gate_event_ids": [
+      "subagent_merge"
+    ],
+    "start_event_ids": [
+      "subagent_start"
+    ],
+    "trace_complete": true
+  },
+  "invariant_check": {
+    "frozen": [
+      "task_set_digest",
+      "adapter",
+      "model",
+      "evaluator"
+    ],
+    "valid": true,
+    "violations": []
+  },
+  "result_digest": "sha256:434011259135773db1b261813bbd95a635ee626a38ca5e4ceeb70e4f623ce6ce",
+  "schema_version": "praxile.subagent_comparison.v1"
+}

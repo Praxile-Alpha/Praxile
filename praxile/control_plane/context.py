@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
+import math
 from typing import Any, Mapping
 
 from ..adapters import AdapterPolicy
@@ -173,11 +175,16 @@ class ContextPolicy:
         allowed = {rule.source for rule in self.source_rules}
         required = {rule.source for rule in self.source_rules if rule.required}
         compiled: list[Mapping[str, Any]] = []
+        measurements: list[Mapping[str, Any]] = []
         for index, item in enumerate(context_items):
-            source = str(item.get("source") or "")
+            compiled_item = dict(item)
+            raw_measurement = compiled_item.pop("_praxile_measurement", None)
+            source = str(compiled_item.get("source") or "")
             if source not in allowed:
                 raise ControlPlaneSchemaError(f"context item {index} uses undeclared source: {source!r}")
-            compiled.append(dict(item))
+            measurement = _context_measurement(compiled_item, raw_measurement, index=index)
+            compiled.append(compiled_item)
+            measurements.append(measurement)
         present = {str(item.get("source") or "") for item in compiled}
         if required - present:
             raise ControlPlaneSchemaError(f"required context sources are missing: {sorted(required - present)}")
@@ -201,5 +208,51 @@ class ContextPolicy:
                 "repository": dict(self.repository),
                 "experience": dict(self.experience),
                 "source_rules": [item.to_dict() for item in self.source_rules],
+                "context_source_measurements": measurements,
             },
         )
+
+
+def _context_measurement(
+    item: Mapping[str, Any], raw: Any, *, index: int
+) -> dict[str, Any]:
+    current_tokens = _estimated_tokens(item)
+    if raw is None:
+        measurement: Mapping[str, Any] = {}
+    else:
+        measurement = require_mapping(raw, f"context item {index} _praxile_measurement")
+    decision = str(measurement.get("decision") or "passthrough")
+    if decision not in {"passthrough", "compressed", "truncated"}:
+        raise ControlPlaneSchemaError(
+            f"context item {index} measurement decision is unsupported: {decision!r}"
+        )
+    input_tokens = strict_int(
+        measurement.get("input_tokens", current_tokens),
+        f"context item {index} input_tokens",
+    )
+    output_tokens = strict_int(
+        measurement.get("output_tokens", current_tokens),
+        f"context item {index} output_tokens",
+    )
+    if output_tokens > input_tokens:
+        raise ControlPlaneSchemaError(
+            f"context item {index} output_tokens cannot exceed input_tokens"
+        )
+    profile = str(measurement.get("compression_profile") or "none")
+    reason = str(measurement.get("reason") or "context passed through without compression")
+    return {
+        "item_index": index,
+        "source": str(item.get("source") or ""),
+        "asset_id": str(item.get("asset_id") or "") or None,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "token_measurement": "reported" if raw is not None else "estimated",
+        "compression_profile": profile,
+        "decision": decision,
+        "reason": reason,
+    }
+
+
+def _estimated_tokens(item: Mapping[str, Any]) -> int:
+    payload = json.dumps(dict(item), ensure_ascii=False, sort_keys=True)
+    return max(1, math.ceil(len(payload) / 4))

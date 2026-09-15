@@ -42,5 +42,6 @@ def test_public_evidence_includes_stop_decisions_and_diff_scope() -> None:
 
     assert "STOP_DECISION" in _PUBLIC_EVENT_TYPES
     assert "CONTEXT_ACTIVATION" in _PUBLIC_EVENT_TYPES
+    assert "CONTEXT_SOURCE_USAGE" in _PUBLIC_EVENT_TYPES
     assert public["tasks"][0]["diff_scope"]["status"] == "review_required"
     assert public["tasks"][0]["context_activation"]["status"] == "abstained"

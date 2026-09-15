@@ -1,0 +1,562 @@
+{
+  "after_promotion": {
+    "active": {
+      "skills.focused-parser": {
+        "candidate_id": "skill_focused_parser_v1",
+        "version": "1"
+      }
+    },
+    "candidates": {
+      "skill_focused_parser_v1": {
+        "candidate": {
+          "base_version": "0",
+          "candidate_id": "skill_focused_parser_v1",
+          "candidate_version": "1",
+          "component_key": "skills.focused-parser",
+          "hypothesis": "The focused parser skill improves the frozen fixture task.",
+          "payload": {
+            "allowed_tools": [
+              "read_file",
+              "run_test",
+              "edit_file"
+            ],
+            "context_requirements": [
+              "Failing test and parser source"
+            ],
+            "eval_cases": [
+              "fixture_parser_case"
+            ],
+            "failure_modes": [
+              "The failure belongs to tokenization"
+            ],
+            "input_schema": {
+              "type": "object"
+            },
+            "meta": {
+              "activation_history": [],
+              "applicable_conditions": [
+                "A focused parser regression is reproducible"
+              ],
+              "asset_id": "skill_focused_parser",
+              "confidence": 0.8,
+              "created_from_run": "source_parser_run",
+              "eval_result": {},
+              "owner": null,
+              "reviewer": null,
+              "schema_version": "praxile.asset_meta.v2",
+              "scope": {
+                "repository": "fixture/project"
+              },
+              "source_evidence": [
+                {
+                  "ref_id": "source_parser_failure",
+                  "type": "event"
+                }
+              ],
+              "status": "proposed",
+              "type": "skill",
+              "version": "1"
+            },
+            "name": "Focused parser repair",
+            "output_schema": {},
+            "preconditions": [
+              "The parser failure is reproducible"
+            ],
+            "procedure": [
+              "Reproduce the focused failure",
+              "Patch the narrowest parser branch"
+            ],
+            "schema_version": "praxile.skill_asset.v2",
+            "verification_contract": [
+              "Focused and regression tests pass"
+            ]
+          },
+          "risk": "low",
+          "schema_version": "praxile.harness_candidate.v1",
+          "source_evidence": [
+            {
+              "ref_id": "source_parser_failure",
+              "type": "event"
+            }
+          ],
+          "type": "skill"
+        },
+        "registered_at": "<generated-at>",
+        "status": "active"
+      }
+    },
+    "evaluations": {
+      "skill_focused_parser_v1": {
+        "baseline_ref": "eval:p1_fixture_baseline",
+        "candidate_eval_ref": "eval:p1_fixture_candidate",
+        "candidate_id": "skill_focused_parser_v1",
+        "decision": "promote",
+        "gates": [
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_evidence",
+                "type": "eval"
+              }
+            ],
+            "gate": "evidence",
+            "passed": true,
+            "summary": "evidence gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_quality",
+                "type": "eval"
+              }
+            ],
+            "gate": "quality",
+            "passed": true,
+            "summary": "quality gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_regression",
+                "type": "eval"
+              }
+            ],
+            "gate": "regression",
+            "passed": true,
+            "summary": "regression gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_cost",
+                "type": "eval"
+              }
+            ],
+            "gate": "cost",
+            "passed": true,
+            "summary": "cost gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_human",
+                "type": "eval"
+              }
+            ],
+            "gate": "human",
+            "passed": true,
+            "summary": "human gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_rollback",
+                "type": "eval"
+              }
+            ],
+            "gate": "rollback",
+            "passed": true,
+            "summary": "rollback gate passed in deterministic fixture acceptance"
+          }
+        ],
+        "metrics": {
+          "cost_delta": 0.0,
+          "input_token_delta": -200,
+          "resolved_delta": 1
+        },
+        "reviewer": "human:p1-acceptance-maintainer",
+        "rollback_target": {
+          "component_key": "skills.focused-parser",
+          "version": "0"
+        },
+        "schema_version": "praxile.candidate_evaluation.v1"
+      }
+    },
+    "history": [
+      {
+        "action": "promote",
+        "approved_by": "p1-acceptance-maintainer",
+        "at": "<generated-at>",
+        "component_key": "skills.focused-parser",
+        "current": {
+          "candidate_id": "skill_focused_parser_v1",
+          "version": "1"
+        },
+        "previous": {
+          "component_key": "skills.focused-parser",
+          "version": "0"
+        }
+      }
+    ],
+    "schema_version": "praxile.harness_registry.v1"
+  },
+  "after_rollback": {
+    "active": {
+      "skills.focused-parser": {
+        "component_key": "skills.focused-parser",
+        "version": "0"
+      }
+    },
+    "candidates": {
+      "skill_focused_parser_v1": {
+        "candidate": {
+          "base_version": "0",
+          "candidate_id": "skill_focused_parser_v1",
+          "candidate_version": "1",
+          "component_key": "skills.focused-parser",
+          "hypothesis": "The focused parser skill improves the frozen fixture task.",
+          "payload": {
+            "allowed_tools": [
+              "read_file",
+              "run_test",
+              "edit_file"
+            ],
+            "context_requirements": [
+              "Failing test and parser source"
+            ],
+            "eval_cases": [
+              "fixture_parser_case"
+            ],
+            "failure_modes": [
+              "The failure belongs to tokenization"
+            ],
+            "input_schema": {
+              "type": "object"
+            },
+            "meta": {
+              "activation_history": [],
+              "applicable_conditions": [
+                "A focused parser regression is reproducible"
+              ],
+              "asset_id": "skill_focused_parser",
+              "confidence": 0.8,
+              "created_from_run": "source_parser_run",
+              "eval_result": {},
+              "owner": null,
+              "reviewer": null,
+              "schema_version": "praxile.asset_meta.v2",
+              "scope": {
+                "repository": "fixture/project"
+              },
+              "source_evidence": [
+                {
+                  "ref_id": "source_parser_failure",
+                  "type": "event"
+                }
+              ],
+              "status": "proposed",
+              "type": "skill",
+              "version": "1"
+            },
+            "name": "Focused parser repair",
+            "output_schema": {},
+            "preconditions": [
+              "The parser failure is reproducible"
+            ],
+            "procedure": [
+              "Reproduce the focused failure",
+              "Patch the narrowest parser branch"
+            ],
+            "schema_version": "praxile.skill_asset.v2",
+            "verification_contract": [
+              "Focused and regression tests pass"
+            ]
+          },
+          "risk": "low",
+          "schema_version": "praxile.harness_candidate.v1",
+          "source_evidence": [
+            {
+              "ref_id": "source_parser_failure",
+              "type": "event"
+            }
+          ],
+          "type": "skill"
+        },
+        "registered_at": "<generated-at>",
+        "status": "rolled_back"
+      }
+    },
+    "evaluations": {
+      "skill_focused_parser_v1": {
+        "baseline_ref": "eval:p1_fixture_baseline",
+        "candidate_eval_ref": "eval:p1_fixture_candidate",
+        "candidate_id": "skill_focused_parser_v1",
+        "decision": "promote",
+        "gates": [
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_evidence",
+                "type": "eval"
+              }
+            ],
+            "gate": "evidence",
+            "passed": true,
+            "summary": "evidence gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_quality",
+                "type": "eval"
+              }
+            ],
+            "gate": "quality",
+            "passed": true,
+            "summary": "quality gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_regression",
+                "type": "eval"
+              }
+            ],
+            "gate": "regression",
+            "passed": true,
+            "summary": "regression gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_cost",
+                "type": "eval"
+              }
+            ],
+            "gate": "cost",
+            "passed": true,
+            "summary": "cost gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_human",
+                "type": "eval"
+              }
+            ],
+            "gate": "human",
+            "passed": true,
+            "summary": "human gate passed in deterministic fixture acceptance"
+          },
+          {
+            "evidence": [
+              {
+                "ref_id": "p1_fixture_rollback",
+                "type": "eval"
+              }
+            ],
+            "gate": "rollback",
+            "passed": true,
+            "summary": "rollback gate passed in deterministic fixture acceptance"
+          }
+        ],
+        "metrics": {
+          "cost_delta": 0.0,
+          "input_token_delta": -200,
+          "resolved_delta": 1
+        },
+        "reviewer": "human:p1-acceptance-maintainer",
+        "rollback_target": {
+          "component_key": "skills.focused-parser",
+          "version": "0"
+        },
+        "schema_version": "praxile.candidate_evaluation.v1"
+      }
+    },
+    "history": [
+      {
+        "action": "promote",
+        "approved_by": "p1-acceptance-maintainer",
+        "at": "<generated-at>",
+        "component_key": "skills.focused-parser",
+        "current": {
+          "candidate_id": "skill_focused_parser_v1",
+          "version": "1"
+        },
+        "previous": {
+          "component_key": "skills.focused-parser",
+          "version": "0"
+        }
+      },
+      {
+        "action": "rollback",
+        "approved_by": "p1-acceptance-maintainer",
+        "at": "<generated-at>",
+        "component_key": "skills.focused-parser",
+        "current": {
+          "component_key": "skills.focused-parser",
+          "version": "0"
+        },
+        "previous": {
+          "candidate_id": "skill_focused_parser_v1",
+          "version": "1"
+        }
+      }
+    ],
+    "schema_version": "praxile.harness_registry.v1"
+  },
+  "assertions": {
+    "candidate_status_after_rollback": "rolled_back",
+    "promoted_version": "1",
+    "rolled_back_version": "0"
+  },
+  "candidate": {
+    "base_version": "0",
+    "candidate_id": "skill_focused_parser_v1",
+    "candidate_version": "1",
+    "component_key": "skills.focused-parser",
+    "hypothesis": "The focused parser skill improves the frozen fixture task.",
+    "payload": {
+      "allowed_tools": [
+        "read_file",
+        "run_test",
+        "edit_file"
+      ],
+      "context_requirements": [
+        "Failing test and parser source"
+      ],
+      "eval_cases": [
+        "fixture_parser_case"
+      ],
+      "failure_modes": [
+        "The failure belongs to tokenization"
+      ],
+      "input_schema": {
+        "type": "object"
+      },
+      "meta": {
+        "activation_history": [],
+        "applicable_conditions": [
+          "A focused parser regression is reproducible"
+        ],
+        "asset_id": "skill_focused_parser",
+        "confidence": 0.8,
+        "created_from_run": "source_parser_run",
+        "eval_result": {},
+        "owner": null,
+        "reviewer": null,
+        "schema_version": "praxile.asset_meta.v2",
+        "scope": {
+          "repository": "fixture/project"
+        },
+        "source_evidence": [
+          {
+            "ref_id": "source_parser_failure",
+            "type": "event"
+          }
+        ],
+        "status": "proposed",
+        "type": "skill",
+        "version": "1"
+      },
+      "name": "Focused parser repair",
+      "output_schema": {},
+      "preconditions": [
+        "The parser failure is reproducible"
+      ],
+      "procedure": [
+        "Reproduce the focused failure",
+        "Patch the narrowest parser branch"
+      ],
+      "schema_version": "praxile.skill_asset.v2",
+      "verification_contract": [
+        "Focused and regression tests pass"
+      ]
+    },
+    "risk": "low",
+    "schema_version": "praxile.harness_candidate.v1",
+    "source_evidence": [
+      {
+        "ref_id": "source_parser_failure",
+        "type": "event"
+      }
+    ],
+    "type": "skill"
+  },
+  "evaluation": {
+    "baseline_ref": "eval:p1_fixture_baseline",
+    "candidate_eval_ref": "eval:p1_fixture_candidate",
+    "candidate_id": "skill_focused_parser_v1",
+    "decision": "promote",
+    "gates": [
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_evidence",
+            "type": "eval"
+          }
+        ],
+        "gate": "evidence",
+        "passed": true,
+        "summary": "evidence gate passed in deterministic fixture acceptance"
+      },
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_quality",
+            "type": "eval"
+          }
+        ],
+        "gate": "quality",
+        "passed": true,
+        "summary": "quality gate passed in deterministic fixture acceptance"
+      },
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_regression",
+            "type": "eval"
+          }
+        ],
+        "gate": "regression",
+        "passed": true,
+        "summary": "regression gate passed in deterministic fixture acceptance"
+      },
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_cost",
+            "type": "eval"
+          }
+        ],
+        "gate": "cost",
+        "passed": true,
+        "summary": "cost gate passed in deterministic fixture acceptance"
+      },
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_human",
+            "type": "eval"
+          }
+        ],
+        "gate": "human",
+        "passed": true,
+        "summary": "human gate passed in deterministic fixture acceptance"
+      },
+      {
+        "evidence": [
+          {
+            "ref_id": "p1_fixture_rollback",
+            "type": "eval"
+          }
+        ],
+        "gate": "rollback",
+        "passed": true,
+        "summary": "rollback gate passed in deterministic fixture acceptance"
+      }
+    ],
+    "metrics": {
+      "cost_delta": 0.0,
+      "input_token_delta": -200,
+      "resolved_delta": 1
+    },
+    "reviewer": "human:p1-acceptance-maintainer",
+    "rollback_target": {
+      "component_key": "skills.focused-parser",
+      "version": "0"
+    },
+    "schema_version": "praxile.candidate_evaluation.v1"
+  },
+  "schema_version": "praxile.p1_promotion_rollback_acceptance.v1"
+}

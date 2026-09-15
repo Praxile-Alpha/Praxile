@@ -61,6 +61,12 @@ python -m pip install -e ".[mini-swe]"
 
 The adapter uses mini-SWE-agent's supported `mini` CLI and its saved trajectory rather than importing or modifying mini-SWE-agent's internal loop. It passes `--task`, `--output`, `--yolo`, and `--exit-immediately`, with optional model, config, and cost-limit arguments. If custom config specs are supplied, include mini-SWE-agent's default config explicitly as required by its CLI. File-based mini-SWE-agent configs must use its supported `.yaml` suffix; key-value config specs remain valid.
 
+When an `AdapterPolicy` was compiled from a V2 Context Policy, the runner emits
+one `CONTEXT_SOURCE_USAGE` event per declared source after `RUN_START`. The event
+records selection count, source budget utilization, compression profile,
+before/after token estimates, and the decision reason. Reserved
+`_praxile_measurement` input is removed before context reaches the adapter.
+
 ```python
 from praxile.adapters import AdapterPolicy, AdapterRunner, AdapterTask, MiniSweAgentAdapter
 

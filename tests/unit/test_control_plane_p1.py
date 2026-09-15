@@ -28,7 +28,7 @@ from praxile.control_plane import (
     validate_delegation_trace,
 )
 from praxile.trace import AgentEvent
-from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
+from praxile.adapters import AdapterPolicy, AdapterRunner, AdapterTask, FixtureAgentAdapter
 from praxile.config import Config
 from praxile.trace import EventStore, RunHandle
 
@@ -94,6 +94,61 @@ def test_context_policy_round_trip_and_evaluation_only_compilation() -> None:
 
     production = replace(restored, status="active").compile(({"source": "task_spec", "content": "Fix"},))
     assert production.settings["evaluation_only"] is False
+
+
+def test_context_policy_persists_source_utilization_and_compression_trace(tmp_path) -> None:
+    policy = ContextPolicy(
+        policy_id="measured-context",
+        version="1",
+        status="active",
+        source_rules=(
+            ContextSourceRule(
+                source="recent_trajectory",
+                stages=("exploration",),
+                max_tokens=100,
+            ),
+            ContextSourceRule(
+                source="retrieved_skill",
+                stages=("implementation",),
+                max_tokens=80,
+            ),
+        ),
+        stage_budgets=budgets(),
+    )
+    compiled = policy.compile(
+        (
+            {
+                "source": "recent_trajectory",
+                "content": "A compact trajectory summary",
+                "_praxile_measurement": {
+                    "input_tokens": 80,
+                    "output_tokens": 20,
+                    "compression_profile": "trajectory-compact-v1",
+                    "decision": "compressed",
+                    "reason": "history crossed the configured context ratio",
+                },
+            },
+        )
+    )
+    assert "_praxile_measurement" not in compiled.context[0]
+
+    result = AdapterRunner(EventStore(Config.load(tmp_path).paths)).execute(
+        FixtureAgentAdapter(),
+        AdapterTask("task_context_usage", "Inspect the regression", str(tmp_path)),
+        compiled,
+    )
+
+    usage = [event for event in result.events if event.type == "CONTEXT_SOURCE_USAGE"]
+    assert len(usage) == 2
+    trajectory = next(event for event in usage if event.payload["source"] == "recent_trajectory")
+    assert trajectory.payload["selected_items"] == 1
+    assert trajectory.payload["input_tokens"] == 80
+    assert trajectory.payload["output_tokens"] == 20
+    assert trajectory.payload["utilization_ratio"] == 0.2
+    assert trajectory.payload["compression"][0]["profile"] == "trajectory-compact-v1"
+    assert trajectory.payload["compression"][0]["token_measurement"] == "reported"
+    skill = next(event for event in usage if event.payload["source"] == "retrieved_skill")
+    assert skill.payload["status"] == "not_selected"
 
 
 def test_context_policy_rejects_undeclared_sources_and_incomplete_stage_budgets() -> None:

@@ -1,0 +1,21 @@
+{
+  "acceptance_id": "p1-control-plane-fixture-v1",
+  "artifacts": [
+    "context-source-trace.json",
+    "skill-activation-ab.json",
+    "subagent-ab.json",
+    "promotion-rollback.json"
+  ],
+  "claims": [
+    "context source utilization and compression decisions are persisted as trace events",
+    "skill delivery, reference, outcome comparison, and causal attribution are distinct",
+    "subagent comparison requires delegation and isolated merge evidence",
+    "a six-gate candidate can be promoted and atomically rolled back"
+  ],
+  "execution_mode": "deterministic_fixture",
+  "non_claims": [
+    "This package does not claim real-model task-quality improvement.",
+    "This package does not claim mini-SWE-agent native subagent support."
+  ],
+  "schema_version": "praxile.p1_acceptance_manifest.v1"
+}

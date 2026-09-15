@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Mapping
 
 from ..trace import AgentEvent, ArtifactRecord, EventStore, RunHandle
 from ..utils import utc_now
@@ -58,6 +59,10 @@ class AdapterRunner:
                 self.event_store.append(decision_event)
                 events.append(decision_event)
                 activation_emitted = True
+            if event.run_id == handle.run_id and event.type == "RUN_START":
+                for usage_event in self._context_source_events(handle, policy):
+                    self.event_store.append(usage_event)
+                    events.append(usage_event)
 
         root_events = [event for event in events if event.run_id == handle.run_id]
         if not root_events or root_events[0].type != "RUN_START" or root_events[-1].type != "RUN_END":
@@ -71,6 +76,61 @@ class AdapterRunner:
             self._validate_artifact(artifact, handle, event_ids)
             self.event_store.record_artifact(artifact)
         return AdapterRunResult(handle=handle, events=tuple(events), artifacts=tuple(artifacts))
+
+    @staticmethod
+    def _context_source_events(handle: RunHandle, policy: AdapterPolicy) -> tuple[AgentEvent, ...]:
+        raw_rules = policy.settings.get("source_rules", [])
+        raw_measurements = policy.settings.get("context_source_measurements", [])
+        if not isinstance(raw_rules, list) or not raw_rules:
+            return ()
+        measurements = [item for item in raw_measurements if isinstance(item, Mapping)] if isinstance(raw_measurements, list) else []
+        events: list[AgentEvent] = []
+        for index, raw_rule in enumerate(raw_rules):
+            if not isinstance(raw_rule, Mapping):
+                continue
+            source = str(raw_rule.get("source") or "")
+            selected = [item for item in measurements if item.get("source") == source]
+            input_tokens = sum(_non_negative_int(item.get("input_tokens")) for item in selected)
+            output_tokens = sum(_non_negative_int(item.get("output_tokens")) for item in selected)
+            max_tokens = _non_negative_int(raw_rule.get("max_tokens"))
+            events.append(
+                AgentEvent.create(
+                    event_id=f"{handle.run_id}:praxile:context-source:{index}",
+                    timestamp=utc_now(),
+                    trace_id=handle.trace_id,
+                    run_id=handle.run_id,
+                    task_id=handle.task_id,
+                    type="CONTEXT_SOURCE_USAGE",
+                    actor="praxile-control-plane",
+                    payload={
+                        "policy_id": policy.policy_id,
+                        "policy_version": policy.version,
+                        "source": source,
+                        "stages": list(raw_rule.get("stages") or []),
+                        "mode": str(raw_rule.get("mode") or "on_demand"),
+                        "required": raw_rule.get("required") is True,
+                        "max_tokens": max_tokens,
+                        "selected_items": len(selected),
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "utilization_ratio": round(output_tokens / max_tokens, 4) if max_tokens else None,
+                        "compression": [
+                            {
+                                "asset_id": item.get("asset_id"),
+                                "profile": item.get("compression_profile"),
+                                "decision": item.get("decision"),
+                                "input_tokens": _non_negative_int(item.get("input_tokens")),
+                                "output_tokens": _non_negative_int(item.get("output_tokens")),
+                                "token_measurement": item.get("token_measurement"),
+                                "reason": item.get("reason"),
+                            }
+                            for item in selected
+                        ],
+                        "status": "used" if selected else "not_selected",
+                    },
+                )
+            )
+        return tuple(events)
 
     @staticmethod
     def _validate_handle(handle: RunHandle, adapter: AgentAdapterV2, task: AdapterTask) -> None:
@@ -100,3 +160,12 @@ class AdapterRunner:
             raise AdapterProtocolError("artifact trace identity does not match run handle")
         if artifact.producer_event_id not in event_ids:
             raise AdapterProtocolError("artifact producer event was not emitted by this adapter execution")
+
+
+def _non_negative_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
