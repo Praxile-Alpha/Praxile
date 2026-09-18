@@ -233,7 +233,7 @@ class CapabilityProtocol:
         if task_ids != partitions:
             raise EvalSchemaError(f"capability task partition mismatch: missing={sorted(task_ids - partitions)}, extra={sorted(partitions - task_ids)}")
         forbidden = _PRIVATE_METADATA_KEYS | {key.lower() for key in self.information_boundary.forbidden_metadata_keys}
-        candidate_leaks = _leaking_keys(candidate_payload.get("context_item"), forbidden)
+        candidate_leaks = _leaking_keys(candidate_payload, forbidden)
         if candidate_leaks:
             raise EvalSchemaError(f"candidate context contains evaluator fields: {sorted(candidate_leaks)}")
         for task in task_set.tasks:

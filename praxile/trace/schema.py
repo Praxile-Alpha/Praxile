@@ -17,6 +17,7 @@ KNOWN_EVENT_TYPES = frozenset(
         "RUN_START",
         "MODEL_CALL",
         "CONTEXT_ACTIVATION",
+        "CONTEXT_REPRESENTATION",
         "CONTEXT_SOURCE_USAGE",
         "CONTEXT_INJECT",
         "TOOL_CALL",

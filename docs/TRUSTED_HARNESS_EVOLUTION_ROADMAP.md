@@ -170,7 +170,8 @@ The four directions derived from ASPIRE, S3Gym, and HarnessDev are tracked separ
 - [ ] **P2-A strong isolation:** sealed evaluator storage and process/filesystem isolation against a malicious executor. Local protocol checks are not an OS sandbox.
 - [x] **P2-A agent-authored declarative proxy eval:** versioned, reviewed development-only metric checks; proxy outcomes remain separate from control-plane held-out resolution.
 - [ ] **P2-A executable proxy scorers:** requires additional sandbox and command-policy design; not part of the safe declarative proxy format.
-- [ ] **P2-B Experience Representation Router:** choose none/raw episode/summary/skill/failure pattern after semantic activation.
+- [x] **P2-B controlled A/B representation router:** choose none/raw episode/summary/skill/failure pattern after semantic activation, with audited inputs, cost, decision and trace evidence. See [implementation and limits](P2_B_EXPERIENCE_REPRESENTATION.md).
+- [ ] **P2-B normal-run asset integration:** derive multiple representations from stored experience and apply the same router to the default `praxile run` context path.
 - [ ] **P2-C Judge Calibration:** link self-judgment to verifier outcome and future-task delta; track false promotions.
 - [ ] **P2-D Executable Harness Lab:** reproducible E/T/C/S/L/V coverage and dead-mechanism checks across executors.
 

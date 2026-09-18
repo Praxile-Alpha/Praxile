@@ -101,6 +101,13 @@ def test_protocol_rejects_answer_bearing_metadata_and_candidate() -> None:
         protocol.validate_run(_tasks(), candidate_payload={"context_item": {"content": "private patch content 123"}}, evaluator_identity={"name": "fixture-evaluator"})
     with pytest.raises(EvalSchemaError, match="candidate context contains"):
         protocol.validate_run(_tasks(), candidate_payload={"context_item": {"rubric": "private", "content": "Focus"}}, evaluator_identity={"name": "fixture-evaluator"})
+    with pytest.raises(EvalSchemaError, match="candidate includes private"):
+        protocol.validate_run(
+            _tasks(),
+            candidate_payload={"context_item": {"content": "Focus"},
+                               "representation_options": {"raw_episode": "private patch content 123"}},
+            evaluator_identity={"name": "fixture-evaluator"},
+        )
 
 
 def test_protocol_rejects_partition_overlap_and_unowned_evaluator() -> None:

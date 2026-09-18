@@ -58,6 +58,22 @@ class AdapterRunner:
                 )
                 self.event_store.append(decision_event)
                 events.append(decision_event)
+                for index, item in enumerate(activation.get("decisions", [])):
+                    representation = item.get("representation") if isinstance(item, Mapping) else None
+                    if not isinstance(representation, Mapping):
+                        continue
+                    selection_event = AgentEvent.create(
+                        event_id=f"{handle.run_id}:praxile:context-representation:{index}",
+                        timestamp=utc_now(),
+                        trace_id=handle.trace_id,
+                        run_id=handle.run_id,
+                        task_id=handle.task_id,
+                        type="CONTEXT_REPRESENTATION",
+                        actor="praxile-control-plane",
+                        payload=dict(representation),
+                    )
+                    self.event_store.append(selection_event)
+                    events.append(selection_event)
                 activation_emitted = True
             if event.run_id == handle.run_id and event.type == "RUN_START":
                 for usage_event in self._context_source_events(handle, policy):

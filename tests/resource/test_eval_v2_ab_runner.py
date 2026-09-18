@@ -240,6 +240,55 @@ def test_capability_ab_uses_approved_dev_proxy_and_seals_heldout_reuse(tmp_path:
     assert resumed["capability"]["protocol_digest"] == protocol.digest
 
 
+def test_ab_representation_routes_after_activation_and_records_trace(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    commit = _repo(source)
+    task = EvalTask(
+        task_id="parser-task", instruction="Fix parser regression",
+        repository=RepositorySpec("owner/repo", commit, "https://invalid.example/owner/repo.git"),
+        evaluation=SWEbenchEvaluationSpec("fixture", "test"),
+        metadata={"context_state_dependency": 1.0},
+    )
+    task_set = EvalTaskSet("fixture", "fixture", "test", (task,))
+    candidate = ContextCandidate(
+        candidate_id="multi-form", version="1", title="Parser experience",
+        candidate_type="experience_activation", context_item={"content": "Legacy summary"},
+        confidence=0.9, evidence_refs=("event:source",), expected_effect={"tool_calls": "decrease"},
+        applies_to={"repositories": ["owner/repo"], "task_signals": ["parser"]},
+        representation_options={"raw_episode": "Exact parser reproduction steps and state.",
+                                "summary_memory": "Parser summary."},
+        representation_profile={"compressibility": 0.1, "evidence_density": 0.9, "token_budget": 100},
+    )
+    state = tmp_path / "state"
+    config = Config.load(tmp_path / "control")
+    event_store = EventStore(config.paths)
+    report = ControlledABExperiment(state, event_store).run(
+        task_set,
+        adapter=FixtureAgentAdapter(), evaluator=PassingEvaluator(),
+        baseline_policy=AdapterPolicy(policy_id="baseline", settings={"workspace_isolated": True}),
+        candidate=candidate, model={"model_name_or_path": "fixture"}, experiment_id="representation-fixture",
+        source_overrides={"owner/repo": source},
+    )
+    assert report["representation_plan"]["decisions"]["parser-task"]["selected"] == "raw_episode"
+    assert report["comparison"]["totals"]["candidate_context_injected"] == 1
+    candidate_run = report["candidate"]["eval_run_id"]
+    candidate_report = read_json(state / "eval" / "v2" / "runs" / candidate_run / "report.json", {})
+    task_result = candidate_report["tasks"][0]
+    assert task_result["context_activation"]["decisions"][0]["representation"]["selected"] == "raw_episode"
+    events = event_store.list_events(trace_id=task_result["trace_id"])
+    assert sum(event.type == "CONTEXT_REPRESENTATION" for event in events) == 1
+    injections = [event for event in events if event.type == "CONTEXT_INJECT"]
+    assert len(injections) == 1
+    injected = str(injections[0].payload)
+    assert "Exact parser reproduction steps and state." in injected
+    assert "Parser summary." not in injected
+    public = PublicExperimentExporter(state, event_store).export("representation-fixture", tmp_path / "public")
+    manifest_text = Path(public["manifest"]).read_text(encoding="utf-8")
+    assert "Exact parser reproduction steps and state." not in manifest_text
+    assert "Parser summary." not in manifest_text
+    assert "<redacted:representation>" in manifest_text
+
+
 def test_controlled_ab_injects_candidate_only_for_semantically_matching_tasks(
     tmp_path: Path,
 ) -> None:

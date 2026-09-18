@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ...adapters import AdapterPolicy
+from .representation import validate_representations
 from .schema import EvalSchemaError, canonical_json
 
 
@@ -27,6 +28,8 @@ class ContextCandidate:
     source_diagnosis_ids: tuple[str, ...] = ()
     source_task_ids: tuple[str, ...] = ()
     applies_to: Mapping[str, Any] = field(default_factory=dict)
+    representation_options: Mapping[str, str] = field(default_factory=dict)
+    representation_profile: Mapping[str, Any] = field(default_factory=dict)
     schema_version: str = CONTEXT_CANDIDATE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -62,6 +65,9 @@ class ContextCandidate:
                 raise EvalSchemaError(f"{name} must contain non-empty strings")
         if not isinstance(self.applies_to, Mapping):
             raise EvalSchemaError("applies_to must be an object")
+        if not isinstance(self.representation_options, Mapping) or not isinstance(self.representation_profile, Mapping):
+            raise EvalSchemaError("representation options and profile must be objects")
+        validate_representations(self.representation_options, self.representation_profile)
         canonical_json(self.to_dict())
 
     @property
@@ -84,8 +90,12 @@ class ContextCandidate:
         context = value.get("context_item")
         applies_to = value.get("applies_to", {})
         expected_effect = value.get("expected_effect")
+        options = value.get("representation_options", {})
+        profile = value.get("representation_profile", {})
         if not all(isinstance(item, Mapping) for item in (context, applies_to, expected_effect)):
             raise EvalSchemaError("context_item, applies_to, and expected_effect must be objects")
+        if not isinstance(options, Mapping) or not isinstance(profile, Mapping):
+            raise EvalSchemaError("representation options and profile must be objects")
         return cls(
             schema_version=str(value.get("schema_version") or ""),
             candidate_id=str(value.get("candidate_id") or ""),
@@ -99,10 +109,12 @@ class ContextCandidate:
             source_diagnosis_ids=_strings(value.get("source_diagnosis_ids", []), "source_diagnosis_ids"),
             source_task_ids=_strings(value.get("source_task_ids", []), "source_task_ids"),
             applies_to=dict(applies_to),
+            representation_options=dict(options),
+            representation_profile=dict(profile),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "candidate_id": self.candidate_id,
             "version": self.version,
@@ -116,6 +128,10 @@ class ContextCandidate:
             "source_task_ids": list(self.source_task_ids),
             "applies_to": dict(self.applies_to),
         }
+        if self.representation_options:
+            payload["representation_options"] = dict(self.representation_options)
+            payload["representation_profile"] = dict(self.representation_profile)
+        return payload
 
     def validate_clean_track(self, evaluation_task_ids: set[str]) -> None:
         overlap = sorted(evaluation_task_ids & set(self.source_task_ids))
@@ -129,6 +145,7 @@ class ContextCandidate:
         baseline: AdapterPolicy,
         *,
         activation_plan: Mapping[str, Any] | None = None,
+        representation_plan: Mapping[str, Any] | None = None,
     ) -> AdapterPolicy:
         if baseline.context:
             raise EvalSchemaError("P0 baseline policy must not contain context")
@@ -140,6 +157,9 @@ class ContextCandidate:
         }
         if activation_plan is not None:
             item["activation_gate"] = dict(activation_plan)
+        if representation_plan is not None:
+            item["representation_plan"] = dict(representation_plan)
+            item["representation_options"] = dict(self.representation_options)
         return AdapterPolicy(
             policy_id=self.candidate_id,
             version=self.version,

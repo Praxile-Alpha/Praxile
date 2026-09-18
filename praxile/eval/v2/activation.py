@@ -124,6 +124,8 @@ def resolve_task_policy(
     for item in policy.context:
         candidate_item = dict(item)
         raw_gate = candidate_item.pop("activation_gate", None)
+        representation_plan = candidate_item.pop("representation_plan", None)
+        representation_options = candidate_item.pop("representation_options", None)
         if not isinstance(raw_gate, Mapping):
             context.append(candidate_item)
             continue
@@ -142,8 +144,22 @@ def resolve_task_policy(
             )
             continue
         normalized = dict(decision)
+        if isinstance(representation_plan, Mapping):
+            representation_decisions = representation_plan.get("decisions", {})
+            representation = representation_decisions.get(task_id) if isinstance(representation_decisions, Mapping) else None
+            if not isinstance(representation, Mapping):
+                raise EvalSchemaError(f"representation decision missing for {task_id}")
+            normalized["representation"] = dict(representation)
         decisions.append(normalized)
         if normalized.get("activated") is True:
+            selected = normalized.get("representation", {}).get("selected", "legacy")
+            if selected == "none":
+                continue
+            if selected != "legacy":
+                if not isinstance(representation_options, Mapping) or selected not in representation_options:
+                    raise EvalSchemaError(f"selected representation is unavailable: {selected}")
+                candidate_item["content"] = representation_options[selected]
+                candidate_item["representation_kind"] = selected
             context.append(candidate_item)
     if not decisions:
         return policy, None
@@ -157,8 +173,8 @@ def resolve_task_policy(
     activation = {
         "schema_version": CONTEXT_ACTIVATION_SCHEMA_VERSION,
         "task_id": task_id,
-        "status": "activated" if context else "abstained",
-        "activated": bool(context),
+        "status": "activated" if any(item.get("activated") for item in decisions) else "abstained",
+        "activated": any(item.get("activated") for item in decisions),
         "decisions": decisions,
         "injected_context_items": len(context),
     }

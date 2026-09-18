@@ -18,6 +18,7 @@ _PUBLIC_EVENT_TYPES = {
     "RUN_START",
     "CONTEXT_INJECT",
     "CONTEXT_ACTIVATION",
+    "CONTEXT_REPRESENTATION",
     "CONTEXT_SOURCE_USAGE",
     "STOP_DECISION",
     "ARTIFACT_CHANGE",
@@ -77,6 +78,7 @@ class PublicExperimentExporter:
             "candidate_digest": experiment.get("candidate_digest"),
             "capability_protocol_digest": experiment.get("capability_protocol_digest"),
             "activation_gate": _redact(experiment.get("activation_gate") or {}),
+            "representation_plan": _redact(experiment.get("representation_plan") or {}),
             "arms": {
                 "baseline": _public_manifest_arm(baseline_manifest.to_dict()),
                 "candidate": _public_manifest_arm(candidate_manifest.to_dict()),
@@ -185,6 +187,8 @@ def _public_event(event: AgentEvent, arm: str) -> dict[str, Any]:
 
 def _redact(value: Any, key: str = "", *, redact_content: bool = False) -> Any:
     lowered = key.lower()
+    if lowered == "representation_options" and isinstance(value, Mapping):
+        return {str(kind): "<redacted:representation>" for kind in value}
     if lowered in _SECRET_KEYS or any(part in lowered for part in _SECRET_KEY_PARTS):
         return "<redacted:credential>"
     if lowered == "uri" and isinstance(value, str) and value.startswith((".praxile/", "file:")):

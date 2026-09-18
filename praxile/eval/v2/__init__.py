@@ -40,6 +40,7 @@ from .experiment import (
 )
 from .heldout import HeldoutUseLedger
 from .proxy import PROXY_EVAL_SCHEMA_VERSION, ProxyCheck, ProxyEvalProposal, ProxyEvalRegistry
+from .representation import REPRESENTATION_SCHEMA_VERSION, ExperienceRepresentationRouter
 from .loader import SWEbenchTaskLoader
 from .manifest import EVAL_MANIFEST_SCHEMA_VERSION, EvalRunManifest, ImmutableManifestStore
 from .metrics import aggregate_metrics, trace_metrics
@@ -88,6 +89,7 @@ __all__ = [
     "EvalSchemaError",
     "EvalTask",
     "EvalTaskSet",
+    "ExperienceRepresentationRouter",
     "EvaluatorResult",
     "FAILURE_CATEGORIES",
     "FailureDetection",
@@ -98,6 +100,7 @@ __all__ = [
     "HeldoutUseLedger",
     "OfficialSWEbenchEvaluator",
     "OperationalizationHypothesis",
+    "REPRESENTATION_SCHEMA_VERSION",
     "PROTOCOL_VERSION",
     "PROXY_EVAL_SCHEMA_VERSION",
     "ProxyCheck",

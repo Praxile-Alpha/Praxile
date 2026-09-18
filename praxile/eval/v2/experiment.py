@@ -13,6 +13,7 @@ from .activation import ContextActivationGate
 from .candidate import ContextCandidate
 from .capability import CapabilityProtocol
 from .heldout import HeldoutUseLedger
+from .representation import ExperienceRepresentationRouter
 from .proxy import ProxyEvalRegistry
 from .diagnosis import FailureDiagnoser
 from .evaluator import TaskEvaluator
@@ -71,8 +72,12 @@ class ControlledABExperiment:
                 raise EvalSchemaError("proxy eval may only reference development tasks")
         candidate.validate_clean_track({task.task_id for task in task_set.tasks})
         activation_plan = ContextActivationGate().plan(candidate, task_set.tasks)
+        representation_plan = (
+            ExperienceRepresentationRouter().plan(candidate, task_set.tasks, activation_plan)
+            if candidate.representation_options else None
+        )
         candidate_policy = candidate.policy(
-            baseline_policy, activation_plan=activation_plan
+            baseline_policy, activation_plan=activation_plan, representation_plan=representation_plan
         )
         baseline_run_id = f"{experiment_id}.baseline"
         candidate_run_id = f"{experiment_id}.candidate"
@@ -91,6 +96,7 @@ class ControlledABExperiment:
             "candidate": candidate.to_dict(),
             "candidate_digest": candidate.digest,
             "activation_gate": activation_plan,
+            **({"representation_plan": representation_plan} if representation_plan is not None else {}),
             "changed_variable": "policy.context[0]",
             "frozen_invariants": [
                 "task_set",
@@ -183,11 +189,13 @@ class ControlledABExperiment:
         baseline_manifest = self.manifests.load(baseline_run_id)
         candidate_manifest = self.manifests.load(candidate_run_id)
         activation_plan = plan.get("activation_gate")
+        representation_plan = plan.get("representation_plan")
         invariant_check = check_ab_invariants(
             baseline_manifest,
             candidate_manifest,
             candidate,
             activation_plan=activation_plan if isinstance(activation_plan, Mapping) else None,
+            representation_plan=representation_plan if isinstance(representation_plan, Mapping) else None,
         )
         if not invariant_check["valid"]:
             raise EvalSchemaError(f"A/B invariants changed: {invariant_check['violations']}")
@@ -216,6 +224,7 @@ class ControlledABExperiment:
             "candidate_id": candidate.candidate_id,
             "candidate_digest": candidate.digest,
             "activation_gate": dict(activation_plan) if isinstance(activation_plan, Mapping) else None,
+            "representation_plan": dict(representation_plan) if isinstance(representation_plan, Mapping) else None,
             "invariant_check": invariant_check,
             "baseline": _arm_summary(baseline_report),
             "candidate": _arm_summary(candidate_report),
@@ -285,6 +294,7 @@ def check_ab_invariants(
     context_candidate: ContextCandidate,
     *,
     activation_plan: Mapping[str, Any] | None = None,
+    representation_plan: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     left = dict(baseline.reproducibility)
     right = dict(candidate.reproducibility)
@@ -305,6 +315,7 @@ def check_ab_invariants(
             settings=dict(left_policy.get("settings") or {}),
         ),
         activation_plan=activation_plan,
+        representation_plan=representation_plan,
     ).to_dict()
     if right_policy != expected:
         for key in sorted(set(right_policy) | set(expected)):
@@ -439,6 +450,10 @@ def compare_ab_reports(
             ),
             "candidate_context_abstained": sum(
                 _activation_status(item) == "abstained" for item in candidate_tasks.values()
+            ),
+            "candidate_context_injected": sum(
+                bool((item.get("context_activation") or {}).get("injected_context_items"))
+                for item in candidate_tasks.values()
             ),
         },
         "trace_overhead": trace_overhead,

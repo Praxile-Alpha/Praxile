@@ -1,0 +1,33 @@
+{
+  "schema_version": "praxile.context_candidate.v1",
+  "candidate_id": "p2-b-parser-investigation",
+  "version": "1",
+  "title": "Parser regression investigation experience",
+  "candidate_type": "experience_activation",
+  "context_item": {
+    "asset_id": "parser-investigation-v1",
+    "content": "Investigate the nearest parser regression first."
+  },
+  "confidence": 0.8,
+  "evidence_refs": ["event:source-run:42"],
+  "expected_effect": {"tool_calls": "decrease"},
+  "source_diagnosis_ids": [],
+  "source_task_ids": ["source-parser-task"],
+  "applies_to": {
+    "repositories": ["owner/repo"],
+    "task_signals": ["parser regression"],
+    "does_not_apply_when": ["documentation-only change"]
+  },
+  "representation_options": {
+    "raw_episode": "Observed failure: parser rejects nested expression. Reproduce with the focused parser test, inspect the state transition, then verify the exact failure path.",
+    "summary_memory": "For parser regressions, reproduce the smallest failing expression before changing shared parsing code.",
+    "skill": "1. Run the focused parser test. 2. Inspect the failing state transition. 3. Patch the narrowest parser branch. 4. Re-run focused and regression tests.",
+    "failure_pattern": "Signature: nested expressions fail while simple expressions pass. Check state-reset logic before changing tokenization."
+  },
+  "representation_profile": {
+    "compressibility": 0.6,
+    "evidence_density": 0.8,
+    "token_budget": 180,
+    "default_state_dependency": 0.5
+  }
+}
