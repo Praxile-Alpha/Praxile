@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from ...trace import AgentEvent, EventStore
 from ...utils import read_json
 from .manifest import ImmutableManifestStore
+from .heldout import HeldoutUseLedger
 from .schema import EvalSchemaError, canonical_json
 
 
@@ -47,6 +48,8 @@ class PublicExperimentExporter:
 
     def export(self, experiment_id: str, output_root: Path) -> dict[str, str]:
         _safe_id(experiment_id)
+        if HeldoutUseLedger(self.state_root).experiment_status(experiment_id) == "reserved":
+            raise EvalSchemaError("held-out feedback cannot be exported before finalization")
         experiment_root = self.state_root / "eval" / "v2" / "experiments" / experiment_id
         experiment = _object(read_json(experiment_root / "manifest.json", None), "experiment manifest")
         report = _object(read_json(experiment_root / "report.json", None), "experiment report")
@@ -72,6 +75,7 @@ class PublicExperimentExporter:
             "task_set_digest": experiment.get("task_set_digest"),
             "candidate": _redact(experiment.get("candidate") or {}, redact_content=True),
             "candidate_digest": experiment.get("candidate_digest"),
+            "capability_protocol_digest": experiment.get("capability_protocol_digest"),
             "activation_gate": _redact(experiment.get("activation_gate") or {}),
             "arms": {
                 "baseline": _public_manifest_arm(baseline_manifest.to_dict()),
@@ -98,6 +102,8 @@ class PublicExperimentExporter:
             ),
             "comparison": _redact(report.get("comparison") or {}),
         }
+        if isinstance(report.get("capability"), Mapping):
+            public_metrics["capability"] = _redact(report["capability"])
         manifest_path = destination / "experiment-manifest.json"
         metrics_path = destination / "raw-metrics.json"
         trace_path = destination / "trace-sample.jsonl"

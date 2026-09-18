@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from ..cli_common import *  # noqa: F401,F403
 from ..adapters import AdapterPolicy, MiniSweAgentAdapter
 from ..eval.v2 import (
     BenchmarkEvalRunner,
+    CapabilityProtocol,
+    HeldoutUseLedger,
+    ProxyEvalProposal,
+    ProxyEvalRegistry,
     ContextCandidate,
     ContextPolicyAblation,
     ControlledABExperiment,
@@ -182,6 +187,8 @@ def cmd_eval_benchmark(args: argparse.Namespace, project_root: Path) -> int:
 def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
+    if HeldoutUseLedger(config.paths.state).run_is_sealed(args.run_id):
+        raise PermissionError("held-out feedback is sealed until the experiment is finalized")
     event_store = EventStore(config.paths)
     run_root = config.paths.state / "eval" / "v2" / "runs" / args.run_id
     report = read_json(run_root / "report.json", None)
@@ -223,6 +230,16 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
     candidate = ContextCandidate.load(Path(args.candidate).expanduser().resolve())
+    capability_protocol = (
+        CapabilityProtocol.load(Path(args.capability_protocol).expanduser().resolve())
+        if args.capability_protocol else None
+    )
+    proxy_ref = None
+    if args.proxy_eval:
+        proxy_id, separator, version = args.proxy_eval.partition("@")
+        if not separator or not proxy_id or not version:
+            raise ValueError("--proxy-eval must be PROXY_ID@VERSION")
+        proxy_ref = (proxy_id, version)
     adapter = MiniSweAgentAdapter(
         model=args.model,
         model_class=args.model_class,
@@ -305,6 +322,9 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
             resume=args.resume,
             keep_workspaces=args.keep_workspaces,
             source_overrides=source_overrides,
+            capability_protocol=capability_protocol,
+            proxy_eval_ref=proxy_ref,
+            development_only=args.development_only,
         )
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -314,13 +334,103 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
         print(f"Candidate: {report['candidate_id']}")
         print(f"Invariants: {'valid' if report['invariant_check']['valid'] else 'invalid'}")
         print(f"Decision: {comparison['decision']} - {comparison['rationale']}")
+        if report.get("capability"):
+            terminal = report["capability"]["terminal_selection"]
+            print(f"Capability terminal: {terminal['decision']} - {terminal['reason']}")
         print(f"Report: {config.paths.state / 'eval' / 'v2' / 'experiments' / args.experiment_id / 'report.json'}")
     return 1 if report["comparison"]["decision"] == "regress" else 0
+
+
+def cmd_eval_proxy_propose(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    proposal = ProxyEvalProposal.load(Path(args.spec).expanduser().resolve())
+    path = ProxyEvalRegistry(config.paths.state).propose(proposal)
+    print(f"Proxy eval proposed: {proposal.proxy_id}@{proposal.version}")
+    print(f"Digest: {proposal.digest}")
+    print(f"Review: praxile eval proxy-review {proposal.proxy_id} --version {proposal.version}")
+    print(f"Stored: {path}")
+    return 0
+
+
+def cmd_eval_proxy_review(args: argparse.Namespace, project_root: Path) -> int:
+    config, _ = load(project_root)
+    proposal = ProxyEvalRegistry(config.paths.state).load(args.proxy_id, args.version)
+    print(json.dumps(proposal.to_dict(), indent=2, ensure_ascii=False))
+    print(f"Digest: {proposal.digest}")
+    return 0
+
+
+def cmd_eval_proxy_approve(args: argparse.Namespace, project_root: Path) -> int:
+    config, _ = load(project_root)
+    registry = ProxyEvalRegistry(config.paths.state)
+    proposal = registry.load(args.proxy_id, args.version)
+    confirmation = safe_input(f"Type APPROVE {proposal.proxy_id}@{proposal.version} to approve proxy eval {proposal.digest}: ")
+    if confirmation != f"APPROVE {proposal.proxy_id}@{proposal.version}":
+        raise ValueError("proxy eval approval cancelled")
+    approval = registry.approve(proposal.proxy_id, proposal.version, reviewer=args.reviewer)
+    print(f"Approved proxy eval {proposal.proxy_id}@{proposal.version} by {approval['reviewer']}")
+    return 0
+
+
+def cmd_eval_proxy_run(args: argparse.Namespace, project_root: Path) -> int:
+    config, _ = load(project_root)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,179}", args.experiment_id):
+        raise ValueError("unsafe experiment ID")
+    registry = ProxyEvalRegistry(config.paths.state)
+    proposal, approval = registry.load_approved(args.proxy_id, args.version)
+    experiment_root = config.paths.state / "eval" / "v2" / "experiments" / args.experiment_id
+    report = read_json(experiment_root / "report.json", None)
+    if not isinstance(report, dict):
+        raise FileNotFoundError(experiment_root / "report.json")
+    if HeldoutUseLedger(config.paths.state).experiment_status(args.experiment_id) == "reserved":
+        raise PermissionError("held-out feedback is sealed until the experiment is finalized")
+    plan = read_json(experiment_root / "manifest.json", {})
+    if isinstance(plan, dict) and isinstance(plan.get("capability_protocol"), dict):
+        protocol = CapabilityProtocol.from_dict(plan["capability_protocol"])
+        if not set(proposal.task_ids) <= set(protocol.evaluation.development_task_ids):
+            raise ValueError("proxy eval references held-out tasks")
+    elif not isinstance(plan, dict) or plan.get("track") != "development":
+        raise ValueError("proxy-run requires a development-only experiment or a declared development partition")
+    result = proposal.evaluate(report["comparison"]["task_results"])
+    result["approved_by"] = approval["reviewer"]
+    result["experiment_id"] = args.experiment_id
+    output = registry.root / proposal.proxy_id / f"{proposal.version}.{args.experiment_id}.report.json"
+    write_json(output, result)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(f"Proxy eval: {result['status']} ({len(result['checks'])} checks)")
+        print(f"Report: {output}")
+    return 0 if result["status"] == "passed" else 1
+
+
+def cmd_eval_capability_check(args: argparse.Namespace, project_root: Path) -> int:
+    protocol = CapabilityProtocol.load(Path(args.protocol).expanduser().resolve())
+    result = {
+        "schema_version": protocol.to_dict()["schema_version"],
+        "digest": protocol.digest,
+        "goal_id": protocol.goal.goal_id,
+        "goal_version": protocol.goal.version,
+        "contract_id": protocol.evaluation.contract_id,
+        "heldout_count": len(protocol.evaluation.heldout_task_ids),
+        "boundary": f"{protocol.information_boundary.isolation_level}; no OS sandbox",
+        "terminal_requires_human_approval": protocol.terminal_selection_rule.require_human_approval,
+    }
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(f"Capability protocol: {result['goal_id']} v{result['goal_version']}")
+        print(f"Digest: {result['digest']}")
+        print(f"Held-out cases: {result['heldout_count']}; boundary: {result['boundary']}")
+    return 0
 
 
 def cmd_eval_ab_analyze(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)
+    if HeldoutUseLedger(config.paths.state).experiment_status(args.experiment_id) == "reserved":
+        raise PermissionError("held-out feedback is sealed until the experiment is finalized")
     report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).analyze(
         args.experiment_id
     )

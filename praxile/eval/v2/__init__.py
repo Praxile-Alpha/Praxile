@@ -5,6 +5,15 @@ from .activation import (
     resolve_task_policy,
 )
 from .candidate import CONTEXT_CANDIDATE_SCHEMA_VERSION, ContextCandidate
+from .capability import (
+    PROTOCOL_VERSION,
+    CapabilityGoal,
+    CapabilityProtocol,
+    EvaluationContract,
+    InformationBoundary,
+    OperationalizationHypothesis,
+    TerminalSelectionRule,
+)
 from .context_ablation import CONTEXT_ABLATION_SCHEMA_VERSION, ContextPolicyAblation
 from .diagnosis import (
     DIAGNOSIS_SCHEMA_VERSION,
@@ -29,6 +38,8 @@ from .experiment import (
     check_ab_invariants,
     compare_ab_reports,
 )
+from .heldout import HeldoutUseLedger
+from .proxy import PROXY_EVAL_SCHEMA_VERSION, ProxyCheck, ProxyEvalProposal, ProxyEvalRegistry
 from .loader import SWEbenchTaskLoader
 from .manifest import EVAL_MANIFEST_SCHEMA_VERSION, EvalRunManifest, ImmutableManifestStore
 from .metrics import aggregate_metrics, trace_metrics
@@ -55,6 +66,8 @@ __all__ = [
     "AB_REPORT_SCHEMA_VERSION",
     "BenchmarkEvalRunner",
     "BenchmarkRepositoryPreparer",
+    "CapabilityGoal",
+    "CapabilityProtocol",
     "CONTEXT_CANDIDATE_SCHEMA_VERSION",
     "CONTEXT_ACTIVATION_SCHEMA_VERSION",
     "CONTEXT_ABLATION_SCHEMA_VERSION",
@@ -71,6 +84,7 @@ __all__ = [
     "EVAL_TASK_SCHEMA_VERSION",
     "EVAL_TASK_SET_SCHEMA_VERSION",
     "EvalRunManifest",
+    "EvaluationContract",
     "EvalSchemaError",
     "EvalTask",
     "EvalTaskSet",
@@ -80,7 +94,15 @@ __all__ = [
     "FailureDiagnoser",
     "FailureDiagnosis",
     "ImmutableManifestStore",
+    "InformationBoundary",
+    "HeldoutUseLedger",
     "OfficialSWEbenchEvaluator",
+    "OperationalizationHypothesis",
+    "PROTOCOL_VERSION",
+    "PROXY_EVAL_SCHEMA_VERSION",
+    "ProxyCheck",
+    "ProxyEvalProposal",
+    "ProxyEvalRegistry",
     "PUBLIC_MANIFEST_SCHEMA_VERSION",
     "PUBLIC_METRICS_SCHEMA_VERSION",
     "PreparedRepository",
@@ -90,6 +112,7 @@ __all__ = [
     "SWEbenchPrediction",
     "SWEbenchTaskLoader",
     "TaskEvaluator",
+    "TerminalSelectionRule",
     "aggregate_metrics",
     "analyze_diff_scope",
     "check_ab_invariants",

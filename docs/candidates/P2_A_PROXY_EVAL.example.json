@@ -1,0 +1,12 @@
+{
+  "schema_version": "praxile.proxy_eval.v1",
+  "proxy_id": "focused-investigation-efficiency",
+  "version": "1",
+  "hypothesis_id": "focused-investigation",
+  "task_ids": ["sympy__sympy-16281"],
+  "rationale": "On development tasks, focused investigation should not increase token or tool use. This proxy does not establish bug-fix success.",
+  "checks": [
+    {"metric": "token_delta", "operator": "<=", "threshold": 0},
+    {"metric": "tool_call_delta", "operator": "<=", "threshold": 0}
+  ]
+}

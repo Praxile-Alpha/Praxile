@@ -162,6 +162,18 @@ Proposal count is not a success metric. A smaller set of validated, frequently a
 | Sealed validation | eval suites, isolated workspace, audit policy |
 | Frozen outer anchor | constitution, safety policy, architecture gates, governance service |
 
+## Self-Developing Agents Follow-on (P2-A to P2-D)
+
+The four directions derived from ASPIRE, S3Gym, and HarnessDev are tracked separately from the original P0-P3 checklist above. See [P2-A implementation and limits](P2_A_CAPABILITY_EVAL_FIREWALL.md).
+
+- [x] **P2-A Capability Goal and Eval Firewall (logical layer):** versioned goal, operationalization hypothesis, evaluation contract, information boundary, and terminal selection rule; task partition and private-field checks before A/B execution; held-out objective decision separated from development proxy metrics.
+- [ ] **P2-A strong isolation:** sealed evaluator storage and process/filesystem isolation against a malicious executor. Local protocol checks are not an OS sandbox.
+- [x] **P2-A agent-authored declarative proxy eval:** versioned, reviewed development-only metric checks; proxy outcomes remain separate from control-plane held-out resolution.
+- [ ] **P2-A executable proxy scorers:** requires additional sandbox and command-policy design; not part of the safe declarative proxy format.
+- [ ] **P2-B Experience Representation Router:** choose none/raw episode/summary/skill/failure pattern after semantic activation.
+- [ ] **P2-C Judge Calibration:** link self-judgment to verifier outcome and future-task delta; track false promotions.
+- [ ] **P2-D Executable Harness Lab:** reproducible E/T/C/S/L/V coverage and dead-mechanism checks across executors.
+
 ## Non-Goals
 
 - automatic model-weight training in the near-term product;

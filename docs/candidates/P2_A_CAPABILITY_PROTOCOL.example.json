@@ -1,0 +1,48 @@
+{
+  "schema_version": "praxile.capability_protocol.v1",
+  "goal": {
+    "schema_version": "praxile.capability_goal.v1",
+    "goal_id": "sympy-bugfix-capability",
+    "version": "1",
+    "task_family": "symbolic-math-bugfix",
+    "objective": "Improve held-out bug-fix resolution without unsafe regressions.",
+    "success_criteria": ["heldout_resolution"]
+  },
+  "operationalization": {
+    "schema_version": "praxile.operationalization_hypothesis.v1",
+    "hypothesis_id": "focused-investigation",
+    "version": "1",
+    "goal_id": "sympy-bugfix-capability",
+    "rationale": "Focused investigation may reduce wasted exploration, but efficiency is not task success.",
+    "proxy_metrics": ["token_count", "tool_calls"],
+    "known_failure_modes": ["lower token usage without a valid patch", "negative transfer to unrelated tasks"]
+  },
+  "evaluation": {
+    "schema_version": "praxile.evaluation_contract.v1",
+    "contract_id": "sympy-lite-single-task-demo",
+    "version": "1",
+    "goal_id": "sympy-bugfix-capability",
+    "dataset_name": "SWE-bench/SWE-bench_Lite",
+    "split": "test",
+    "development_task_ids": ["sympy__sympy-16281"],
+    "heldout_task_ids": ["sympy__sympy-18532"],
+    "evaluator_owner": "control_plane",
+    "evaluator_name": "swe-bench-official",
+    "primary_metric": "resolved"
+  },
+  "information_boundary": {
+    "schema_version": "praxile.information_boundary.v1",
+    "boundary_id": "no-evaluator-payload",
+    "version": "1",
+    "isolation_level": "logical_only",
+    "forbidden_metadata_keys": ["solution", "gold_patch"]
+  },
+  "terminal_selection_rule": {
+    "schema_version": "praxile.terminal_selection_rule.v1",
+    "rule_id": "heldout-first-human-review",
+    "version": "1",
+    "minimum_heldout_gains": 1,
+    "maximum_heldout_regressions": 0,
+    "require_human_approval": true
+  }
+}

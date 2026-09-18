@@ -10,14 +10,18 @@ import pytest
 from praxile.adapters import AdapterPolicy, FixtureAgentAdapter, FixtureArtifact, FixtureEvent
 from praxile.config import Config
 from praxile.eval.v2 import (
+    CapabilityProtocol,
     ContextPolicyAblation,
     ContextCandidate,
     ControlledABExperiment,
     EvalTask,
     EvalTaskSet,
+    EvalSchemaError,
     EvaluatorResult,
     RepositorySpec,
     PublicExperimentExporter,
+    ProxyEvalProposal,
+    ProxyEvalRegistry,
     SWEbenchEvaluationSpec,
     SWEbenchPrediction,
 )
@@ -85,6 +89,14 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
         source_diagnosis_ids=("diagnosis-training",),
         source_task_ids=("training-task",),
     )
+    protocol = CapabilityProtocol.from_dict({
+        "schema_version": "praxile.capability_protocol.v1",
+        "goal": {"schema_version": "praxile.capability_goal.v1", "goal_id": "fixture-goal", "version": "1", "task_family": "bugfix", "objective": "Resolve the held-out task", "success_criteria": ["heldout_resolution"]},
+        "operationalization": {"schema_version": "praxile.operationalization_hypothesis.v1", "hypothesis_id": "focused", "version": "1", "goal_id": "fixture-goal", "rationale": "Focused reads may reduce tool calls", "proxy_metrics": ["tool_calls"], "known_failure_modes": ["no resolution gain"]},
+        "evaluation": {"schema_version": "praxile.evaluation_contract.v1", "contract_id": "fixture-eval", "version": "1", "goal_id": "fixture-goal", "dataset_name": "fixture", "split": "test", "development_task_ids": [], "heldout_task_ids": ["owner__repo-1"], "evaluator_owner": "control_plane", "evaluator_name": "passing", "primary_metric": "resolved"},
+        "information_boundary": {"schema_version": "praxile.information_boundary.v1", "boundary_id": "fixture-boundary", "version": "1", "isolation_level": "logical_only", "forbidden_metadata_keys": []},
+        "terminal_selection_rule": {"schema_version": "praxile.terminal_selection_rule.v1", "rule_id": "heldout-first", "version": "1", "minimum_heldout_gains": 1, "maximum_heldout_regressions": 0, "require_human_approval": True},
+    })
     config = Config.load(tmp_path / "control")
     state = tmp_path / "state"
     store = EventStore(config.paths)
@@ -103,10 +115,13 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
         model={"model_name_or_path": "fixture", "cost_tracking": "default"},
         experiment_id="p0-c-fixture",
         source_overrides={"owner/repo": source},
+        capability_protocol=protocol,
     )
 
     assert report["invariant_check"]["valid"] is True
     assert report["comparison"]["decision"] == "inconclusive"
+    assert report["capability"]["terminal_selection"]["decision"] == "inconclusive"
+    assert report["capability"]["information_boundary"]["os_sandbox"] is False
     assert report["comparison"]["trace_overhead"]["context_inject_event_delta"] == 1
     assert report["activation_gate"]["activated_count"] == 1
     assert report["activation_gate"]["abstained_count"] == 0
@@ -125,6 +140,7 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     assert (root / "diagnoses" / "baseline" / "owner__repo-1.json").is_file()
 
     reanalyzed = experiment.analyze("p0-c-fixture")
+    assert reanalyzed["capability"]["protocol_digest"] == protocol.digest
 
     assert reanalyzed["diagnoses"]["baseline"][0]["diagnosis_id"] == (
         report["diagnoses"]["baseline"][0]["diagnosis_id"]
@@ -144,11 +160,84 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     assert "Fix the issue" not in trace_text
     assert "Start with one focused regression test." not in trace_text
     assert '"tokens"' in metrics_text
+    assert '"terminal_selection"' in metrics_text
+    assert protocol.digest in manifest_text
     assert '"tokens": "<redacted:credential>"' not in metrics_text
     assert not list(public.glob("*.lock"))
     for line in trace_text.splitlines():
         event = AgentEvent.from_json(line)
         assert event.extensions["public_export"]["redacted"] is True
+
+
+def test_capability_ab_uses_approved_dev_proxy_and_seals_heldout_reuse(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    commit = _repo(source)
+    tasks = tuple(
+        EvalTask(
+            task_id=task_id,
+            instruction="Fix the issue",
+            repository=RepositorySpec("owner/repo", commit, "https://invalid.example/owner/repo.git"),
+            evaluation=SWEbenchEvaluationSpec("fixture", "test"),
+        )
+        for task_id in ("dev-task", "heldout-task")
+    )
+    task_set = EvalTaskSet("fixture", "fixture", "test", tasks)
+    digest = "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest()
+    adapter = FixtureAgentAdapter(artifacts=[FixtureArtifact("workspace_patch", "candidate.patch", digest)])
+    candidate = ContextCandidate(
+        candidate_id="focused-context", version="1", title="Focused context",
+        candidate_type="experience_activation", context_item={"content": "Read the focused test first."},
+        confidence=0.7, evidence_refs=("event:source",),
+        expected_effect={"tool_calls": "decrease"}, source_task_ids=("source-task",),
+    )
+    protocol = CapabilityProtocol.from_dict({
+        "schema_version": "praxile.capability_protocol.v1",
+        "goal": {"schema_version": "praxile.capability_goal.v1", "goal_id": "fixture-goal", "version": "1", "task_family": "bugfix", "objective": "Resolve held-out tasks", "success_criteria": ["heldout_resolution"]},
+        "operationalization": {"schema_version": "praxile.operationalization_hypothesis.v1", "hypothesis_id": "focused", "version": "1", "goal_id": "fixture-goal", "rationale": "Focused reads might save calls", "proxy_metrics": ["tool_calls"], "known_failure_modes": ["no resolution gain"]},
+        "evaluation": {"schema_version": "praxile.evaluation_contract.v1", "contract_id": "fixture-eval", "version": "1", "goal_id": "fixture-goal", "dataset_name": "fixture", "split": "test", "development_task_ids": ["dev-task"], "heldout_task_ids": ["heldout-task"], "evaluator_owner": "control_plane", "evaluator_name": "passing", "primary_metric": "resolved"},
+        "information_boundary": {"schema_version": "praxile.information_boundary.v1", "boundary_id": "logical", "version": "1", "isolation_level": "logical_only", "forbidden_metadata_keys": []},
+        "terminal_selection_rule": {"schema_version": "praxile.terminal_selection_rule.v1", "rule_id": "heldout-first", "version": "1", "minimum_heldout_gains": 1, "maximum_heldout_regressions": 0, "require_human_approval": True},
+    })
+    config = Config.load(tmp_path / "control")
+    state = tmp_path / "state"
+    proxy_registry = ProxyEvalRegistry(state)
+    proxy = ProxyEvalProposal.from_dict({
+        "schema_version": "praxile.proxy_eval.v1", "proxy_id": "dev-efficiency", "version": "1",
+        "hypothesis_id": "focused", "task_ids": ["dev-task"],
+        "rationale": "Development calls must not increase",
+        "checks": [{"metric": "tool_call_delta", "operator": "<=", "threshold": 0}],
+    })
+    proxy_registry.propose(proxy)
+    with pytest.raises(EvalSchemaError, match="human approval"):
+        proxy_registry.load_approved("dev-efficiency", "1")
+    proxy_registry.approve("dev-efficiency", "1", reviewer="human")
+    experiment = ControlledABExperiment(state, EventStore(config.paths))
+    kwargs = {
+        "adapter": adapter,
+        "evaluator": PassingEvaluator(),
+        "baseline_policy": AdapterPolicy(policy_id="baseline", budgets={"wall_timeout_seconds": 30}, settings={"workspace_isolated": True}),
+        "candidate": candidate,
+        "model": {"model_name_or_path": "fixture"},
+        "source_overrides": {"owner/repo": source},
+        "capability_protocol": protocol,
+        "proxy_eval_ref": ("dev-efficiency", "1"),
+    }
+    development_kwargs = {key: value for key, value in kwargs.items()
+                          if key not in {"capability_protocol", "proxy_eval_ref"}}
+    development = experiment.run(
+        EvalTaskSet("fixture-dev", "fixture", "test", tasks[:1]),
+        experiment_id="dev-fixture", development_only=True, **development_kwargs,
+    )
+    assert development["track"] == "development"
+    assert proxy.evaluate(development["comparison"]["task_results"])["status"] == "passed"
+    report = experiment.run(task_set, experiment_id="final-fixture", **kwargs)
+    assert report["capability"]["proxy_eval"]["status"] == "passed"
+    assert report["capability"]["proxy_eval"]["objective_claim"] is False
+    assert report["capability"]["terminal_selection"]["decision"] == "inconclusive"
+    with pytest.raises(EvalSchemaError, match="already reserved"):
+        experiment.run(task_set, experiment_id="second-fixture", **kwargs)
+    resumed = experiment.run(task_set, experiment_id="final-fixture", resume=True, **kwargs)
+    assert resumed["capability"]["protocol_digest"] == protocol.digest
 
 
 def test_controlled_ab_injects_candidate_only_for_semantically_matching_tasks(

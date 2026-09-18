@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
@@ -10,6 +11,9 @@ from ...trace import EventStore
 from ...utils import file_lock, read_json, utc_now, write_json
 from .activation import ContextActivationGate
 from .candidate import ContextCandidate
+from .capability import CapabilityProtocol
+from .heldout import HeldoutUseLedger
+from .proxy import ProxyEvalRegistry
 from .diagnosis import FailureDiagnoser
 from .evaluator import TaskEvaluator
 from .manifest import EvalRunManifest, ImmutableManifestStore
@@ -44,9 +48,27 @@ class ControlledABExperiment:
         resume: bool = False,
         keep_workspaces: bool = False,
         source_overrides: Mapping[str, Path] | None = None,
+        capability_protocol: CapabilityProtocol | None = None,
+        proxy_eval_ref: tuple[str, str] | None = None,
+        development_only: bool = False,
     ) -> dict[str, Any]:
         if baseline_policy.context:
             raise EvalSchemaError("controlled P0 baseline policy must have empty context")
+        if development_only and capability_protocol is not None:
+            raise EvalSchemaError("development-only experiments cannot use a held-out capability protocol")
+        if capability_protocol is not None:
+            capability_protocol.validate_run(
+                task_set, candidate_payload=candidate.to_dict(), evaluator_identity=evaluator.identity()
+            )
+        if proxy_eval_ref is not None and capability_protocol is None:
+            raise EvalSchemaError("proxy eval requires a capability protocol")
+        proxy_eval = None
+        if proxy_eval_ref is not None:
+            proxy_eval, _ = ProxyEvalRegistry(self.state_root).load_approved(*proxy_eval_ref)
+            if proxy_eval.hypothesis_id != capability_protocol.operationalization.hypothesis_id:
+                raise EvalSchemaError("proxy eval hypothesis differs from the capability protocol")
+            if not set(proxy_eval.task_ids) <= set(capability_protocol.evaluation.development_task_ids):
+                raise EvalSchemaError("proxy eval may only reference development tasks")
         candidate.validate_clean_track({task.task_id for task in task_set.tasks})
         activation_plan = ContextActivationGate().plan(candidate, task_set.tasks)
         candidate_policy = candidate.policy(
@@ -62,7 +84,7 @@ class ControlledABExperiment:
             "schema_version": AB_EXPERIMENT_SCHEMA_VERSION,
             "experiment_id": experiment_id,
             "created_at": utc_now(),
-            "track": "clean",
+            "track": "development" if development_only else "clean",
             "task_set_digest": task_set.digest,
             "baseline_run_id": baseline_run_id,
             "candidate_run_id": candidate_run_id,
@@ -80,8 +102,32 @@ class ControlledABExperiment:
                 "policy.settings",
             ],
         }
+        if capability_protocol is not None:
+            plan["capability_protocol"] = capability_protocol.to_dict()
+            plan["capability_protocol_digest"] = capability_protocol.digest
+            plan["information_boundary"] = {
+                "execution_projection": "task_instruction_and_public_metadata_only",
+                "evaluator_owned_by": capability_protocol.evaluation.evaluator_owner,
+                "os_sandbox": False,
+                "confidentiality_level": capability_protocol.information_boundary.isolation_level,
+            }
+        if proxy_eval is not None:
+            plan["proxy_eval"] = {"proxy_id": proxy_eval.proxy_id, "version": proxy_eval.version,
+                                  "digest": proxy_eval.digest}
         if isinstance(existing, Mapping):
             plan["created_at"] = existing.get("created_at")
+            if canonical_json(plan) != canonical_json(existing):
+                raise EvalSchemaError("cannot resume A/B with a changed capability, proxy, or experiment manifest")
+        if capability_protocol is not None:
+            heldout = HeldoutUseLedger(self.state_root)
+            heldout.reserve(
+                capability_protocol, experiment_id=experiment_id,
+                candidate_digest=candidate.digest, task_set_digest=task_set.digest,
+            )
+            if heldout.status(capability_protocol) == "evaluated":
+                if not resume:
+                    raise EvalSchemaError("held-out evaluation was already finalized")
+                return self.analyze(experiment_id)
         _write_once(manifest_path, plan)
         baseline_report = self.benchmark.run(
             task_set,
@@ -112,9 +158,14 @@ class ControlledABExperiment:
                 "changed_variable": "policy.context[0]",
             },
         )
-        return self.analyze(experiment_id)
+        return self._analyze(experiment_id)
 
     def analyze(self, experiment_id: str) -> dict[str, Any]:
+        if HeldoutUseLedger(self.state_root).experiment_status(experiment_id) == "reserved":
+            raise EvalSchemaError("held-out feedback is sealed until the experiment is finalized")
+        return self._analyze(experiment_id)
+
+    def _analyze(self, experiment_id: str) -> dict[str, Any]:
         root = self._root(experiment_id)
         plan = read_json(root / "manifest.json", None)
         if not isinstance(plan, Mapping):
@@ -151,11 +202,17 @@ class ControlledABExperiment:
             event_store=self.event_store,
             cost_comparable=_cost_comparable(baseline_manifest, candidate_manifest),
         )
+        capability_value = plan.get("capability_protocol")
+        capability_protocol = None
+        if capability_value is not None:
+            capability_protocol = CapabilityProtocol.from_dict(capability_value)
+            if capability_protocol.digest != plan.get("capability_protocol_digest"):
+                raise EvalSchemaError("A/B capability protocol digest mismatch")
         report = {
             "schema_version": AB_REPORT_SCHEMA_VERSION,
             "experiment_id": experiment_id,
             "created_at": utc_now(),
-            "track": "clean",
+            "track": plan.get("track", "clean"),
             "candidate_id": candidate.candidate_id,
             "candidate_digest": candidate.digest,
             "activation_gate": dict(activation_plan) if isinstance(activation_plan, Mapping) else None,
@@ -165,7 +222,37 @@ class ControlledABExperiment:
             "diagnoses": diagnoses,
             "comparison": comparison,
         }
+        if capability_protocol is not None:
+            proxy_result = None
+            proxy_ref = plan.get("proxy_eval")
+            if isinstance(proxy_ref, Mapping):
+                proxy_eval, approval = ProxyEvalRegistry(self.state_root).load_approved(
+                    str(proxy_ref.get("proxy_id")), str(proxy_ref.get("version"))
+                )
+                if proxy_eval.digest != proxy_ref.get("digest"):
+                    raise EvalSchemaError("A/B proxy eval digest mismatch")
+                if proxy_eval.hypothesis_id != capability_protocol.operationalization.hypothesis_id:
+                    raise EvalSchemaError("A/B proxy eval hypothesis mismatch")
+                if not set(proxy_eval.task_ids) <= set(capability_protocol.evaluation.development_task_ids):
+                    raise EvalSchemaError("A/B proxy eval references held-out tasks")
+                proxy_result = proxy_eval.evaluate(comparison["task_results"])
+                proxy_result["approved_by"] = approval["reviewer"]
+            report["capability"] = {
+                "goal_id": capability_protocol.goal.goal_id,
+                "goal_version": capability_protocol.goal.version,
+                "hypothesis_id": capability_protocol.operationalization.hypothesis_id,
+                "contract_id": capability_protocol.evaluation.contract_id,
+                "protocol_digest": capability_protocol.digest,
+                "information_boundary": dict(plan["information_boundary"]),
+                "terminal_selection": capability_protocol.select_terminal(comparison["task_results"]),
+                "proxy_eval": proxy_result,
+            }
         write_json(self._root(experiment_id) / "report.json", report)
+        if capability_protocol is not None and HeldoutUseLedger(self.state_root).status(capability_protocol):
+            report_digest = "sha256:" + hashlib.sha256(canonical_json(report).encode("utf-8")).hexdigest()
+            HeldoutUseLedger(self.state_root).mark_evaluated(
+                capability_protocol, experiment_id=experiment_id, report_digest=report_digest
+            )
         return report
 
     def _diagnose_arm(
