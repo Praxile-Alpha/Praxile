@@ -84,6 +84,8 @@ Skills additionally keep `metadata.json` for status/version and `versions/` for 
 
 `workspaces/` stores optional per-task isolated workspaces created by `praxile run --workspace-mode copy` or `--workspace-mode git-worktree`. Isolated runs import their trajectory and proposals back into the source project and write patch artifacts under `experience/artifacts/workspaces/`; source project files are not changed automatically.
 
+`eval/v2/harness-lab/<LAB_ID>/` stores an immutable P2-D executable Harness manifest and its final repeated dev/held-out report. Individual baseline/candidate repetitions remain under `eval/v2/runs/` and retain their own immutable run manifests, task results, trace references, evaluator evidence, and detached-worktree records.
+
 `snapshots/` stores point-in-time copies of governed `.praxile/` state. Generated indexes and caches are excluded because they can be rebuilt. Praxile creates a pre-apply snapshot before accepting a proposal, and users can create or restore snapshots with `praxile snapshot create`, `praxile snapshot list`, and `praxile rollback <SNAPSHOT_ID>`.
 
 `checkpoints/` stores resumable in-flight task state and is cleared when a run finishes normally. `logs/trace.jsonl` stores structured runtime events for debugging model routing, safety blocks, context compression, and checkpoint writes.

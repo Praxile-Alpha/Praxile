@@ -6,7 +6,8 @@ from typing import Any, Mapping
 from .common import ControlPlaneSchemaError, EvidenceRef, evidence_refs, non_empty, require_mapping, safe_id
 
 
-HARNESS_CANDIDATE_SCHEMA_VERSION = "praxile.harness_candidate.v1"
+HARNESS_CANDIDATE_SCHEMA_VERSION = "praxile.harness_candidate.v2"
+LEGACY_HARNESS_CANDIDATE_SCHEMA_VERSION = "praxile.harness_candidate.v1"
 CANDIDATE_EVALUATION_SCHEMA_VERSION = "praxile.candidate_evaluation.v1"
 CANDIDATE_TYPES = frozenset({"prompt", "context_policy", "retrieval", "skill", "tool_policy", "model_routing", "subagent_policy", "recovery_policy"})
 GATE_NAMES = ("evidence", "quality", "regression", "cost", "human", "rollback")
@@ -23,15 +24,19 @@ class HarnessCandidate:
     source_evidence: tuple[EvidenceRef, ...]
     payload: Mapping[str, Any]
     risk: str = "medium"
+    executor_profile: str = "default"
+    task_family: str = "default"
     schema_version: str = HARNESS_CANDIDATE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        if self.schema_version != HARNESS_CANDIDATE_SCHEMA_VERSION:
+        if self.schema_version not in {HARNESS_CANDIDATE_SCHEMA_VERSION, LEGACY_HARNESS_CANDIDATE_SCHEMA_VERSION}:
             raise ControlPlaneSchemaError(f"unsupported harness candidate schema: {self.schema_version}")
         safe_id(self.candidate_id, "candidate_id")
         if self.type not in CANDIDATE_TYPES:
             raise ControlPlaneSchemaError(f"unsupported candidate type: {self.type!r}")
         safe_id(self.component_key, "component_key")
+        safe_id(self.executor_profile, "executor_profile")
+        safe_id(self.task_family, "task_family")
         non_empty(self.base_version, "base_version")
         non_empty(self.candidate_version, "candidate_version")
         if self.base_version == self.candidate_version:
@@ -45,8 +50,11 @@ class HarnessCandidate:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "HarnessCandidate":
+        schema = str(value.get("schema_version") or "")
+        if schema == LEGACY_HARNESS_CANDIDATE_SCHEMA_VERSION:
+            schema = HARNESS_CANDIDATE_SCHEMA_VERSION
         return cls(
-            schema_version=str(value.get("schema_version") or ""),
+            schema_version=schema,
             candidate_id=str(value.get("candidate_id") or ""),
             type=str(value.get("type") or ""),
             component_key=str(value.get("component_key") or ""),
@@ -56,7 +64,13 @@ class HarnessCandidate:
             source_evidence=evidence_refs(value.get("source_evidence", [])),
             payload=dict(require_mapping(value.get("payload"), "candidate payload")),
             risk=str(value.get("risk") or ""),
+            executor_profile=str(value.get("executor_profile") or "default"),
+            task_family=str(value.get("task_family") or "default"),
         )
+
+    @property
+    def promotion_key(self) -> str:
+        return promotion_key(self.component_key, self.executor_profile, self.task_family)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,7 +84,17 @@ class HarnessCandidate:
             "source_evidence": [item.to_dict() for item in self.source_evidence],
             "payload": dict(self.payload),
             "risk": self.risk,
+            "executor_profile": self.executor_profile,
+            "task_family": self.task_family,
+            "promotion_key": self.promotion_key,
         }
+
+
+def promotion_key(component_key: str, executor_profile: str, task_family: str) -> str:
+    safe_id(component_key, "component_key")
+    safe_id(executor_profile, "executor_profile")
+    safe_id(task_family, "task_family")
+    return f"{component_key}::{executor_profile}::{task_family}"
 
 
 @dataclass(frozen=True)
@@ -159,4 +183,3 @@ class CandidateEvaluation:
             "metrics": dict(self.metrics),
             "rollback_target": dict(self.rollback_target),
         }
-

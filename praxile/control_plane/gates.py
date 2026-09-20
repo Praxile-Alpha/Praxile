@@ -102,5 +102,79 @@ class PromotionGateEvaluator:
                 "diff_scope_known": diff_scope_known,
                 "diff_scope_passed": diff_scope_passed,
             },
-            rollback_target={"component_key": candidate.component_key, "version": candidate.base_version},
+            rollback_target={
+                "component_key": candidate.component_key,
+                "executor_profile": candidate.executor_profile,
+                "task_family": candidate.task_family,
+                "promotion_key": candidate.promotion_key,
+                "version": candidate.base_version,
+            },
+        )
+
+    def evaluate_lab(
+        self,
+        candidate: HarnessCandidate,
+        lab_report: Mapping[str, Any],
+        *,
+        reviewer: str,
+        human_approved: bool,
+        thresholds: PromotionThresholds | None = None,
+    ) -> CandidateEvaluation:
+        report = require_mapping(lab_report, "Harness Lab report")
+        if report.get("schema_version") != "praxile.executable_harness_report.v1":
+            raise ControlPlaneSchemaError("unsupported Harness Lab report schema")
+        if report.get("promotion_key") != candidate.promotion_key:
+            raise ControlPlaneSchemaError("Harness Lab promotion key differs from the candidate")
+        splits = require_mapping(report.get("splits"), "Harness Lab splits")
+        heldout = require_mapping(splits.get("heldout"), "held-out Harness Lab statistics")
+        delta = require_mapping(heldout.get("delta"), "held-out Harness Lab delta")
+        efficiency = require_mapping(heldout.get("efficiency"), "held-out efficiency")
+        invariants = require_mapping(report.get("invariant_check"), "Harness Lab invariant check")
+        limits = thresholds or PromotionThresholds()
+        estimate = float(delta.get("estimate", 0.0) or 0.0)
+        interval = delta.get("ci95")
+        if not isinstance(interval, list) or len(interval) != 2:
+            raise ControlPlaneSchemaError("held-out delta requires a 95% confidence interval")
+        lower = float(interval[0])
+        regressions = int(heldout.get("regressions", 0) or 0)
+        cost_delta = efficiency.get("cost_delta_mean")
+        dead = list(report.get("dead_mechanisms") or [])
+        repetitions = int(report.get("repetitions", 0) or 0)
+        lab_ref = EvidenceRef("eval", str(report.get("lab_id") or "harness-lab"))
+        evidence = tuple(candidate.source_evidence) + (lab_ref,)
+        quality_passed = bool(report.get("promotion_eligible")) and estimate > 0 and lower >= 0 and not dead
+        regression_passed = bool(invariants.get("valid")) and regressions <= limits.max_regressions and repetitions >= 2
+        cost_passed = cost_delta is not None and float(cost_delta) <= limits.max_cost_increase
+        approval_ref = "approval_" + hashlib.sha256(reviewer.encode("utf-8")).hexdigest()[:16]
+        gates = (
+            GateResult("evidence", bool(candidate.source_evidence), evidence, "Candidate and executable Harness Lab evidence are linked."),
+            GateResult("quality", quality_passed, (lab_ref,), f"Held-out delta={estimate}, ci95={interval}, dead_mechanisms={dead}."),
+            GateResult("regression", regression_passed, (lab_ref,), f"Regressions={regressions}, repetitions={repetitions}, invariants_valid={bool(invariants.get('valid'))}."),
+            GateResult("cost", cost_passed, (lab_ref,), f"Mean held-out cost delta={cost_delta!r}, allowed increase={limits.max_cost_increase}."),
+            GateResult("human", human_approved, (EvidenceRef("user_feedback", approval_ref, "Explicit promotion review"),), "Human approval recorded." if human_approved else "Human approval is still required."),
+            GateResult("rollback", bool(candidate.base_version), (lab_ref,), f"Rollback target is {candidate.promotion_key}@{candidate.base_version}."),
+        )
+        all_passed = all(item.passed for item in gates)
+        return CandidateEvaluation(
+            candidate_id=candidate.candidate_id,
+            baseline_ref=f"harness-lab:{report.get('lab_id')}:baseline",
+            candidate_eval_ref=f"harness-lab:{report.get('lab_id')}:candidate",
+            gates=gates,
+            decision="promote" if all_passed else "abstain",
+            reviewer=reviewer,
+            metrics={
+                "heldout_delta": estimate,
+                "heldout_delta_ci95": interval,
+                "regressions": regressions,
+                "cost_delta": cost_delta,
+                "dead_mechanisms": dead,
+                "repetitions": repetitions,
+            },
+            rollback_target={
+                "component_key": candidate.component_key,
+                "executor_profile": candidate.executor_profile,
+                "task_family": candidate.task_family,
+                "promotion_key": candidate.promotion_key,
+                "version": candidate.base_version,
+            },
         )

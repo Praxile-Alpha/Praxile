@@ -9,6 +9,15 @@ from .evolution import (
     HarnessCandidate,
 )
 from .gates import PromotionGateEvaluator, PromotionThresholds
+from .lab import (
+    COVERAGE_CLASSES,
+    HARNESS_LAB_MANIFEST_SCHEMA,
+    HARNESS_LAB_REPORT_SCHEMA,
+    ExecutableHarnessLab,
+    ExecutableHarnessManifest,
+    ExecutorCompatibilityMatrix,
+    HarnessMechanism,
+)
 from .experiments import (
     ControlledArmMeasurement,
     SkillActivationExperiment,
@@ -49,6 +58,13 @@ __all__ = [
     "EvidenceRef",
     "GateResult",
     "HarnessCandidate",
+    "HarnessMechanism",
+    "ExecutableHarnessLab",
+    "ExecutableHarnessManifest",
+    "ExecutorCompatibilityMatrix",
+    "COVERAGE_CLASSES",
+    "HARNESS_LAB_MANIFEST_SCHEMA",
+    "HARNESS_LAB_REPORT_SCHEMA",
     "HarnessEvolutionRegistry",
     "MergeDecision",
     "PromotionGateEvaluator",

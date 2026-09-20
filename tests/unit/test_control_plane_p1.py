@@ -421,17 +421,18 @@ def test_registry_requires_six_gates_and_supports_atomic_rollback(tmp_path) -> N
     registry.register(first)
     registry.record_evaluation(evaluation())
     registry.promote(first.candidate_id, approved_by="maintainer@example.com")
-    assert registry.snapshot()["active"]["context.default"]["version"] == "2"
+    key = "context.default::default::default"
+    assert registry.snapshot()["active"][key]["version"] == "2"
 
     second = candidate("candidate_2", "3", "2")
     registry.register(second)
     registry.record_evaluation(evaluation("candidate_2", "2"))
     registry.promote(second.candidate_id, approved_by="maintainer@example.com")
-    assert registry.snapshot()["active"]["context.default"]["version"] == "3"
+    assert registry.snapshot()["active"][key]["version"] == "3"
 
     registry.rollback("context.default", approved_by="maintainer@example.com")
     state = registry.snapshot()
-    assert state["active"]["context.default"]["version"] == "2"
+    assert state["active"][key]["version"] == "2"
     assert state["candidates"]["candidate_2"]["status"] == "rolled_back"
 
 

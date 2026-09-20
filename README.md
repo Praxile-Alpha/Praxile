@@ -176,6 +176,8 @@ The P2-B representation router runs in normal `praxile run` execution as well as
 
 P2-C stores `self_judgment`, `verifier_outcome`, `next_task_delta`, `judgment_calibration`, and `transfer_effect` separately. It reports judge precision, calibration error, and false-promotion rate. An LLM judge may prioritize a proposal for review, but **self-judgment alone cannot make that proposal eligible for promotion**. Objective verifier evidence and explicit human approval remain mandatory; controlled A/B evaluation is still required for causal claims.
 
+P2-D makes Harness Candidates executable under immutable manifests. It repeats isolated development and held-out experiments, reports E/T/C/S/L/V runtime coverage and dead mechanisms, calculates confidence intervals, and scopes promotion by component, executor profile, and task family.
+
 ```bash
 praxile judge metrics
 praxile judge metrics --json --include-observations
@@ -586,6 +588,7 @@ Not included in the first release:
 - [Architecture](docs/ARCHITECTURE.md)
 - [P2-B Experience Representation](docs/P2_B_EXPERIENCE_REPRESENTATION.md)
 - [P2-C Judge Calibration](docs/P2_C_JUDGE_CALIBRATION.md)
+- [P2-D Executable Harness Lab](docs/P2_D_EXECUTABLE_HARNESS_LAB.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)

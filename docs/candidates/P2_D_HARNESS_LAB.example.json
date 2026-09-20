@@ -1,0 +1,105 @@
+{
+  "schema_version": "praxile.executable_harness_manifest.v1",
+  "lab_id": "sympy-focused-context-minimax-v1",
+  "version": "1",
+  "experiment_mode": "creation",
+  "isolation_mode": "worktree",
+  "candidate": {
+    "schema_version": "praxile.harness_candidate.v2",
+    "candidate_id": "sympy-focused-context-v2",
+    "type": "context_policy",
+    "component_key": "context.focused-investigation",
+    "base_version": "1",
+    "candidate_version": "2",
+    "hypothesis": "Focused repository investigation improves symbolic-math bug fixes without broad patches.",
+    "source_evidence": [
+      {
+        "type": "eval",
+        "ref_id": "sympy-development-ab-v1",
+        "claim": "Development evidence motivated this executable candidate."
+      }
+    ],
+    "payload": {
+      "context_policy": "focused-investigation"
+    },
+    "risk": "medium",
+    "executor_profile": "mini-swe-agent.minimax-m3",
+    "task_family": "symbolic-math-bugfix"
+  },
+  "adapter_name": "mini-swe-agent",
+  "executor_config": {
+    "model_class": null,
+    "config_specs": [],
+    "cost_tracking": "ignore_errors",
+    "timeout_seconds": 1800
+  },
+  "model": {
+    "model_name_or_path": "openai/MiniMax-M3",
+    "provider": "openai-compatible"
+  },
+  "evaluator": {
+    "name": "swe-bench-official",
+    "version": "1",
+    "entrypoint": "swebench.harness.run_evaluation",
+    "distribution_version": "EDIT_TO_INSTALLED_VERSION",
+    "max_workers": 1,
+    "timeout_seconds": 1800,
+    "extra_args": []
+  },
+  "baseline_policy": {
+    "policy_id": "sympy-baseline",
+    "version": "1",
+    "context": [],
+    "budgets": {
+      "wall_timeout_seconds": 1800
+    },
+    "settings": {
+      "allow_unattended_execution": true,
+      "workspace_isolated": true,
+      "step_limit": 150
+    }
+  },
+  "candidate_policy": {
+    "policy_id": "sympy-focused-context",
+    "version": "2",
+    "context": [
+      {
+        "kind": "summary_memory",
+        "content": "Start with the narrowest failing symbolic-math regression and inspect shared base behavior before broad search."
+      }
+    ],
+    "budgets": {
+      "wall_timeout_seconds": 1800
+    },
+    "settings": {
+      "allow_unattended_execution": true,
+      "workspace_isolated": true,
+      "step_limit": 150
+    }
+  },
+  "development_task_ids": [
+    "sympy__sympy-16281"
+  ],
+  "heldout_task_ids": [
+    "sympy__sympy-18532"
+  ],
+  "development_task_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "heldout_task_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repetitions": 3,
+  "mechanisms": [
+    {
+      "mechanism_id": "focused-context-injection",
+      "coverage_class": "C",
+      "expected_event_types": [
+        "CONTEXT_INJECT"
+      ],
+      "required": true
+    },
+    {
+      "mechanism_id": "independent-verification",
+      "coverage_class": "V",
+      "required": true
+    }
+  ],
+  "base_harness_ref": null
+}

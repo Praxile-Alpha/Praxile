@@ -20,3 +20,16 @@ def test_judge_metrics_parser_contract() -> None:
     assert args.judge_command == "metrics"
     assert args.limit == 50
     assert args.json is True
+
+
+def test_harness_lab_parser_contract() -> None:
+    args = build_parser().parse_args([
+        "harness", "lab-run", "manifest.json",
+        "--development-tasks", "dev.json",
+        "--heldout-tasks", "heldout.json",
+        "--resume",
+    ])
+    assert args.manifest == "manifest.json"
+    assert args.development_tasks == "dev.json"
+    assert args.heldout_tasks == "heldout.json"
+    assert args.resume is True

@@ -72,9 +72,18 @@ def test_candidate_cli_register_evaluate_promote_list_and_rollback(tmp_path: Pat
     assert cmd_harness_candidate_promote(argparse.Namespace(candidate_id="cli_candidate", approved_by="maintainer"), tmp_path) == 0
     assert cmd_harness_candidate_list(argparse.Namespace(json=True), tmp_path) == 0
     listed = json.loads(capsys.readouterr().out.split("Promoted cli_candidate\n")[-1])
-    assert listed["active"]["context.default"]["version"] == "2"
-    assert cmd_harness_candidate_rollback(argparse.Namespace(component_key="context.default", approved_by="maintainer"), tmp_path) == 0
-    assert HarnessEvolutionRegistry(tmp_path).snapshot()["active"]["context.default"]["version"] == "1"
+    key = "context.default::default::default"
+    assert listed["active"][key]["version"] == "2"
+    assert cmd_harness_candidate_rollback(
+        argparse.Namespace(
+            component_key="context.default",
+            executor_profile="default",
+            task_family="default",
+            approved_by="maintainer",
+        ),
+        tmp_path,
+    ) == 0
+    assert HarnessEvolutionRegistry(tmp_path).snapshot()["active"][key]["version"] == "1"
 
 
 def test_skill_evaluate_cli_writes_markdown_projection(tmp_path: Path) -> None:

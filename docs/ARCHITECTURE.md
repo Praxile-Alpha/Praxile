@@ -430,6 +430,10 @@ For full details, see the [Security Model](SECURITY_MODEL.md).
 
 ## Bounded Harness Evolution
 
+P2-D adds an Executable Harness Lab above the V2 benchmark runner. A versioned manifest freezes the Candidate, baseline and candidate Adapter policies, executor profile, model, evaluator, isolation mode, task family, disjoint development/held-out IDs, repetitions, and expected mechanisms. Each arm executes through `BenchmarkEvalRunner` in a detached task worktree; container mode is permitted only for an Adapter that explicitly reports container isolation.
+
+The Lab aggregates E/T/C/S/L/V runtime coverage, detects declared mechanisms that never activate, computes repeated-run confidence intervals, and emits executor-specific compatibility rows. Its report feeds the existing Evidence, Quality, Regression, Cost, Human, and Rollback gates. Active pointers are keyed by `component_key + executor_profile + task_family`, so evidence from one execution model or task family cannot silently activate the same component elsewhere.
+
 Praxile mines repeated failure pathologies across episodes and indexes alternatives by pathology and exactly one owned harness component. Candidates run as isolated baseline/candidate experiments and cannot modify the active harness during validation. A validated candidate becomes active only after explicit human acceptance; activation writes a versioned manifest with validation evidence, approval, activation time, and rollback target.
 
 The frozen outer anchor includes the constitution, safety policy, sealed evals/scorers, architecture-gate enforcement, and approval enforcement. Normal proposals cannot modify it. Runtime rollback monitoring requires component participation evidence before acting, and experiment bundles redact repository content by default.

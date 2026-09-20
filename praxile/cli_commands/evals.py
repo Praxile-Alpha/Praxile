@@ -14,6 +14,7 @@ from ..eval.v2 import (
     ContextCandidate,
     ContextPolicyAblation,
     ControlledABExperiment,
+    EvalTaskSet,
     FailureDiagnoser,
     OfficialSWEbenchEvaluator,
     PublicExperimentExporter,
@@ -22,6 +23,9 @@ from ..eval.v2 import (
 from ..control_plane import (
     ContextPolicy,
     HarnessCandidate,
+    ExecutableHarnessLab,
+    ExecutableHarnessManifest,
+    ExecutorCompatibilityMatrix,
     HarnessEvolutionRegistry,
     PromotionThresholds,
     SkillAsset,
@@ -657,14 +661,14 @@ def cmd_harness_candidate_list(args: argparse.Namespace, project_root: Path) -> 
     rows = []
     for candidate_id, record in sorted(state["candidates"].items()):
         candidate = record["candidate"]
-        rows.append({"candidate_id": candidate_id, "type": candidate["type"], "component_key": candidate["component_key"], "version": candidate["candidate_version"], "status": record["status"]})
+        rows.append({"candidate_id": candidate_id, "type": candidate["type"], "component_key": candidate["component_key"], "executor_profile": candidate.get("executor_profile", "default"), "task_family": candidate.get("task_family", "default"), "promotion_key": candidate.get("promotion_key"), "version": candidate["candidate_version"], "status": record["status"]})
     if args.json:
         print(json.dumps({"candidates": rows, "active": state["active"]}, indent=2, ensure_ascii=False))
     elif not rows:
         print("No V2 harness candidates.")
     else:
         for row in rows:
-            print(f"{row['candidate_id']}  type={row['type']} component={row['component_key']} version={row['version']} status={row['status']}")
+            print(f"{row['candidate_id']}  type={row['type']} key={row['promotion_key']} version={row['version']} status={row['status']}")
     return 0
 
 
@@ -678,13 +682,24 @@ def cmd_harness_candidate_evaluate(args: argparse.Namespace, project_root: Path)
     ab_report = _json_object(Path(args.ab_report), "A/B report")
     config, store = load(project_root)
     store.initialize(config)
-    evaluation = BenchmarkEvalRunner(config.paths.state, EventStore(config.paths)).build_promotion_evaluation(
-        candidate,
-        ab_report,
-        reviewer=args.reviewer,
-        human_approved=bool(args.approve_human),
-        thresholds=PromotionThresholds(args.max_regressions, args.max_cost_increase, not args.allow_quality_tie),
-    )
+    thresholds = PromotionThresholds(args.max_regressions, args.max_cost_increase, not args.allow_quality_tie)
+    if ab_report.get("schema_version") == "praxile.executable_harness_report.v1":
+        from ..control_plane import PromotionGateEvaluator
+        evaluation = PromotionGateEvaluator().evaluate_lab(
+            candidate,
+            ab_report,
+            reviewer=args.reviewer,
+            human_approved=bool(args.approve_human),
+            thresholds=thresholds,
+        )
+    else:
+        evaluation = BenchmarkEvalRunner(config.paths.state, EventStore(config.paths)).build_promotion_evaluation(
+            candidate,
+            ab_report,
+            reviewer=args.reviewer,
+            human_approved=bool(args.approve_human),
+            thresholds=thresholds,
+        )
     registry.record_evaluation(evaluation)
     print(json.dumps(evaluation.to_dict(), indent=2, ensure_ascii=False) if args.json else f"Candidate {args.candidate_id}: {evaluation.decision}")
     return 0 if evaluation.decision == "promote" else 1
@@ -697,8 +712,91 @@ def cmd_harness_candidate_promote(args: argparse.Namespace, project_root: Path) 
 
 
 def cmd_harness_candidate_rollback(args: argparse.Namespace, project_root: Path) -> int:
-    HarnessEvolutionRegistry(project_root).rollback(args.component_key, approved_by=args.approved_by)
-    print(f"Rolled back {args.component_key}")
+    HarnessEvolutionRegistry(project_root).rollback(
+        args.component_key,
+        approved_by=args.approved_by,
+        executor_profile=args.executor_profile,
+        task_family=args.task_family,
+    )
+    print(f"Rolled back {args.component_key}::{args.executor_profile}::{args.task_family}")
+    return 0
+
+
+def cmd_harness_lab_run(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    manifest = ExecutableHarnessManifest.from_dict(_json_object(Path(args.manifest), "harness lab manifest"))
+    development = EvalTaskSet.from_dict(_json_object(Path(args.development_tasks), "development task set"))
+    heldout = EvalTaskSet.from_dict(_json_object(Path(args.heldout_tasks), "held-out task set"))
+    model_name = str(manifest.model.get("model_name_or_path") or manifest.model.get("model"))
+    executor_config = manifest.executor_config
+    config_specs = executor_config.get("config_specs", [])
+    if not isinstance(config_specs, list) or any(not isinstance(item, str) for item in config_specs):
+        raise ValueError("manifest executor_config.config_specs must be a string array")
+    cost_tracking = str(executor_config.get("cost_tracking") or "default")
+    if cost_tracking not in {"default", "ignore_errors"}:
+        raise ValueError("manifest executor_config.cost_tracking is unsupported")
+    timeout = int(executor_config.get("timeout_seconds", 1800) or 1800)
+    adapter = MiniSweAgentAdapter(
+        model=model_name,
+        model_class=str(executor_config.get("model_class") or "") or None,
+        config_specs=config_specs,
+        environment={"MSWEA_COST_TRACKING": cost_tracking} if cost_tracking != "default" else None,
+        default_timeout_seconds=timeout,
+    )
+    evaluator = OfficialSWEbenchEvaluator(timeout_seconds=timeout)
+    adapter_available, adapter_detail = adapter.availability()
+    if not adapter_available:
+        raise RuntimeError(f"mini-SWE-agent is unavailable: {adapter_detail}; install praxile[benchmark]")
+    evaluator_available, evaluator_detail = evaluator.availability()
+    if not evaluator_available:
+        raise RuntimeError(f"SWE-bench evaluator is unavailable: {evaluator_detail}")
+    source_overrides: dict[str, Path] = {}
+    for raw in args.source:
+        repo, separator, path = raw.partition("=")
+        if not separator or not repo.strip() or not path.strip():
+            raise ValueError(f"invalid --source {raw!r}; expected REPO=PATH")
+        source_overrides[repo.strip()] = Path(path).expanduser().resolve()
+    with adapter:
+        report = ExecutableHarnessLab(config.paths.state, EventStore(config.paths)).run(
+            manifest,
+            development,
+            heldout,
+            adapter=adapter,
+            evaluator=evaluator,
+            resume=args.resume,
+            keep_workspaces=args.keep_workspaces,
+            source_overrides=source_overrides,
+        )
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        heldout_delta = report["splits"]["heldout"]["delta"]
+        print(f"Harness Lab: {report['lab_id']} key={report['promotion_key']}")
+        print(f"Held-out delta: {heldout_delta['estimate']} ci95={heldout_delta['ci95']}")
+        print(f"Coverage: {report['runtime_coverage']['covered']}")
+        print(f"Dead mechanisms: {report['dead_mechanisms'] or 'none'}")
+        print(f"Promotion eligible: {report['promotion_eligible']}")
+    return 0 if not report["dead_mechanisms"] else 1
+
+
+def cmd_harness_lab_matrix(args: argparse.Namespace, project_root: Path) -> int:
+    reports = [_json_object(Path(path), "harness lab report") for path in args.report]
+    matrix = ExecutorCompatibilityMatrix.build(reports)
+    if args.output:
+        write_json(Path(args.output).expanduser().resolve(), matrix)
+    print(json.dumps(matrix, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_harness_lab_digest(args: argparse.Namespace, project_root: Path) -> int:
+    task_set = EvalTaskSet.from_dict(_json_object(Path(args.task_set), "task set"))
+    payload = {
+        "task_set": task_set.name,
+        "task_ids": [task.task_id for task in task_set.tasks],
+        "digest": task_set.digest,
+    }
+    print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["digest"])
     return 0
 
 

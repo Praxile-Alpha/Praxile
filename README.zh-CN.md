@@ -176,6 +176,8 @@ P2-B 表示路由不仅用于受控 A/B 实验，也已经接入普通 `praxile 
 
 P2-C 会分别保存 `self_judgment`、`verifier_outcome`、`next_task_delta`、`judgment_calibration` 和 `transfer_effect`，并统计 Judge precision、calibration error 与 false-promotion rate。LLM Judge 可以改变 proposal 的审查优先级，但**不能仅凭 Self-Judgment 让 Proposal 获得 promotion 资格**。客观 verifier evidence 与人工审批仍然是硬约束；要声称因果提升，仍需受控 A/B 实验。
 
+P2-D 会把 Harness Candidate 编译成不可变的可执行 Manifest，在隔离的 development/held-out 任务上重复实验，统计 E/T/C/S/L/V 运行时覆盖与 dead mechanism，计算置信区间，并按 component、executor profile 与 task family 隔离 promotion。
+
 ```bash
 praxile judge metrics
 praxile judge metrics --json --include-observations
@@ -586,6 +588,7 @@ Praxile 当前处于 **Alpha** 阶段。
 - [Architecture](docs/ARCHITECTURE.md)
 - [P2-B Experience Representation](docs/P2_B_EXPERIENCE_REPRESENTATION.md)
 - [P2-C Judge Calibration](docs/P2_C_JUDGE_CALIBRATION.md)
+- [P2-D Executable Harness Lab](docs/P2_D_EXECUTABLE_HARNESS_LAB.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)

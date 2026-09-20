@@ -173,7 +173,7 @@ The four directions derived from ASPIRE, S3Gym, and HarnessDev are tracked separ
 - [x] **P2-B controlled A/B representation router:** choose none/raw episode/summary/skill/failure pattern after semantic activation, with audited inputs, cost, decision and trace evidence. See [implementation and limits](P2_B_EXPERIENCE_REPRESENTATION.md).
 - [x] **P2-B normal-run asset integration:** derive bounded, source-linked representations from indexed project assets and apply semantic activation plus representation routing before the default `praxile run` prompt. Retrieved and injected usage are now recorded separately.
 - [x] **P2-C Judge Calibration:** persist self-judgment separately from objective verifier outcome, backfill observational future-task delta only after real experience injection, and report precision, calibration error, and false-promotion rate. Self-judgment alone cannot grant promotion eligibility. See [implementation and limits](P2_C_JUDGE_CALIBRATION.md).
-- [ ] **P2-D Executable Harness Lab:** reproducible E/T/C/S/L/V coverage and dead-mechanism checks across executors.
+- [x] **P2-D Executable Harness Lab:** immutable executable manifests, detached-worktree or capability-verified container isolation, Creation/Evolution modes, fixed executors, E/T/C/S/L/V runtime coverage, dead-mechanism blocking, disjoint dev/held-out sets, repeated experiments with confidence intervals, executor compatibility matrices, and promotion keys scoped by component, executor profile, and task family. See [implementation and limits](P2_D_EXECUTABLE_HARNESS_LAB.md).
 
 ## Non-Goals
 
