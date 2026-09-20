@@ -189,7 +189,7 @@ class EvidenceExtractor:
         loaded: list[dict[str, Any]] = []
         seen: set[str] = set()
         for item in values:
-            if isinstance(item, dict):
+            if isinstance(item, dict) and item.get("used_in_prompt", True):
                 key = str(item.get("path") or item.get("asset_id") or item)
                 if key in seen:
                     continue

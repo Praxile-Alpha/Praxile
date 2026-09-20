@@ -51,6 +51,8 @@ def default_config(project_root: Path) -> dict[str, Any]:
         },
         "context": {
             "compression_enabled": True,
+            "experience_representation_enabled": True,
+            "experience_representation_budget_units": 600,
             "max_prompt_chars": 120000,
             "compression_threshold": 0.8,
             "observation_keep_chars": 1600,
@@ -109,6 +111,8 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "calibration": {
                 "min_recall": 0.80,
                 "repeated_runs": 2,
+                "positive_threshold": 0.70,
+                "transfer_delta_threshold": 0.05,
             },
         },
         "search": {
@@ -583,6 +587,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "checkpoint.every_steps",
         "executors.max_readonly_concurrency",
         "context.max_prompt_chars",
+        "context.experience_representation_budget_units",
         "context.observation_keep_chars",
         "context.recent_messages_to_keep",
         "memory.project_memory_soft_limit_bytes",
@@ -627,6 +632,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "checkpoint.enabled",
         "executors.parallel_readonly_exploration_enabled",
         "context.compression_enabled",
+        "context.experience_representation_enabled",
         "trace.enabled",
         "trace.sync",
         "retrieval.hybrid_enabled",
@@ -722,6 +728,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "semantic_judges.risk_detector.high_risk_score",
         "semantic_judges.risk_detector.medium_risk_score",
         "semantic_judges.calibration.min_recall",
+        "semantic_judges.calibration.positive_threshold",
+        "semantic_judges.calibration.transfer_delta_threshold",
     ]:
         expect(path, (int, float))
     for path in [
@@ -830,6 +838,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         "runtime.action_parse_retries",
         "runtime.invalid_action_fail_fast_count",
         "executors.max_readonly_concurrency",
+        "context.experience_representation_budget_units",
         "trace.retention_days",
         "gateway.max_threads",
         "reward.scope.broad_edit_top_level_threshold",
@@ -862,6 +871,8 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
             errors.append(f"{path}: expected int or null, got {type(value).__name__}")
         if isinstance(value, int) and value < 0:
             errors.append(f"{path}: must be >= 0")
+    if type(value_at("context.experience_representation_budget_units")) is not int:
+        errors.append("context.experience_representation_budget_units: expected int")
     min_experience = value_at("reward.min_experience_value_for_proposals")
     if isinstance(min_experience, (int, float)) and float(min_experience) < 0:
         errors.append("reward.min_experience_value_for_proposals: must be non-negative")

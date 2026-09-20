@@ -54,6 +54,7 @@ class AttributionJudge:
             item
             for item in loaded
             if _asset_path(item)
+            and item.get("used_in_prompt", True)
             and (
                 _asset_path(item) in referenced
                 or _score_value(item) >= threshold

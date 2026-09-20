@@ -156,6 +156,34 @@ The core rule is simple:
 
 > A run may produce learning signals, but only approved proposals become durable repository knowledge.
 
+### Context representation and judge calibration
+
+Praxile now governs both **how experience enters a run** and **how a run's quality claims are verified**.
+
+```text
+Retrieved assets
+  -> deterministic semantic activation gate
+  -> representation policy
+  -> none | raw_episode | summary_memory | skill | failure_pattern
+  -> bounded prompt injection
+
+LLM self-judgment ---------------------> calibration
+Objective environment verification ---> calibration
+Later task outcome --------------------> observational transfer effect
+```
+
+The P2-B representation router runs in normal `praxile run` execution as well as controlled A/B experiments. Retrieval alone does not count as use: an asset is credited only when semantic activation passes, the router selects a bounded representation, and that representation is injected. Selection decisions and token-budget estimates are written to the trajectory.
+
+P2-C stores `self_judgment`, `verifier_outcome`, `next_task_delta`, `judgment_calibration`, and `transfer_effect` separately. It reports judge precision, calibration error, and false-promotion rate. An LLM judge may prioritize a proposal for review, but **self-judgment alone cannot make that proposal eligible for promotion**. Objective verifier evidence and explicit human approval remain mandatory; controlled A/B evaluation is still required for causal claims.
+
+```bash
+praxile judge metrics
+praxile judge metrics --json --include-observations
+praxile judge calibrate path/to/suite.json --write-proposal
+```
+
+See [P2-B Experience Representation](docs/P2_B_EXPERIENCE_REPRESENTATION.md) and [P2-C Judge Calibration](docs/P2_C_JUDGE_CALIBRATION.md).
+
 ---
 
 ## Feature highlights
@@ -166,6 +194,10 @@ The core rule is simple:
   `praxile sync` captures a local, auditable repository context snapshot with Context Health, file-category signals, git dirtiness, recent commits/diffs, docs/spec indexes, optional local CI/GitHub context, experience counts, and ContextJuice estimates. It writes `.praxile/context/repo_snapshot.json`, `.praxile/context/commits/`, `.praxile/context/diffs/`, plus historical snapshots.
 - **ContextJuice and Repository Memory Tree**  
   `praxile context compress` produces role-specific compressed context with preserved evidence metadata; `praxile context tree` builds a human-readable memory tree under `.praxile/context/tree/`.
+- **Semantic activation and experience representation**
+  Retrieved experience passes a deterministic activation gate and is then represented as `none`, bounded raw episode, summary memory, skill, or failure pattern. Retrieved and injected assets are audited separately.
+- **Calibrated semantic judges**
+  LLM self-judgment is stored separately from objective verifier outcomes and later transfer observations. Precision, calibration error, and false-promotion rate expose when a judge is overconfident.
 - **Policy Layers and governance loop**  
   `praxile policy list/check/explain` inspects project-local governance layers, and `praxile watch` runs safe governance passes that can sync, compress, audit, rebuild graph, and reflect without editing code or auto-accepting proposals.
 - **Workflow Templates**  
@@ -552,6 +584,8 @@ Not included in the first release:
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [P2-B Experience Representation](docs/P2_B_EXPERIENCE_REPRESENTATION.md)
+- [P2-C Judge Calibration](docs/P2_C_JUDGE_CALIBRATION.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)

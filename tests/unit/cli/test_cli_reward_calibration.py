@@ -13,3 +13,10 @@ def test_judge_calibration_parser_contract() -> None:
     assert args.judge_command == "calibrate"
     assert args.suite == "suite.json"
     assert args.write_proposal is True
+
+
+def test_judge_metrics_parser_contract() -> None:
+    args = build_parser().parse_args(["judge", "metrics", "--limit", "50", "--json"])
+    assert args.judge_command == "metrics"
+    assert args.limit == 50
+    assert args.json is True

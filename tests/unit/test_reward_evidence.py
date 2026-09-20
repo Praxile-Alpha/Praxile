@@ -100,6 +100,8 @@ def test_controlled_judge_calibration_and_gated_policy_proposal(tmp_path: Path) 
     assert first["confusion"]["false_negative"] == 1
     assert first["recall"] == 0.5
     assert first["evidence_coverage"] == 0.5
+    assert first["calibration_error"] > 0
+    assert first["false_promotion_rate"] == 0.0
     assert proposal is not None
     assert proposal["type"] == "reward_policy"
     assert proposal["architecture_gate_required"] is True

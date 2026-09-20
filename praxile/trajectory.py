@@ -53,7 +53,7 @@ class TrajectoryLogger:
     def task_id(self) -> str:
         return self.data["task_id"]
 
-    def set_loaded_context(self, context: list[dict[str, Any]]) -> None:
+    def set_loaded_context(self, context: list[dict[str, Any]], *, injected_paths: set[str] | None = None) -> None:
         self.data["loaded_memories"] = [item for item in context if item.get("kind") == "memory"]
         self.data["loaded_skills"] = [item for item in context if item.get("kind") == "skill"]
         self.data["loaded_rules"] = [item for item in context if item.get("kind") == "rule"]
@@ -67,12 +67,17 @@ class TrajectoryLogger:
                 "matched_terms": item.get("matched_terms") or [],
                 "matched_fields": item.get("matched_fields") or [],
                 "why_loaded": item.get("why_loaded") or item.get("reason"),
-                "used_in_prompt": True,
+                "used_in_prompt": injected_paths is None or item.get("path") in injected_paths,
                 "source_task_id": item.get("source_task_id"),
                 "confidence": item.get("confidence"),
             }
             for item in context
         ]
+
+    def mark_context_injected(self, paths: set[str]) -> None:
+        for item in self.data.get("loaded_assets", []):
+            if item.get("path") in paths:
+                item["used_in_prompt"] = True
 
     def set_plan(self, plan: list[str]) -> None:
         self.data["plan"] = plan

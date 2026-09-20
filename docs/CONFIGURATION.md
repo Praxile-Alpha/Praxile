@@ -85,6 +85,8 @@ Praxile keeps operational knobs in `.praxile/config.json`:
   },
   "context": {
     "compression_enabled": true,
+    "experience_representation_enabled": true,
+    "experience_representation_budget_units": 600,
     "max_prompt_chars": 120000,
     "compression_threshold": 0.8,
     "observation_keep_chars": 1600,
@@ -366,6 +368,10 @@ Project map caching stores a short-lived summary in `.praxile/cache/project_map.
 `checkpoint.enabled=true` writes resumable execution state under `.praxile/checkpoints/` after important runtime steps. Use `praxile run --resume <TASK_ID>` to continue from the last persisted action after an interruption.
 
 `context.compression_enabled=true` deterministically compresses older observations when prompt text approaches the configured threshold. This keeps long action loops from dragging full command output or large file reads through every subsequent model call. Runtime compression now uses the same role profiles as ContextJuice, records the selected role/profile/strategy in the trajectory, and treats config values as overrides for `.praxile/policies/context.json`. Use `praxile context status`, `praxile context compress --run latest`, `praxile context compress --source ci-log.txt`, and `praxile context tree` to inspect compression outputs and build the human-readable Repository Memory Tree.
+
+`context.experience_representation_enabled=true` routes project experience during normal `praxile run`: retrieval is followed by the semantic activation gate, then by deterministic form selection. `experience_representation_budget_units` bounds the selected experience text (one unit approximates four characters). A selected `none` remains retrieved but is not injected or credited as used in the model prompt. Set the flag to `false` to retain the previous retrieved-snippet injection behavior. See [P2-B Experience Representation](P2_B_EXPERIENCE_REPRESENTATION.md).
+
+`semantic_judges.calibration.positive_threshold` converts an available self-judgment score into a positive prediction for precision measurement. `transfer_delta_threshold` classifies later observational verifier deltas as positive, neutral, or negative. Neither setting can promote an asset without objective verifier evidence and explicit human approval. See [P2-C Judge Calibration](P2_C_JUDGE_CALIBRATION.md).
 
 `policy_layers.enabled=true` enables policy-as-code inspection. `praxile policy list` shows built-in and file-backed layers under `.praxile/policies/`; `praxile policy check --write-defaults` seeds `default.json`, `context.json`, `proposal_gate.json`, and `tool_policy.json`; `praxile policy explain proposal_gate` shows layer precedence and the effective value. Rules in `.praxile/policies/tool_policy.json` are also loaded by `SafetyPolicy`, so project-local policy-as-code can deny matching runtime tool calls after human review.
 

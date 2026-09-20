@@ -171,12 +171,15 @@ class TrajectoriesStoreMixin:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO judge_calibration_runs
-                (calibration_id, judge, report_path, recall, disagreement_rate, abstention_rate, evidence_coverage, report_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (calibration_id, judge, report_path, precision, recall, calibration_error,
+                 false_promotion_rate, disagreement_rate, abstention_rate, evidence_coverage,
+                 report_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     report.get("calibration_id"), report.get("judge"), report.get("path"),
-                    report.get("recall", 0.0), report.get("disagreement_rate", 0.0),
+                    report.get("precision"), report.get("recall", 0.0), report.get("calibration_error"),
+                    report.get("false_promotion_rate"), report.get("disagreement_rate", 0.0),
                     report.get("abstention_rate", 0.0), report.get("evidence_coverage", 0.0),
                     json.dumps(report, ensure_ascii=False), report.get("created_at") or utc_now(),
                 ),
@@ -192,6 +195,41 @@ class TrajectoriesStoreMixin:
         with self._connection() as conn:
             rows = conn.execute(query, params).fetchall()
         return [json.loads(row["report_json"]) for row in rows]
+    def record_judge_observation(self, observation: dict[str, Any]) -> None:
+        calibration = observation.get("judgment_calibration") or {}
+        self_judgment = observation.get("self_judgment") or {}
+        verifier = observation.get("verifier_outcome") or {}
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO judge_observations
+                (task_id, self_judgment_score, verifier_score, verifier_available,
+                 promotion_eligible, calibration_error, false_promotion,
+                 observation_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    observation.get("task_id"), self_judgment.get("score"), verifier.get("score"),
+                    int(bool(verifier.get("available"))), int(bool(calibration.get("promotion_eligible"))),
+                    calibration.get("absolute_error"), int(bool(calibration.get("false_promotion"))),
+                    json.dumps(observation, ensure_ascii=False), observation.get("created_at") or utc_now(),
+                    observation.get("updated_at") or utc_now(),
+                ),
+            )
+    def get_judge_observation(self, task_id: str) -> dict[str, Any] | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT observation_json FROM judge_observations WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+        return json.loads(row["observation_json"]) if row else None
+    def list_judge_observations(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT observation_json FROM judge_observations ORDER BY updated_at DESC LIMIT ?",
+                (max(1, int(limit)),),
+            ).fetchall()
+        return [json.loads(row["observation_json"]) for row in rows]
     def checkpoint_path(self, task_id: str) -> Path:
         return self.paths.checkpoints / f"{task_id}.json"
     def write_checkpoint(self, checkpoint: dict[str, Any]) -> Path:

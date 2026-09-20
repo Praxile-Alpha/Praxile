@@ -30,6 +30,7 @@ from ..control_plane import (
     SkillMarkdownProjector,
 )
 from ..trace import EventStore
+from ..judge_governance import JudgeGovernance
 
 
 def cmd_workspace_list(args: argparse.Namespace, project_root: Path) -> int:
@@ -748,6 +749,10 @@ def cmd_judge_calibrate(args: argparse.Namespace, project_root: Path) -> int:
     else:
         print(f"Judge calibration: {report['calibration_id']}")
         print(f"Cases: {report['case_count']} recall={report['recall']} precision={report['precision']}")
+        print(
+            f"Calibration error: {report['calibration_error']} "
+            f"false promotion rate: {report['false_promotion_rate']}"
+        )
         print(f"Disagreement: {report['disagreement_rate']} abstention: {report['abstention_rate']}")
         print(f"Evidence coverage: {report['evidence_coverage']}")
         print(f"Report: {report['path']}")
@@ -756,6 +761,28 @@ def cmd_judge_calibrate(args: argparse.Namespace, project_root: Path) -> int:
         elif args.write_proposal:
             print("No proposal generated; repeated-miscalibration threshold was not reached.")
     return 0 if report["recall"] >= float(config.get("semantic_judges", "calibration", "min_recall", default=0.8)) else 1
+
+
+def cmd_judge_metrics(args: argparse.Namespace, project_root: Path) -> int:
+    config, store = load(project_root)
+    store.initialize(config)
+    observations = store.list_judge_observations(limit=args.limit)
+    metrics = JudgeGovernance.metrics(observations)
+    payload = {"metrics": metrics, "observations": observations if args.include_observations else []}
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(
+            "Judge metrics: "
+            f"precision={metrics['precision']} "
+            f"calibration_error={metrics['calibration_error']} "
+            f"false_promotion_rate={metrics['false_promotion_rate']}"
+        )
+        print(
+            f"Comparable: {metrics['comparable_count']}/{metrics['observation_count']} "
+            f"promotion claims: {metrics['promotion_claim_count']}"
+        )
+    return 0
 
 
 def cmd_reward_explain(args: argparse.Namespace, project_root: Path) -> int:

@@ -213,6 +213,9 @@ class EvolutionEngine:
 
     def _apply_proposal_gate(self, proposals: list[dict[str, Any]], trajectory: dict[str, Any]) -> list[dict[str, Any]]:
         if not self.config.get("proposal_gate", "enabled", default=True):
+            promotion_eligibility = self._promotion_eligibility(trajectory)
+            for proposal in proposals:
+                proposal["promotion_eligibility"] = dict(promotion_eligibility)
             trajectory["proposal_gate_summary"] = {
                 "generated": len(proposals),
                 "pending": len(proposals),
@@ -226,6 +229,7 @@ class EvolutionEngine:
         for proposal in proposals:
             gate = self._proposal_gate_decision(proposal, trajectory)
             proposal["proposal_gate"] = gate
+            proposal["promotion_eligibility"] = gate["promotion_eligibility"]
             if gate["passed"]:
                 passed.append(proposal)
             else:
@@ -319,6 +323,8 @@ class EvolutionEngine:
         if spec_compliance and spec_status == "full":
             reasons.append("Attached spec compliance is satisfied.")
 
+        promotion_eligibility = self._promotion_eligibility(trajectory)
+
         passed = not suppressed_reasons
         return {
             "passed": passed,
@@ -329,8 +335,30 @@ class EvolutionEngine:
             "anti_scope_valid": anti_scope_ok,
             "duplicate_risk": "unknown",
             "spec_compliance_status": spec_status if spec_compliance else None,
+            "promotion_eligibility": promotion_eligibility,
             "reasons": reasons,
             "suppressed_reasons": suppressed_reasons,
+        }
+
+    @staticmethod
+    def _promotion_eligibility(trajectory: dict[str, Any]) -> dict[str, Any]:
+        verifier = trajectory.get("verifier_outcome") or {}
+        self_judgment = trajectory.get("self_judgment") or {}
+        verifier_available = bool(verifier.get("available"))
+        verifier_passed = bool(verifier_available and verifier.get("passed"))
+        self_only = bool(self_judgment.get("available") and not verifier_available)
+        return {
+            "eligible": verifier_passed,
+            "basis": "verifier_outcome" if verifier_available else "insufficient_verifier_evidence",
+            "verifier_available": verifier_available,
+            "verifier_passed": verifier_passed,
+            "self_judgment_only": self_only,
+            "requires_human_approval": True,
+            "note": (
+                "Self-judgment can prioritize review but cannot grant promotion eligibility."
+                if self_judgment.get("available")
+                else "Promotion requires objective verifier evidence and explicit human approval."
+            ),
         }
 
     def _proposal(

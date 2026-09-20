@@ -139,6 +139,9 @@ class BoundedHarnessEvolution:
         validation = proposal.get("validation") or {}
         if proposal.get("status") != "accepted" or validation.get("status") != "validated":
             raise PermissionError("Only human-accepted, validated harness candidates can be promoted")
+        eligibility = proposal.get("promotion_eligibility")
+        if isinstance(eligibility, dict) and not eligibility.get("eligible"):
+            raise PermissionError("Harness candidate lacks objective verifier evidence for promotion")
         component_id = str(change.get("component_id") or "")
         active = self.registry.describe(component_id)
         manifest_path = self._manifest_path()

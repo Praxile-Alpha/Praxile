@@ -689,6 +689,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_judge_calibrate.add_argument("--write-proposal", action="store_true", help="Write a gated reward-policy proposal after repeated miscalibration")
     p_judge_calibrate.add_argument("--json", action="store_true", help="Emit the full calibration report")
     p_judge_calibrate.set_defaults(func=cmd_judge_calibrate)
+    p_judge_metrics = judge_sub.add_parser("metrics", help="Report online self-judgment calibration metrics")
+    p_judge_metrics.add_argument("--limit", type=int, default=200, help="Maximum run observations to aggregate")
+    p_judge_metrics.add_argument("--include-observations", action="store_true", help="Include observations in JSON output")
+    p_judge_metrics.add_argument("--json", action="store_true", help="Emit machine-readable metrics")
+    p_judge_metrics.set_defaults(func=cmd_judge_metrics)
 
     p_reward = sub.add_parser("reward", help="Explain versioned reward claims and evidence")
     reward_sub = p_reward.add_subparsers(dest="reward_command", required=True)

@@ -164,17 +164,41 @@ class BaseStore:
                   calibration_id TEXT PRIMARY KEY,
                   judge TEXT NOT NULL,
                   report_path TEXT NOT NULL,
+                  precision REAL,
                   recall REAL NOT NULL,
+                  calibration_error REAL,
+                  false_promotion_rate REAL,
                   disagreement_rate REAL NOT NULL,
                   abstention_rate REAL NOT NULL,
                   evidence_coverage REAL NOT NULL,
                   report_json TEXT NOT NULL,
                   created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS judge_observations (
+                  task_id TEXT PRIMARY KEY,
+                  self_judgment_score REAL,
+                  verifier_score REAL,
+                  verifier_available INTEGER NOT NULL DEFAULT 0,
+                  promotion_eligible INTEGER NOT NULL DEFAULT 0,
+                  calibration_error REAL,
+                  false_promotion INTEGER NOT NULL DEFAULT 0,
+                  observation_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_reward_claims_task ON reward_claims(task_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_reward_evidence_task ON reward_evidence(task_id)")
+            self._ensure_columns(
+                conn,
+                "judge_calibration_runs",
+                {
+                    "precision": "REAL",
+                    "calibration_error": "REAL",
+                    "false_promotion_rate": "REAL",
+                },
+            )
             self._ensure_asset_schema(conn)
             self._ensure_graph_schema(conn)
     def _ensure_graph_schema(self, conn: sqlite3.Connection) -> None:

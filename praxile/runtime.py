@@ -10,7 +10,9 @@ from .action_schema import ActionSchemaRegistry
 from .config import Config
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
+from .experience_context import RuntimeExperienceContext
 from .interop import interop_policy
+from .judge_governance import JudgeGovernance
 from .json_utils import RobustJSONError, parse_json_object
 from .model import ModelRequestCancelled, ModelRouter, ModelUnavailable
 from .reward import RewardEngine
@@ -91,7 +93,7 @@ class AgentRuntime:
             logger.set_spec_context(build_spec_context(self.config.paths.root, spec_files))
             self._emit_progress(progress_callback, "retrieve", "Retrieving project experience.")
             retrieved = self.store.retrieve(task, limit=8) if use_experience else []
-            logger.set_loaded_context(retrieved)
+            logger.set_loaded_context(retrieved, injected_paths=set())
             activation_assets = [
                 {
                     **item,
@@ -100,10 +102,25 @@ class AgentRuntime:
                 }
                 for item in retrieved
             ]
-            self.store.record_asset_usage(logger.task_id, activation_assets, used_in_prompt=True)
+            self.store.record_asset_usage(logger.task_id, activation_assets, used_in_prompt=False)
             self._emit_progress(progress_callback, "analyze", "Analyzing task risk and intent.")
-            analysis = self.analyzer.analyze(task, retrieved)
+            analysis_rules = [item for item in retrieved if item.get("kind") == "rule"]
+            analysis = self.analyzer.analyze(task, analysis_rules)
             logger.set_task_analysis(analysis)
+            prompt_context, representation_decisions = RuntimeExperienceContext(self.config, self.store).plan(
+                task, logger.task_id, analysis, retrieved
+            )
+            logger.data["experience_representation"] = {
+                "schema_version": "praxile.runtime_experience_representation.v1",
+                "decisions": representation_decisions,
+                "selected_count": len(prompt_context),
+            }
+            by_path = {item["path"]: item for item in representation_decisions}
+            for item in logger.data["loaded_assets"]:
+                decision = by_path.get(item.get("path"))
+                if decision:
+                    item["representation_kind"] = decision["representation"]
+                    item["activation_status"] = decision["activation"]
             self._emit_progress(progress_callback, "plan", "Recording initial plan.", {"plan": analysis.get("plan")})
             logger.set_plan(analysis["plan"])
             if self._parallel_readonly_enabled(parallel_readonly_explore):
@@ -128,7 +145,7 @@ class AgentRuntime:
                 messages=[],
                 context={
                     "task": task,
-                    "retrieved": retrieved,
+                    "retrieved": prompt_context,
                     "private": analysis["privacy_sensitive"],
                     "high_risk": analysis["high_risk"],
                     "dry_run": dry_run,
@@ -165,14 +182,14 @@ class AgentRuntime:
                     self._run_action_loop(
                         task,
                         logger,
-                        retrieved,
+                        prompt_context,
                         max_steps=max_steps or int(self.config.get("runtime", "max_steps", default=10)),
                         private=analysis["privacy_sensitive"],
                         high_risk=True,
                         dry_run=True,
                         checkpoint_context={
                             "task": task,
-                            "retrieved": retrieved,
+                            "retrieved": prompt_context,
                             "private": analysis["privacy_sensitive"],
                             "high_risk": True,
                             "dry_run": True,
@@ -188,14 +205,14 @@ class AgentRuntime:
                 result_status, result_summary = self._run_action_loop(
                     task,
                     logger,
-                    retrieved,
+                    prompt_context,
                     max_steps=max_steps or int(self.config.get("runtime", "max_steps", default=10)),
                     private=analysis["privacy_sensitive"],
                     high_risk=analysis["high_risk"],
                     dry_run=dry_run,
                     checkpoint_context={
                         "task": task,
-                        "retrieved": retrieved,
+                        "retrieved": prompt_context,
                         "private": analysis["privacy_sensitive"],
                         "high_risk": analysis["high_risk"],
                         "dry_run": dry_run,
@@ -234,6 +251,9 @@ class AgentRuntime:
         logger = TrajectoryLogger.from_data(checkpoint["trajectory"])
         self._register_base_executors(logger)
         context = dict(checkpoint.get("context") or {})
+        original_task = str(context.get("task") or logger.data.get("user_task") or "")
+        if task_override and task_override != original_task and logger.data.get("experience_representation"):
+            raise ValueError("cannot change task text while resuming a frozen experience representation; start a new run")
         task = task_override or context.get("task") or logger.data.get("user_task", "")
         if task_override:
             logger.data["user_task"] = task_override
@@ -339,6 +359,15 @@ class AgentRuntime:
             trajectory["llm_judge_reward"] = llm_judge
         report = self.reward.build_report(trajectory, test_results)
         trajectory["reward_report"] = report
+        judge_observation = self._record_judge_governance(trajectory)
+        for field in (
+            "self_judgment",
+            "verifier_outcome",
+            "next_task_delta",
+            "judgment_calibration",
+            "transfer_effect",
+        ):
+            trajectory[field] = judge_observation[field]
         self._emit_progress(progress_callback, "evolve", "Generating experience proposals.")
         proposals = self.evolution.generate(trajectory)
         trajectory["experience_candidates"] = [
@@ -380,6 +409,7 @@ class AgentRuntime:
         if rollback_events:
             trajectory["harness_rollback_events"] = rollback_events
         self.store.record_trajectory(trajectory)
+        self.store.record_judge_observation(judge_observation)
         for proposal in proposals:
             self.store.write_proposal(proposal)
         self.store.delete_checkpoint(logger.task_id)
@@ -391,6 +421,34 @@ class AgentRuntime:
             {"task_id": logger.task_id, "status": result_status, "proposals": len(proposals)},
         )
         return trajectory
+
+    def _record_judge_governance(self, trajectory: dict[str, Any]) -> dict[str, Any]:
+        governance = JudgeGovernance(self.config)
+        current = governance.observe(trajectory)
+        source_assets: dict[str, list[str]] = {}
+        for asset in trajectory.get("loaded_assets") or []:
+            if not asset.get("used_in_prompt", True):
+                continue
+            source_task_id = str(asset.get("source_task_id") or "").strip()
+            path = str(asset.get("path") or "").strip()
+            if source_task_id and source_task_id != trajectory.get("task_id") and path:
+                source_assets.setdefault(source_task_id, []).append(path)
+        for source_task_id, paths in source_assets.items():
+            source = self.store.get_judge_observation(source_task_id)
+            if not source:
+                continue
+            transfer = governance.transfer_observation(
+                source,
+                current,
+                current_task_id=str(trajectory.get("task_id") or ""),
+                asset_paths=paths,
+            )
+            if transfer:
+                self.store.record_judge_observation(governance.apply_transfer(source, transfer))
+        previous = self.store.list_judge_observations(limit=1000)
+        current["aggregate_metrics_before_current_run"] = JudgeGovernance.metrics(previous)
+        current["aggregate_metrics_including_current_run"] = JudgeGovernance.metrics([*previous, current])
+        return current
 
     def _llm_judge_reward(self, trajectory: dict[str, Any]) -> dict[str, Any] | None:
         enabled = bool(
@@ -513,8 +571,9 @@ class AgentRuntime:
 
     def _evolution_summary(self, trajectory: dict[str, Any], proposals: list[dict[str, Any]]) -> dict[str, Any]:
         loaded_assets = trajectory.get("loaded_assets") or []
+        used_assets = [item for item in loaded_assets if item.get("used_in_prompt", True)]
         loaded_counts: dict[str, int] = {}
-        for item in loaded_assets:
+        for item in used_assets:
             key = str(item.get("kind") or item.get("asset_type") or "asset")
             loaded_counts[key] = loaded_counts.get(key, 0) + 1
         proposal_counts: dict[str, int] = {}
@@ -527,7 +586,8 @@ class AgentRuntime:
             level = proposal.get("confidence_level", "unknown")
             confidence_counts[level] = confidence_counts.get(level, 0) + 1
         return {
-            "used_assets": len(loaded_assets),
+            "used_assets": len(used_assets),
+            "retrieved_assets": len(loaded_assets),
             "used_asset_counts": loaded_counts,
             "produced_proposals": len(proposals),
             "proposal_counts": proposal_counts,
@@ -670,6 +730,8 @@ class AgentRuntime:
         haystack = "\n".join(text_parts)
         referenced: list[str] = []
         for item in loaded:
+            if not item.get("used_in_prompt", True):
+                continue
             path = str(item.get("path") or item.get("asset_id") or "")
             if not path:
                 continue
@@ -1182,7 +1244,7 @@ class AgentRuntime:
     ) -> list[dict[str, str]]:
         tree = "\n".join(logger.data["environment_snapshot"].get("filesystem", {}).get("files", [])[:160])
         context = "\n\n".join(
-            f"[{item['kind']} priority={item.get('load_priority')} scope={item.get('scope')}] {item['path']}\n"
+            f"[{item['kind']} representation={item.get('representation_kind', 'legacy')} priority={item.get('load_priority')} scope={item.get('scope')}] {item['path']}\n"
             f"{shorten(item['snippet'], 1000)}"
             for item in retrieved
         )
@@ -1233,6 +1295,9 @@ class AgentRuntime:
             f"Allowed command prefixes:\n{allowed}\n\n"
             "Choose the next action."
         )
+        if retrieved:
+            self.store.mark_assets_injected(logger.task_id, retrieved)
+            logger.mark_context_injected({str(item.get("path")) for item in retrieved})
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def _parse_action(self, content: str) -> dict[str, Any] | None:

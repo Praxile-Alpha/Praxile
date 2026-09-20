@@ -32,8 +32,10 @@ class JudgeCalibrationRunner:
         true_negative = sum(len(known_labels - (set(row["expected"]) | set(row["detected"]))) for row in rows)
         abstentions = sum(1 for row in rows if row["abstained"])
         disagreements = sum(1 for row in rows if set(row["expected"]) != set(row["detected"]))
+        promotion_claims = sum(1 for row in rows if row["promotion_claim"])
+        false_promotions = sum(1 for row in rows if row["false_promotion"])
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "calibration_id": new_id("judgecal"),
             "suite": str(suite_path),
             "judge": str(suite.get("judge") or "reward_guard"),
@@ -47,6 +49,13 @@ class JudgeCalibrationRunner:
             "confusion": {"true_positive": true_positive, "false_positive": false_positive, "true_negative": true_negative, "false_negative": false_negative},
             "precision": _ratio(true_positive, true_positive + false_positive),
             "recall": _ratio(true_positive, true_positive + false_negative),
+            "calibration_error": _ratio(
+                false_positive + false_negative,
+                true_positive + false_positive + true_negative + false_negative,
+            ),
+            "false_promotion_rate": _ratio(false_promotions, promotion_claims),
+            "promotion_claim_count": promotion_claims,
+            "false_promotion_count": false_promotions,
             "abstention_rate": _ratio(abstentions, len(rows)),
             "disagreement_rate": _ratio(disagreements, len(rows)),
             "evidence_coverage": _ratio(true_positive, expected_total),
@@ -98,11 +107,14 @@ class JudgeCalibrationRunner:
             _apply_mutation(trajectory, mutation)
         detected = sorted(_detect(trajectory))
         expected = sorted(str(item) for item in (case.get("expected_detections") or []))
+        promotion_claim = bool(case.get("promotion_claim", not detected))
         return {
             "case_id": str(case.get("case_id") or f"case-{len(expected)}"),
             "expected": expected,
             "detected": detected,
             "abstained": not detected and bool(expected),
+            "promotion_claim": promotion_claim,
+            "false_promotion": bool(promotion_claim and expected),
             "evidence_coverage": _ratio(len(set(expected) & set(detected)), len(expected)),
         }
 

@@ -72,6 +72,31 @@ class FeedbackStoreMixin:
                 self._insert_activation_event(conn, task_id, path, "retrieved", now=now, **event_context)
                 if used_in_prompt:
                     self._insert_activation_event(conn, task_id, path, "injected", now=now, **event_context)
+    def mark_assets_injected(self, task_id: str, assets: list[dict[str, Any]]) -> None:
+        if not assets:
+            return
+        self._init_db()
+        now = utc_now()
+        with self._connection() as conn:
+            for item in assets:
+                path = str(item.get("path") or "")
+                if not path:
+                    continue
+                pending = conn.execute(
+                    "SELECT 1 FROM asset_usage WHERE task_id = ? AND path = ? AND used_in_prompt = 0 LIMIT 1",
+                    (task_id, path),
+                ).fetchone()
+                if not pending:
+                    continue
+                conn.execute(
+                    "UPDATE asset_usage SET used_in_prompt = 1, updated_at = ? WHERE task_id = ? AND path = ? AND used_in_prompt = 0",
+                    (now, task_id, path),
+                )
+                self._insert_activation_event(
+                    conn, task_id, path, "injected", now=now,
+                    model_role="coding_agent",
+                    metadata={"representation": item.get("representation_kind", "legacy")},
+                )
     def update_asset_usage_outcome(
         self,
         task_id: str,

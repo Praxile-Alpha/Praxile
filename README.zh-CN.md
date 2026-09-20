@@ -156,6 +156,34 @@ flowchart LR
 
 > 一次运行可以产生学习信号，但只有经过审批的 proposal 才能成为长期仓库知识。
 
+### 经验表示与 Judge 校准
+
+Praxile 现在同时治理两件事：**经验以什么形式进入下一次运行**，以及**如何验证一次运行对自身质量的判断**。
+
+```text
+检索到的经验资产
+  -> 确定性语义激活门控
+  -> 表示策略
+  -> none | raw_episode | summary_memory | skill | failure_pattern
+  -> 有预算约束的 Prompt 注入
+
+LLM Self-Judgment -------------> Calibration
+客观环境验证结果 ---------------> Calibration
+后续任务实际结果 ---------------> Observational Transfer Effect
+```
+
+P2-B 表示路由不仅用于受控 A/B 实验，也已经接入普通 `praxile run`。检索到某条经验不等于使用了它：只有语义门控通过、表示策略选中，并且最终注入 Prompt 后，Praxile 才会记录该资产被实际使用。选择过程与 token 预算估算会写入 trajectory。
+
+P2-C 会分别保存 `self_judgment`、`verifier_outcome`、`next_task_delta`、`judgment_calibration` 和 `transfer_effect`，并统计 Judge precision、calibration error 与 false-promotion rate。LLM Judge 可以改变 proposal 的审查优先级，但**不能仅凭 Self-Judgment 让 Proposal 获得 promotion 资格**。客观 verifier evidence 与人工审批仍然是硬约束；要声称因果提升，仍需受控 A/B 实验。
+
+```bash
+praxile judge metrics
+praxile judge metrics --json --include-observations
+praxile judge calibrate path/to/suite.json --write-proposal
+```
+
+详见 [P2-B 经验表示路由](docs/P2_B_EXPERIENCE_REPRESENTATION.md)和[P2-C Judge 校准](docs/P2_C_JUDGE_CALIBRATION.md)。
+
 ---
 
 ## 功能亮点
@@ -166,6 +194,10 @@ flowchart LR
   `praxile sync` 会生成本地、可审计的仓库上下文快照，包含 Context Health、文件分类信号、git 变更状态、近期 commits/diffs、docs/spec 索引、可选本地 CI/GitHub 上下文、经验资产计数与 ContextJuice 估算，并写入 `.praxile/context/repo_snapshot.json`、`.praxile/context/commits/`、`.praxile/context/diffs/` 与历史快照。
 - **ContextJuice 与 Repository Memory Tree**  
   `praxile context compress` 会按模型角色压缩上下文并保留证据元数据；`praxile context tree` 会在 `.praxile/context/tree/` 下生成面向人的仓库经验树。
+- **语义激活与经验表示路由**
+  检索到的经验先经过确定性语义激活门控，再选择 `none`、有界 raw episode、summary memory、skill 或 failure pattern；retrieved 与 injected 会被分别审计。
+- **可校准的 Semantic Judges**
+  LLM 自评、客观 verifier outcome 和后续 transfer observation 分开保存，通过 precision、calibration error 和 false-promotion rate 暴露 Judge 的过度自信。
 - **Policy Layers 与治理循环**  
   `praxile policy list/check/explain` 用于检查项目本地治理规则层；`praxile watch` 会执行安全治理循环，可同步、压缩、审计、重建图谱和运行 Reflect，但不会自动改代码或自动接受 proposal。
 - **Workflow Templates**  
@@ -552,6 +584,8 @@ Praxile 当前处于 **Alpha** 阶段。
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [P2-B Experience Representation](docs/P2_B_EXPERIENCE_REPRESENTATION.md)
+- [P2-C Judge Calibration](docs/P2_C_JUDGE_CALIBRATION.md)
 - [Core Layers](docs/CORE_LAYERS.md)
 - [Experience Model](docs/EXPERIENCE_MODEL.md)
 - [Evals And Adapters](docs/EVALS_AND_ADAPTERS.md)

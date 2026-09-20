@@ -30,6 +30,8 @@
   },
   "context": {
     "compression_enabled": true,
+    "experience_representation_enabled": true,
+    "experience_representation_budget_units": 600,
     "max_prompt_chars": 120000,
     "compression_threshold": 0.8,
     "observation_keep_chars": 1600,
@@ -87,7 +89,9 @@
     },
     "calibration": {
       "min_recall": 0.8,
-      "repeated_runs": 2
+      "repeated_runs": 2,
+      "positive_threshold": 0.7,
+      "transfer_delta_threshold": 0.05
     }
   },
   "search": {
