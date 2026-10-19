@@ -236,7 +236,8 @@ class ExecutableHarnessLab:
                             "promotion_key": manifest.candidate.promotion_key,
                         },
                     )
-                arms.append(self._arm_result(split, repetition, reports["baseline"], reports["candidate"]))
+                arms.append(self._arm_result(split, repetition, reports["baseline"], reports["candidate"],
+                    cost_comparable=manifest.model.get("cost_tracking") != "ignore_errors"))
         report = self._report(manifest, arms)
         write_json(root / "report.json", report)
         return report
@@ -271,6 +272,7 @@ class ExecutableHarnessLab:
         repetition: int,
         baseline: Mapping[str, Any],
         candidate: Mapping[str, Any],
+        *, cost_comparable: bool = True,
     ) -> dict[str, Any]:
         left = _outcomes(baseline)
         right = _outcomes(candidate)
@@ -294,8 +296,8 @@ class ExecutableHarnessLab:
             "tasks": rows,
             "coverage": coverage,
             "efficiency": {
-                "baseline_cost": float((baseline.get("metrics") or {}).get("cost", 0.0) or 0.0),
-                "candidate_cost": float((candidate.get("metrics") or {}).get("cost", 0.0) or 0.0),
+                "baseline_cost": _complete_cost(baseline) if cost_comparable else None,
+                "candidate_cost": _complete_cost(candidate) if cost_comparable else None,
                 "baseline_tokens": _token_total(baseline),
                 "candidate_tokens": _token_total(candidate),
             },
@@ -466,7 +468,9 @@ def _statistics(arms: list[dict[str, Any]]) -> dict[str, Any]:
         return {"estimate": estimate, "ci95": interval}
     base_summary = summary("baseline_rate", 0.0, 1.0)
     candidate_summary = summary("candidate_rate", 0.0, 1.0)
-    cost_deltas = [float(arm["efficiency"]["candidate_cost"]) - float(arm["efficiency"]["baseline_cost"]) for arm in arms]
+    cost_deltas = [float(arm["efficiency"]["candidate_cost"]) - float(arm["efficiency"]["baseline_cost"]) for arm in arms
+        if all(type(arm["efficiency"].get(key)) in (int, float) and math.isfinite(arm["efficiency"][key])
+               for key in ("candidate_cost", "baseline_cost"))]
     token_deltas = [int(arm["efficiency"]["candidate_tokens"]) - int(arm["efficiency"]["baseline_tokens"]) for arm in arms]
     return {
         "schema_version": "praxile.task_cluster_statistics.v1",
@@ -488,13 +492,22 @@ def _statistics(arms: list[dict[str, Any]]) -> dict[str, Any]:
         "regressions": sum(row["transition"] == "regressed" for row in rows),
         "unknown": sum(row["transition"] == "unknown" for row in rows),
         "efficiency": {
-            "cost_delta_mean": round(sum(cost_deltas) / len(cost_deltas), 8) if cost_deltas else None,
+            "cost_delta_mean": round(sum(cost_deltas) / len(cost_deltas), 8) if cost_deltas and len(cost_deltas) == len(arms) else None,
+            "unpriced_repetition_count": len(arms) - len(cost_deltas),
             "cost_delta_ci95": None,
             "token_delta_mean": round(sum(token_deltas) / len(token_deltas), 2) if token_deltas else None,
             "token_delta_ci95": None,
             "scope": "descriptive repetition totals; no independent-task cost interval available",
         },
     }
+
+
+def _complete_cost(report: Mapping[str, Any]) -> float | None:
+    metrics = report.get("metrics") or {}
+    value = metrics.get("cost_total")
+    if metrics.get("cost_complete") is True and type(value) in (int, float) and math.isfinite(value) and value >= 0:
+        return float(value)
+    return None
 
 
 def _token_total(report: Mapping[str, Any]) -> int:

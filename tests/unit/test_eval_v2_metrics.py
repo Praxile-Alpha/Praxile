@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from praxile.eval.v2 import trace_metrics
 from praxile.trace import AgentEvent, TokenUsage
+from praxile.eval.v2.metrics import aggregate_metrics
 
 
 def _event(event_id: str, event_type: str, payload: dict, **kwargs):
@@ -16,6 +17,27 @@ def _event(event_id: str, event_type: str, payload: dict, **kwargs):
         payload=payload,
         **kwargs,
     )
+
+
+def test_missing_price_preserves_subtotal_but_total_is_unknown():
+    metrics = trace_metrics([_event("known", "MODEL_CALL", {}, cost=0.25),
+                             _event("unknown", "MODEL_CALL", {})], wall_latency_ms=1, resolved=True)
+    assert metrics["reported_cost_subtotal"] == 0.25
+    assert metrics["cost_total"] is None
+    assert not metrics["cost_complete"]
+    assert metrics["unpriced_model_calls"] == 1
+    combined = aggregate_metrics([{"metrics": metrics}])
+    assert combined["cost_total"] is None
+    assert combined["unpriced_task_count"] == 1
+
+
+def test_explicit_zero_price_is_distinct_from_absent_model_events():
+    zero = trace_metrics([_event("free", "MODEL_CALL", {}, cost=0.0)], wall_latency_ms=1, resolved=True)
+    assert zero["cost_complete"] is True
+    assert zero["cost_total"] == 0
+    assert aggregate_metrics([{"metrics": zero}])["cost_total"] == 0
+    empty = trace_metrics([], wall_latency_ms=1, resolved=None)
+    assert empty["cost_total"] is None
 
 
 def test_trace_metrics_cover_frozen_p0_dimensions() -> None:

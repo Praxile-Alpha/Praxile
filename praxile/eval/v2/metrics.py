@@ -13,6 +13,8 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
     progress = next((event.payload for event in reversed(rows) if event.type == "PROGRESS"), {})
     recovery_count = 0
     failed_interval = False
+    reported_cost = round(sum(float(event.cost or 0.0) for event in model_calls), 8)
+    cost_complete = bool(model_calls) and all(event.cost is not None for event in model_calls)
     for state in verification_states:
         if state == "failed":
             failed_interval = True
@@ -26,7 +28,11 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
             "output": sum(event.token_usage.output for event in model_calls if event.token_usage),
             "cache": sum(event.token_usage.cache for event in model_calls if event.token_usage),
         },
-        "cost": round(sum(float(event.cost or 0.0) for event in model_calls), 8),
+        "cost": reported_cost,
+        "reported_cost_subtotal": reported_cost,
+        "cost_total": reported_cost if cost_complete else None,
+        "cost_complete": cost_complete,
+        "unpriced_model_calls": sum(event.cost is None for event in model_calls),
         "latency_ms": wall_latency_ms,
         "reported_model_latency_ms": sum(int(event.latency_ms or 0) for event in model_calls),
         "model_calls": len(model_calls),
@@ -57,6 +63,8 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
     progress = [item.get("progress", {}) for item in metrics]
     resolved = [item for item in task_results if item.get("evaluator", {}).get("resolved") is True]
     known = [item for item in task_results if item.get("evaluator", {}).get("resolved") is not None]
+    cost_complete = bool(metrics) and all(item.get("cost_complete") is True for item in metrics)
+    reported_cost = round(sum(float(item.get("cost", 0.0) or 0.0) for item in metrics), 8)
     return {
         "task_count": len(task_results),
         "completed_count": sum(1 for item in task_results if item.get("status") == "completed"),
@@ -67,7 +75,11 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
             key: sum(int(item.get("tokens", {}).get(key, 0)) for item in metrics)
             for key in ("input", "output", "cache")
         },
-        "cost": round(sum(float(item.get("cost", 0.0)) for item in metrics), 8),
+        "cost": reported_cost,
+        "reported_cost_subtotal": reported_cost,
+        "cost_total": reported_cost if cost_complete else None,
+        "cost_complete": cost_complete,
+        "unpriced_task_count": sum(item.get("cost_complete") is not True for item in metrics),
         "latency_ms": sum(int(item.get("latency_ms", 0)) for item in metrics),
         "tool_calls": sum(int(item.get("tool_calls", 0)) for item in metrics),
         "progress": {

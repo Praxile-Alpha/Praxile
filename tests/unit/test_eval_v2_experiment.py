@@ -17,6 +17,7 @@ def _task(task_id: str, resolved: bool, *, tokens: int, tools: int) -> dict:
             "tool_calls": tools,
             "latency_ms": 10,
             "cost": 0.1,
+            "cost_complete": True,
         },
     }
 
@@ -67,3 +68,14 @@ def test_comparison_accepts_strict_efficiency_improvement_without_success_change
 
     assert result["decision"] == "improve"
     assert result["totals"]["cost_delta"] is None
+
+
+def test_comparison_does_not_report_cost_delta_when_an_arm_is_unpriced(tmp_path):
+    baseline = {"tasks": [_task("a", True, tokens=10, tools=2)]}
+    candidate = deepcopy(baseline)
+    candidate["tasks"][0]["metrics"]["cost_complete"] = False
+    result = compare_ab_reports(baseline, candidate, diagnoses={},
+        event_store=EventStore(Config.load(tmp_path).paths), cost_comparable=True)
+    assert not result["cost_comparable"]
+    assert result["totals"]["cost_delta"] is None
+    assert result["task_results"][0]["cost_delta"] is None

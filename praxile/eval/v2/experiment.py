@@ -357,6 +357,9 @@ def compare_ab_reports(
     candidate_tasks = {str(item["task_id"]): item for item in candidate.get("tasks", [])}
     if set(baseline_tasks) != set(candidate_tasks):
         raise EvalSchemaError("baseline and candidate task IDs differ")
+    cost_comparable = cost_comparable and bool(baseline_tasks) and all(
+        task.get("metrics", {}).get("cost_complete") is True
+        for task in (*baseline_tasks.values(), *candidate_tasks.values()))
     baseline_diagnoses = {item["task_id"]: item for item in diagnoses.get("baseline", [])}
     categories: dict[str, list[dict[str, Any]]] = defaultdict(list)
     task_rows: list[dict[str, Any]] = []

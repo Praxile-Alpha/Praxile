@@ -13,3 +13,11 @@ Harness Lab 的 split 统计现使用 `praxile.task_cluster_statistics.v1`，sta
 兼容注意：split 的 sample_count/n 现在表示任务数，不再表示 repetition 数；baseline/candidate 的 resolved 旧计数移除，使用明确的逐任务均值、observation_count 和 rate。顶层实验 manifest 与冻结执行输入不变。
 
 9 项统计、门禁及隔离执行测试通过，覆盖重复不放大样本、缺失配对、等权均值、重复记录拒绝和旧统计门禁。这些测试验证统计实现，不代表实际实验收益。
+
+## 费用完整性
+
+trace metrics 增加 reported_cost_subtotal、cost_total、cost_complete 和 unpriced_model_calls；aggregate 增加 unpriced_task_count。为兼容保留的 cost 字段仍是已报告小计，不能单凭它认定总费用为零。有 MODEL_CALL 未提供 cost，或者没有 MODEL_CALL 证据时，cost_total=null；明确报告 cost=0 的模型调用可以是已知零费用。
+
+Harness Lab 只消费 cost_complete=true 的 cost_total，且 ignore_errors 模式不比较费用。任何 repetition 缺完整价格，则 cost_delta_mean=null，不通过既有成本门禁。普通 A/B 也要求全部任务明确报告费用完整，才输出 cost_delta；旧报告未标完整性时保持未知。
+
+这里的完整性仅针对已记录 MODEL_CALL。尚未进入该 trace 的官方 judge、离线 proposer/probe/composer 等费用不因此被视为零，也不能宣称已完成整条演化流程总成本统计。

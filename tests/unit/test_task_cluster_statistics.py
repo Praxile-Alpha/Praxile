@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from praxile.control_plane.lab import _statistics
+from praxile.control_plane.lab import _statistics, _complete_cost
 from praxile.eval.v2.schema import EvalSchemaError
 
 
@@ -45,3 +45,15 @@ def test_duplicate_repetitions_or_task_rows_rejected():
     one["tasks"] *= 2
     with pytest.raises(EvalSchemaError, match="duplicate task"):
         _statistics([one])
+
+
+def test_incomplete_cost_cannot_be_averaged_as_zero_or_omitted():
+    first = arm(1, [("a", False, True)])
+    second = arm(2, [("a", False, True)])
+    second["efficiency"]["candidate_cost"] = None
+    stats = _statistics([first, second])
+    assert stats["efficiency"]["cost_delta_mean"] is None
+    assert stats["efficiency"]["unpriced_repetition_count"] == 1
+    assert _complete_cost({"metrics": {"cost": 0}}) is None
+    assert _complete_cost({"metrics": {"cost_complete": True, "cost_total": 0}}) == 0
+    assert _complete_cost({"metrics": {"cost_complete": True, "cost_total": float("nan")}}) is None
