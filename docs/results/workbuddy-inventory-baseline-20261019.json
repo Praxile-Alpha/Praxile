@@ -1,0 +1,51 @@
+{
+  "schema_version": "praxile.public_benchmark_evidence.v1",
+  "date": "2026-10-19",
+  "benchmark": "WorkBuddy Office",
+  "task_id": "drug-inventory-split-L2-006",
+  "dataset_revision": "3e8ad839685c589d83a1dd60fe2d15eabb75f27a",
+  "executor": "WorkBuddyPraxileAgent",
+  "executor_model": "MiniMax-M3",
+  "harbor_version": "0.18.0",
+  "worker_wheel_sha256": "c349f27a120626f6460e22828d7a1247db68c454ba71d4ce5d8ab8ebfbfe3424",
+  "image_id": "sha256:64fd3491c37927734b6f2ebeeeaa9916f929e3d534c4b3e6bb3e39d3ab0165a5",
+  "experience_mode": "fresh_disabled",
+  "max_steps": 20,
+  "timeout_seconds": 600,
+  "automatic_retries": 0,
+  "inherit_task_packages": true,
+  "inputs_unchanged": true,
+  "native_status": "completed",
+  "official_verifier": "workbuddy_bench.judge:CompositeVerifier",
+  "official_llm_judge_enabled": false,
+  "official_status": "partial_pass",
+  "official_reward": 0.8667,
+  "tests_passed": 13,
+  "tests_total": 15,
+  "trace_binding": {
+    "status": "bound",
+    "source_result_sha256": "b8833e3e3a5dda88982ebe49b2402796ca7e88a0414df17aad24c4e209d0a43b",
+    "event_count": 48,
+    "provenance_attested": false
+  },
+  "usage": {
+    "source": "host_credential_broker_provider_responses",
+    "calls": 15,
+    "failed_calls": 0,
+    "input_tokens": 110494,
+    "output_tokens": 3271,
+    "provider_latency_seconds": 40.633317,
+    "cost_usd": null,
+    "credential_revoked": true
+  },
+  "container_cleanup_verified": true,
+  "deliverable_retained_on_host": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Single real baseline, not an A/B experiment or evidence of improvement",
+    "Official partial pass differs from the executor's completed self-report",
+    "result.xlsx was evaluated in the container but not retained on the host before deletion",
+    "Subsequent output collection fix does not retroactively recover this artifact",
+    "No private rubric, failed test details, credential or task content is published"
+  ]
+}

@@ -64,7 +64,7 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active,
         (task / "tests/check.py").write_text('''from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
-output = Path('/workspace/report.txt')
+output = Path('/workspace/output/report.txt')
 passed = output.is_file() and output.read_text() == 'fixture delivered'
 logs = Path('/logs/verifier')
 logs.mkdir(parents=True, exist_ok=True)
@@ -83,7 +83,7 @@ sys.exit(0 if passed else 1)
         brokers.append(broker)
         action = {"type": "finish", "summary": "fixture complete", "status": "completed"}
         if official and brokers.count(broker) == 1:
-            action = {"type": "edit_file", "path": "report.txt",
+            action = {"type": "edit_file", "path": "output/report.txt",
                       "content": "fixture delivered" if deliver_correct else "incorrect fixture content"}
         return {"choices": [{"message": {"content": json.dumps(action)}}],
             "usage": {"prompt_tokens": 12, "completion_tokens": 7}}
@@ -105,6 +105,8 @@ sys.exit(0 if passed else 1)
         job["environment"]["import_path"] = "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment"
     if official:
         job["verifier"] = {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
+        job["agents"][0]["kwargs"]["output_directory"] = "output"
+        job["artifacts"] = [{"source": "/workspace/output", "exclude": ["__pycache__", "*.pyc"]}]
     root = tmp_path / "pair"
     root.mkdir()
     plan, arms = prepare_pair(job, candidate, repository="fixture/repo" if active else "other/repo", output_dir=root)
@@ -129,6 +131,9 @@ sys.exit(0 if passed else 1)
         assert task_checksum(task) == trial["task_checksum"]
         assert trial["exception_info"] is None
         assert trial["verifier_result"]["rewards"]["reward"] == (0.0 if official and not deliver_correct else 1.0)
+        if official:
+            artifact = trials[0].parent / "artifacts/workspace/output/report.txt"
+            assert artifact.read_text() == ("fixture delivered" if deliver_correct else "incorrect fixture content")
         evidence = {}
         def read(relative):
             raw = (trials[0].parent / relative).read_bytes()

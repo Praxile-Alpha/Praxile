@@ -141,6 +141,25 @@ def test_job_refuses_unprepared_tasks(package, tmp_path):
                                  job_name="smoke", task_ids=("example",))
 
 
+def test_job_collects_explicit_output_before_container_deletion(prepared_package, tmp_path):
+    dataset = load(prepared_package)
+    agent = native_agent()
+    agent["kwargs"]["output_directory"] = "output/reports"
+    job = dataset.job_config(agent=agent, jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+    assert job["artifacts"] == [{"source": "/workspace/output/reports", "exclude": ["__pycache__", "*.pyc"]}]
+    del agent["kwargs"]["output_directory"]
+    assert dataset.job_config(agent=agent, jobs_dir=tmp_path / "jobs", job_name="smoke",
+                              task_ids=("example",))["artifacts"] == []
+
+
+@pytest.mark.parametrize("output", ["", ".", "/", "../tests", "output/../../tests", "output\\other", 42, "out\nput"])
+def test_job_rejects_unsafe_output_collection(prepared_package, tmp_path, output):
+    agent = native_agent()
+    agent["kwargs"]["output_directory"] = output
+    with pytest.raises(EvalSchemaError, match="output_directory"):
+        load(prepared_package).job_config(agent=agent, jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+
+
 def test_job_revalidates_source_and_refuses_security(prepared_package, tmp_path):
     dataset = load(prepared_package)
     config = prepared_package / "dataset.toml"

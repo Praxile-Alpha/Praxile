@@ -10,7 +10,7 @@ import re
 import shutil
 import tempfile
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from importlib.metadata import version
 
 from ..utils import file_lock
@@ -112,10 +112,21 @@ class WorkBuddyDataset:
             raise EvalSchemaError("WorkBuddy workspace must be /workspace")
         if not agent.get("model_name"):
             raise EvalSchemaError("explicit executor model_name is required")
+        artifacts = []
+        output = agent["kwargs"].get("output_directory")
+        if output is not None:
+            if (not isinstance(output, str) or not PurePosixPath(output).parts
+                    or PurePosixPath(output).is_absolute() or ".." in PurePosixPath(output).parts
+                    or "\\" in output or any(ord(char) < 32 for char in output)):
+                raise EvalSchemaError("output_directory must be a nonempty workspace-relative path")
+            # Delegate collection before container deletion to Harbor, not the agent.
+            artifacts = [{"source": str(PurePosixPath("/workspace") / output),
+                          "exclude": ["__pycache__", "*.pyc"]}]
         return {
             "job_name": job_name, "jobs_dir": str(jobs_dir.resolve()),
             "n_attempts": 1, "n_concurrent_trials": 1, "timeout_multiplier": 2.5,
             "retry": {"max_retries": 0},
+            "artifacts": artifacts,
             "environment": {"type": "docker", "import_path":
                 "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment",
                 "force_build": True, "delete": True},

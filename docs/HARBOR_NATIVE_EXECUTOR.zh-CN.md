@@ -802,3 +802,13 @@ docker build --platform linux/amd64 \
 启动前 inspect 本地镜像身份与平台，启动后检查 `uname -m`；成功写入 Trial 根目录的 `praxile-pinned-environment.json`，记录 image ID、Dockerfile/Compose 摘要与实际架构。该记录不是可信构建证明，不证明镜像来自指定 Dockerfile；调用方负责构建来源。生命周期仍归 Harbor 所有，异常时也必须执行 `stop(delete=True)`。
 
 本机 ARM Mac + Docker Desktop + Harbor 0.18 实测：上述真实 Office 镜像经适配器启动，容器内 pandas/openpyxl 检查通过并清理；8 项测试通过，无模型调用。验证范围为环境生命周期，不含完整 Trial、Agent、官方评分或收益结论；Linux daemon 尚未实测。
+
+### 真实 Office 基线：部分通过及产物收集缺口
+
+2026-10-19，`drug-inventory-split-L2-006` 已通过固定镜像适配器执行完整 Harbor Trial：MiniMax M3、20 步/600 秒上限、零重试、不注入经验、worker 显式继承任务镜像依赖。官方 CompositeVerifier 返回 `partial_pass`，15 项通过 13 项，reward **0.8667**。执行器自报 `completed`，两种状态分别保留，不能把自报状态当成全部验收通过。
+
+执行前后任务、共享 verifier 和 wheel 快照一致；官方结果与原生轨迹绑定成功，共 48 个事件。15 次 API 响应报告 input 110494/output 3271 tokens，费用未知（不以订阅计划推断零费用）。代理撤销、无在途调用、Trial 容器删除均已核对。公开证据见 [本次基线](results/workbuddy-inventory-baseline-20261019.json)，不包含私有评分细节或凭据。
+
+该 Trial 也暴露出一个真实缺陷：`output_directory` 当时只传给 worker，Job 未声明 Harbor artifacts；因此官方读取了容器内 `output/result.xlsx`，但删除容器后宿主只有空产物 manifest，文件没有保留。不能回填或重造该次交付物。修复后 `WorkBuddyDataset.job_config()` 将显式的工作区相对 `output_directory` 转成 Job artifacts，由 Harbor 在清理前收集，排除 Python 缓存；未配置时不隐式收集整个 workspace。非法路径在生成 job 时拒绝。已有 job JSON 不会自动迁移，需重新生成；成功及失败产物都应保留，以支持审计。
+
+这是单任务真实基线，不是候选提升结果；完整交付验收、更多任务覆盖和开发/held-out 实验仍未完成。后续实验不得把本次私有失败细节注入执行器或经验候选。
