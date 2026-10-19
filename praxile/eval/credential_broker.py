@@ -54,7 +54,7 @@ class ChatCredentialBroker:
                 or url.query or url.fragment or not url.path.endswith("/chat/completions")):
             raise ValueError("broker requires a fixed HTTPS chat endpoint")
         limits = [(max_calls, 1, 1000), (output_budget, 1, 10_000_000),
-                  (max_output, 1, 131072), (ttl_seconds, 1, 3600), (request_timeout, 1, 120)]
+                  (max_output, 1, 262144), (ttl_seconds, 1, 3600), (request_timeout, 1, 120)]
         if any(type(v) is not int or not lo <= v <= hi for v, lo, hi in limits):
             raise ValueError("invalid broker budget")
         if not key or any(c.isspace() for c in key) or not model.strip():
@@ -91,7 +91,7 @@ class ChatCredentialBroker:
 
     def chat(self, authorization: str, payload: dict) -> dict:
         self._authorize(authorization)
-        allowed = {"model", "messages", "max_tokens", "temperature", "stream"}
+        allowed = {"model", "messages", "max_tokens", "max_completion_tokens", "temperature", "stream"}
         if not isinstance(payload, dict) or set(payload) - allowed or payload.get("model") != self.model:
             raise BrokerDenied("request outside model capability")
         if payload.get("stream", False) is not False:
@@ -105,13 +105,16 @@ class ChatCredentialBroker:
                     or message["role"] not in {"system", "user", "assistant"}
                     or not isinstance(message["content"], str)):
                 raise BrokerDenied("only text chat messages are permitted")
-        maximum = payload.get("max_tokens", self.max_output)
+        if "max_tokens" in payload and "max_completion_tokens" in payload:
+            raise BrokerDenied("ambiguous output limits")
+        output_field = "max_completion_tokens" if "max_completion_tokens" in payload else "max_tokens"
+        maximum = payload.get(output_field, self.max_output)
         if type(maximum) is not int or not 1 <= maximum <= self.max_output:
             raise BrokerDenied("invalid output limit")
         temperature = payload.get("temperature", 1)
         if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:
             raise BrokerDenied("invalid temperature")
-        body = json.dumps({**payload, "max_tokens": maximum}, allow_nan=False).encode()
+        body = json.dumps({**payload, output_field: maximum}, allow_nan=False).encode()
         if len(body) > 1024 * 1024:
             raise BrokerDenied("request too large")
         if not self._flight.acquire(blocking=False):

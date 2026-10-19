@@ -193,6 +193,25 @@ python -m praxile.eval.jobbench_results \
 
 ## 真实材料准备记录
 
+### JobBench easy 环境构建验收（2026-10-19，未完成）
+
+目标 `easy--technical_writers--task1`，沿用下列冻结 generation。原始 Dockerfile
+第一阶段在 `registry.docker-cn.com` TLS 握手超时，未进入模型执行。
+随后直接拉取 `registry-1.docker.io/library/python` 的相同摘要
+`sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254` 成功。
+使用 Docker `--build-context` 将原 FROM 引用映射到官方 registry 的同摘要镜像，
+未修改生成目录、Dockerfile、依赖版本或 Docker 全局镜像源。
+
+映射后的 build 已通过基础镜像解析，但约 243 秒后在 APT 安装阶段失败：
+`deb.debian.org:80` 多个归档下载连接失败，退出码 100。没有生成最终任务镜像，
+也没有启动 Agent、MiniMax benchmark 请求或官方 judge；不能记作 0 分任务。
+这次记录是基础设施失败证据，不是成功环境复现或正式支持声明。
+
+另检查官方 judge 使用 `max_completion_tokens=200000`。宿主代理新增该字段的
+保真转发和同一预算校验（不能同时携带 max_tokens），未改写官方 judge。
+只有显式配置足够输出预留时才允许请求；provider 实际是否支持此上限、
+多模态评分与独立评分容器仍待实际验证。
+
 - 数据 revision：`d43a66575635da0d3f6cb9a20976dc1a60f3ffc9`，公开清单 main 65、easy 63，共 128 条任务。
 - 下载 main/easy 的 `technical_writers/task1` 两条集成任务，共 15 个文件、2,694,463 字节；不是全量覆盖。
 - 上游 renderer 生成的两任务 manifest SHA-256：`246cdeca67266141ddb35172279e5d1c9be5ceb8d5bca1f68102d276ea6a0b18`。main 任务含一个待搜索参考文件，受限检索接口仍待实现，不能声称材料访问能力已完整。

@@ -45,6 +45,31 @@ def test_failure_consumes_reservation_and_secret_echo_is_rejected(broker):
     assert broker.status()["remaining_calls"] == 1
 
 
+def test_completion_limit_alias_is_forwarded_without_silent_rewrite(broker):
+    forwarded = []
+    broker._forward = lambda body: (forwarded.append(json.loads(body)), {"choices": []})[1]
+    request(broker, max_completion_tokens=7)
+    assert forwarded[0]["max_completion_tokens"] == 7
+    assert "max_tokens" not in forwarded[0]
+    assert broker.status()["remaining_output"] == 13
+
+
+@pytest.mark.parametrize("changes", [{"max_tokens": 2, "max_completion_tokens": 2},
+                                    {"max_completion_tokens": 11}, {"max_completion_tokens": False}])
+def test_completion_limit_alias_cannot_bypass_budget(broker, changes):
+    with pytest.raises(BrokerDenied):
+        request(broker, **changes)
+    assert broker.status()["remaining_calls"] == 2
+
+
+def test_official_judge_large_requested_limit_needs_explicit_host_budget():
+    with ChatCredentialBroker(key="fixture", endpoint="https://provider.invalid/v1/chat/completions",
+                              model="fixed", max_calls=1, output_budget=200000, max_output=200000) as broker:
+        broker._forward = lambda body: {"choices": []}
+        request(broker, max_completion_tokens=200000)
+        assert broker.status()["remaining_output"] == 0
+
+
 def test_revoked_expired_and_incorrect_capabilities(broker):
     with pytest.raises(BrokerDenied):
         broker.chat("Bearer incorrect", {})

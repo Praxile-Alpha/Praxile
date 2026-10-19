@@ -143,6 +143,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+真实环境进展：easy technical_writers/task1 原始基础镜像经官方 registry 同摘要映射
+成功获取（未改任务文件或全局镜像源），后续 APT 下载因 deb.debian.org:80 连接失败
+返回 100，最终镜像未生成。未调用执行模型或 judge，不计任务零分。官方 judge 的
+max_completion_tokens=200000 已进入代理保真/预算兼容测试；499 项快速单元通过，
+不等于真实评分验收。详见 HARBOR_NATIVE_EXECUTOR.zh-CN.md。
+
 阶段实现记录（2026-10-19）：`praxile.eval.jobbench` 已支持读取、完整校验上游不可变 generation，按 main/easy 与精确 task ID 选择，并生成通过 Harbor 0.22.0 schema 的原生执行 job。公开输入与 tests 引用分开投影；摘要不匹配、额外文件、符号链接、共享 verifier 和完整 rubric 复制到环境会被拒绝。7 项单元测试及上游真实 renderer 协议测试通过；这是 fixture 材料的接入验收，尚未下载/执行真实任务或调用官方 judge，因此下列正式能力总项不勾选。
 
 后续进展：已下载并通过官方 renderer 准备 main/easy 各一条真实 technical-writers 材料，冻结数据 revision 与 manifest 摘要见执行器文档。`jobbench_results` 可校验并导入官方逐项分数，验证冻结 task checksum 和 rubric 权重，区分有效零分与评分错误，保留私有原始证据。45 项相关单元测试、2 项上游集成测试通过；真实 main rubric 的官方无产物分支得到 `0/66`，未调用模型。非空产物 LLM 评审、真实 Agent 执行、受限参考材料搜索、恢复与全量覆盖尚未完成。
