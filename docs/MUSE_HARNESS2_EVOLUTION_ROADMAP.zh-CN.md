@@ -399,8 +399,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   profile 真实复验（2026-10-19）：MiniMax 单次 1297 input / 4000 output，
   52.284 秒，仅推理块、无最终 JSON，length 截断被拒绝，未生成/执行候选。
   新增角色级受限 request_options 透传与校验，默认不启用、不覆盖预算；
-  仅配置/传输测试通过，模型端支持和后续有效草案未验收。证据见
-  results/jobbench-candidate-profile-20261019.json，完整项继续不勾选。
+  首次仅配置/传输测试通过，证据见 results/jobbench-candidate-profile-20261019.json。
+  后续同预算单次显式 thinking disabled 请求正常返回 NO_ENTRY：1284 input /
+  12 output，1.591 秒。没有候选、执行或晋升，不宣称质量或性能提升；证据见
+  results/jobbench-candidate-direct-20261019.json。有效草案与实际收益仍未验收，
+  完整项继续不勾选，不通过强制产出绕过弃权。
   两阶段组合增补：Python API 支持两组开发 probe 后调用组合器，模型输入只
   含父候选与白名单任务 verdict；组合/弃权先冻结，恢复不重复生成，组合独立
   重跑。fixture 验证执行、恢复和弃权；CLI 已接 compose-after-probes 与

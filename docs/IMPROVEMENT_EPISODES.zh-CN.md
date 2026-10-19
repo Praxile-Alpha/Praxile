@@ -109,8 +109,14 @@ results/jobbench-candidate-profile-20261019.json。缺少输出不等于能力�
 reasoning_effort（none/minimal/low/medium/high）和 reasoning_split（boolean）；
 只为主 OpenAI-compatible provider 透传，不覆盖模型、消息、token 上限或权限。
 默认不设置，非兼容 provider 或跨目标 fallback 不静默忽略/移植。具体模型支持
-哪些字段、是否遵守由其 API 决定；这里仅通过配置与传输 fixture 测试，尚未对
-MiniMax 验证关闭推理是否可用。角色配置仍进入实验配置摘要。
+哪些字段、是否遵守由其 API 决定。角色配置仍进入实验配置摘要。
+
+2026-10-19 后续真实单次复验：按 [MiniMax 官方说明](https://platform.minimax.io/docs/api-reference/text-openai-api)
+为 M3 显式设置 thinking disabled，保持相同源证据、动作 profile、60 秒和
+4000 输出 token 上限，正常返回 NO_ENTRY，1284 input / 12 output，1.591 秒。
+结果仅证明本次请求被接受且正常弃权，不证明内部推理过程、候选质量或任务收益；
+没有生成、执行或晋升候选。不能将两次单样本比较当作性能提升。证据见
+`results/jobbench-candidate-direct-20261019.json`，不因弃权自动重试或扩大预算。
 
 可选 `--executor-profile native-profile.json` 为生成器提供版本化原生动作范围：
 
