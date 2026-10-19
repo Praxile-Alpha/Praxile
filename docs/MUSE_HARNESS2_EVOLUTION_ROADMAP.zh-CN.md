@@ -182,9 +182,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 工具 profile v2 真实设计返回完整文本但 JSON 解析失败（未进入动作校验），无候选。
 新增可选函数提交传输，严格检查唯一同名函数与 JSON arguments，不执行工具，
-不静默降级。当前仅完成 provider/router 层及离线验证；候选 CLI 接入和真实
-MiniMax 工具提交验收仍待完成。详见 IMPROVEMENT_EPISODES 与
-`results/docx-repair-profile-v2-design-20261019.json`，不勾选完整生成/验证闭环。
+不静默降级。候选 CLI 已通过 `--response-mode function` 显式接入，manifest
+冻结完整合同，历史默认文本模式保持兼容。一次 MiniMax M3.1 Flash 实测通过
+指定函数提交及严格 JSON 解析，但首个 read_document 示例存在 4 项 schema
+错误，未生成可执行候选。后续补充参数范围与脱敏字段诊断，仅经离线测试，
+不回填旧结果或自动重试。详见 IMPROVEMENT_EPISODES 与
+`results/docx-repair-function-design-20261019.json`，不勾选完整生成/验证闭环。
 
 修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
 示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏

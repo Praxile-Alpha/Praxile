@@ -436,7 +436,24 @@ tool_choice。返回必须只有一次同名函数调用，arguments 须为严�
 这一层只验证提交信封和严格 JSON，不声称 provider 强制完整 JSON Schema；
 调用方仍须运行候选、引用、动作及安全校验。错误不会触发自动修复请求。
 参数 shape、响应大小、未声明工具能力、fallback 拒绝已有离线替身验证。
-候选设计 CLI 尚未选择该模式，流式接口未接入，MiniMax 真实函数提交也尚未验收。
+候选设计 CLI 现在支持 `--response-mode function`（默认仍为文本），适用于
+`eval design-context` 和 `eval design-native-context`。调用模型必须显式声明
+supports_tools；不支持时拒绝，不静默降级。manifest 保存完整函数合同，
+trajectory 保存合同摘要；resume 不允许改变模式或合同。提交函数只传输结果，
+不会执行 action_examples，证据引用、动作校验及晋升限制仍由本地控制面执行。
+流式接口仍未接入。
+
+一次 MiniMax-M3.1-Flash / low 的 seeded DOCX development 设计调用，指定函数
+返回和严格 JSON 解析成功，但第一个 read_document 示例有 4 项 schema 错误。
+没有候选发布、probe 或 promotion。已知用量为输入 5778、输出 4240 tokens，
+其中 reasoning 538 已包含在输出内；传输耗时 26.169 秒，费用未知。
+这验证了函数提交通路，不证明候选质量或任务性能改善，详见
+`results/docx-repair-function-design-20261019.json`。
+
+该实测后将 profile 中已知 minimum/maximum/pattern 投影至函数 schema，并增加
+仅含已知字段名的 field_error_counts，避免诊断泄漏字段值。旧记录没有这些字段，
+不能推断当时具体哪几个参数出错，也未用新 schema 追加模型调用。函数 schema
+不涵盖全部文档语义，不能替代本地校验；合同变化需新的 design ID。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

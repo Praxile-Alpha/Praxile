@@ -52,6 +52,9 @@ def validate_action_examples(examples, capability):
             schema = registry.schemas[example["type"]]
             _invalid_example("schema_mismatch", index, action_type=example["type"],
                 error_count=len(errors), missing_required_fields=[key for key in schema["required"] if key not in example],
+                field_error_counts={key: sum(error.startswith(example["type"] + "." + key + " ") for error in errors)
+                    for key in {**schema["required"], **schema["optional"]}
+                    if any(error.startswith(example["type"] + "." + key + " ") for error in errors)},
                 unknown_field_count=len(set(example) - {"type", *schema["required"], *schema["optional"]}))
     return {"profile_digest": capability["digest"], "executor": capability["profile"]["executor"],
             "profile": deepcopy(capability["profile"]), "action_examples": deepcopy(examples),

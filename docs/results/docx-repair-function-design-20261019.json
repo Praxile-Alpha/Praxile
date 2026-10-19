@@ -1,0 +1,49 @@
+{
+  "schema_version": "praxile.public_experiment_receipt.v1",
+  "design_id": "docx-repair-function-001",
+  "scope": "seeded_docx_development_candidate_design_only",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "response_mode": "function",
+  "max_output_tokens": 8000,
+  "request_timeout_seconds": 120,
+  "attempt_count": 1,
+  "max_retries": 0,
+  "input_sha256": "7bdb95a92fcbd5955c9fd4d775fda6c22ab2f956fae4abcb0f51d1cb4ee1efc9",
+  "contract_sha256": "091d970c8a3fb04677dff2bc1533bfdd2a93f1e06f0239af75f4f35408ba99fb",
+  "response_sha256": "43f493062e67f25e7affc1b1959f9d4d638a9b67604d6a120896e053502505eb",
+  "evidence_count": 10,
+  "public_task_context_supplied": true,
+  "evidence_sufficiency_verified": false,
+  "transport_elapsed_ms": 26169,
+  "finish_reason": "tool_calls",
+  "response_decode": "parsed",
+  "status": "failed",
+  "failure_stage": "candidate_action_examples",
+  "candidate_position": "first",
+  "action_validation_diagnostic": {
+    "reason": "schema_mismatch",
+    "example_index": 0,
+    "action_type": "read_document",
+    "error_count": 4,
+    "missing_required_fields": [],
+    "unknown_field_count": 0
+  },
+  "usage": {
+    "input_tokens": 5778,
+    "output_tokens": 4240,
+    "reasoning_tokens_included_in_output": 538,
+    "model_calls": 1,
+    "tool_executions": 0,
+    "cost_usd": null
+  },
+  "candidate_published": false,
+  "probe_executed": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Not a benchmark task run or held-out A/B result.",
+    "Function submission does not establish candidate correctness.",
+    "Field-level diagnostics and numeric schema bounds were added after this run and were not tested against the model.",
+    "Raw response was not retained; exact invalid parameter values cannot be reconstructed."
+  ]
+}

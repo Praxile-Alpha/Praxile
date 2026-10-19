@@ -15,7 +15,7 @@ def setup_run(tmp_path, monkeypatch):
     def router(*args, **kwargs):
         yield object(), {"model": "fixture", "config_digest": "fixed"}
     monkeypatch.setattr(module, "configured_design_router", router)
-    monkeypatch.setattr(module, "collect_development_evidence", lambda *args, **kwargs: {"evidence": [{"fixture": True}]})
+    monkeypatch.setattr(module, "collect_development_evidence", lambda *args, **kwargs: {"evidence": [{"fixture": True, "event_id": "e1"}]})
     def generate(**kwargs):
         calls.append(kwargs["max_output_tokens"])
         return {"decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}
@@ -64,8 +64,21 @@ def test_cli_parses_explicit_budget():
     from praxile.cli_parser import build_parser
     args = build_parser().parse_args(["eval", "design-context", "dev", "--design-id", "draft",
         "--scope", "scope.json", "--development-task-id", "d", "--heldout-task-id", "h",
-        "--max-output-tokens", "8000"])
+        "--max-output-tokens", "8000", "--response-mode", "function"])
     assert args.max_output_tokens == 8000
+    assert args.response_mode == "function"
+
+
+def test_function_protocol_frozen_and_cannot_change_on_resume(setup_run):
+    config, kwargs, calls, root = setup_run
+    module.run_candidate_design(config, None, **kwargs, response_mode="function")
+    plan = json.loads((root / "manifest.json").read_text())
+    assert plan["response_protocol"]["contract"]["name"] == "submit_development_candidates_v1"
+    module.run_candidate_design(config, None, **kwargs, response_mode="function", resume=True)
+    for mode in (None, "text"):
+        with pytest.raises(EvalSchemaError):
+            module.run_candidate_design(config, None, **kwargs, response_mode=mode, resume=True)
+    assert calls == [4000]
 
 
 def test_intent_persisted_before_generator_and_failed_run_not_replayed(setup_run, monkeypatch):

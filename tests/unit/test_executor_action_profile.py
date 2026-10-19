@@ -71,6 +71,16 @@ def test_validation_diagnostic_does_not_export_unknown_names_or_values():
     assert "PRIVATE" not in str(diagnostic) + str(caught.value)
 
 
+def test_known_field_error_counts_do_not_include_values():
+    capability = profile_context({**profile(), "actions": ["read_document"]})
+    with pytest.raises(EvalSchemaError) as caught:
+        validate_action_examples([{"type": "read_document", "path": "PRIVATE",
+                                   "start": "PRIVATE", "limit": "PRIVATE"}], capability)
+    diagnostic = caught.value.action_validation_diagnostic
+    assert diagnostic["field_error_counts"] == {"start": 2, "limit": 2}
+    assert "PRIVATE" not in str(diagnostic)
+
+
 def test_native_candidate_cannot_enter_different_executor(tmp_path):
     from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
     from praxile.eval.v2.candidate import ContextCandidate

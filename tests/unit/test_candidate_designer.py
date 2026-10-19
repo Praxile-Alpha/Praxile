@@ -41,6 +41,35 @@ def test_explicit_request_timeout_reaches_router_and_trajectory():
         "evidence_sufficiency_verified": False}
 
 
+def test_function_contract_is_forwarded_and_local_validation_still_applies():
+    kwargs, calls = inputs({"content": json.dumps(proposal()), "finish_reason": "tool_calls"})
+    result = design_development_candidates(**kwargs, response_mode="function")
+    contract = calls[0][1]["response_contract"]
+    assert contract["name"] == "submit_development_candidates_v1"
+    assert contract["schema"]["oneOf"][0]["properties"]["candidates"]["minItems"] == 2
+    assert contract["schema"]["oneOf"][0]["properties"]["composition"]["properties"]["evidence_refs"]["items"]["enum"] == ["event:e1"]
+    assert result["decision"] == "DRAFTS_REQUIRE_EXPERIMENT"
+    assert kwargs["logger"].data["development_candidate_designs"][0]["response_protocol"]["mode"] == "function"
+    invalid = proposal()
+    invalid["composition"]["evidence_refs"] = ["event:invented"]
+    kwargs, _ = inputs({"content": json.dumps(invalid), "finish_reason": "tool_calls"})
+    with pytest.raises(EvalSchemaError, match="supplied evidence"):
+        design_development_candidates(**kwargs, response_mode="function")
+
+
+def test_function_action_contract_declares_discriminator_and_parameters():
+    from praxile.eval.v2.candidate_response import candidate_response_contract
+    from praxile.eval.v2.executor_profile import profile_context
+    capability = profile_context({"schema_version": "praxile.executor_action_profile.v2",
+        "executor": "praxile", "version": "1", "actions": ["read_document"]})
+    contract = candidate_response_contract(["event:e1"], capability)
+    action = contract["schema"]["oneOf"][0]["properties"]["composition"]["properties"]["action_examples"]["items"]["oneOf"][0]
+    assert action["required"] == ["type", "path"]
+    assert action["properties"]["type"]["enum"] == ["read_document"]
+    assert action["properties"]["limit"] == {"type": "integer", "minimum": 1, "maximum": 20}
+    assert action["additionalProperties"] is False
+
+
 @pytest.mark.parametrize("value", [True, 0, 301, "120"])
 def test_invalid_request_timeout_never_calls_router(value):
     kwargs, calls = inputs({})

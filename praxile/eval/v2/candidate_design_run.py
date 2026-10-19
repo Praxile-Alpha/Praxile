@@ -11,7 +11,8 @@ from .schema import EvalSchemaError
 
 def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                          development_task_ids, heldout_task_ids, applies_to, private=False, resume=False,
-                         executor_profile=None, max_output_tokens=None, request_timeout_seconds=None):
+                         executor_profile=None, max_output_tokens=None, request_timeout_seconds=None, response_mode=None):
+    _validate_mode(response_mode)
     _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
         raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
@@ -22,15 +23,16 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
         executor_profile=executor_profile, max_output_tokens=max_output_tokens,
-        request_timeout_seconds=request_timeout_seconds)
+        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode)
 
 
 def run_native_candidate_design(config, result_path, *, expected_sha256, track,
                                 design_id, development_task_ids, heldout_task_ids, applies_to,
                                 private=False, resume=False, executor_profile=None, max_output_tokens=None,
                                 request_timeout_seconds=None, public_task_context_path=None,
-                                public_task_context_sha256=None):
+                                public_task_context_sha256=None, response_mode=None):
     from .native_development_evidence import collect_native_evidence
+    _validate_mode(response_mode)
     _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
         raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
@@ -48,7 +50,12 @@ def run_native_candidate_design(config, result_path, *, expected_sha256, track,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
         executor_profile=executor_profile, max_output_tokens=max_output_tokens,
-        request_timeout_seconds=request_timeout_seconds)
+        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode)
+
+
+def _validate_mode(value):
+    if value is not None and value not in ("text", "function"):
+        raise EvalSchemaError("candidate response mode must be text or function")
 
 
 def _validate_timeout(value):
@@ -57,7 +64,7 @@ def _validate_timeout(value):
 
 
 def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
-                applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds):
+                applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds, response_mode):
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
@@ -71,6 +78,12 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
         if executor_profile is not None:
             from .executor_profile import profile_context
             plan["executor_capability"] = profile_context(executor_profile)
+        if response_mode is not None:
+            plan["response_protocol"] = {"mode": response_mode}
+            if response_mode == "function":
+                from .candidate_response import candidate_response_contract
+                plan["response_protocol"]["contract"] = candidate_response_contract(
+                    ["event:" + item["event_id"] for item in bundle["evidence"]], plan.get("executor_capability"))
         with file_lock(root / "design"):
             existed = (root / "manifest.json").exists()
             if existed and not resume:
@@ -103,6 +116,7 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                     development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
                     applies_to=applies_to, design_id=design_id, router=router, logger=logger,
                     private=private, executor_profile=executor_profile,
+                    response_mode=response_mode or "text",
                     public_task_context=bundle.get("public_task_context"),
                     request_timeout_seconds=request_timeout_seconds if request_timeout_seconds is not None else 60,
                     max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {
