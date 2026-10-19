@@ -231,6 +231,27 @@ def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
     return 0
 
 
+def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int:
+    from ..eval.v2.candidate_design_run import run_candidate_design
+    config, store = load(project_root)
+    store.initialize(config)
+    scope = read_json(Path(args.scope).expanduser().resolve(), None)
+    if not isinstance(scope, dict):
+        raise ValueError("--scope must contain an applies_to JSON object")
+    report = run_candidate_design(config, EventStore(config.paths), design_id=args.design_id,
+        experiment_id=args.experiment_id, arm=args.arm, development_task_ids=args.development_task_id,
+        heldout_task_ids=args.heldout_task_id, applies_to=scope, private=args.private, resume=args.resume)
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print(f"Candidate design: {report['design_id']} - {report['decision']}")
+        root = config.paths.state / "eval/v2/candidate_designs" / args.design_id
+        for filename in report["candidate_files"]:
+            print(root / filename)
+        print("No experiment started; no asset promoted.")
+    return 0
+
+
 def _development_cycle_inputs(args):
     second = getattr(args, "second_candidate", None)
     composed = getattr(args, "composed_candidate", None)

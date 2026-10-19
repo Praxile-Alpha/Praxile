@@ -381,6 +381,9 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   manifest/report/任务归属，仅提取 search/read_file/run_command 的结构化
   状态、参数摘要和事件引用，不发送原始输出或 evaluator 内容；可直接送入
   designer，无可用事件则不调用模型。fixture 覆盖正常来源与拒绝错配来源。
+  CLI design-context 已接此证据入口：冻结输入/范围/去敏角色配置，保存生成
+  轨迹与候选文件，不自动执行；恢复重建缺失候选而不重复已保存的模型生成。
+  fixture 验证 CLI 生成、文件恢复及变更输入拒绝，真实模型质量仍未验收。
   两阶段组合增补：Python API 支持两组开发 probe 后调用组合器，模型输入只
   含父候选与白名单任务 verdict；组合/弃权先冻结，恢复不重复生成，组合独立
   重跑。fixture 验证执行、恢复和弃权；CLI 已接 compose-after-probes 与

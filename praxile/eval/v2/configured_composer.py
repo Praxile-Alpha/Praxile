@@ -12,7 +12,7 @@ from .schema import EvalSchemaError, canonical_json
 
 
 @contextmanager
-def configured_probe_composer(config, *, cycle_id, applies_to, private=False):
+def configured_design_router(config, *, cycle_id, applies_to, private=False):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", cycle_id):
         raise EvalSchemaError("unsafe development cycle ID")
     for key in ("repositories", "task_signals", "does_not_apply_when"):
@@ -29,6 +29,17 @@ def configured_probe_composer(config, *, cycle_id, applies_to, private=False):
                     "provider": route["provider"], "model": route["model"], "private": private,
                     "config_digest": hashlib.sha256(canonical_json(_redact(config.data)).encode()).hexdigest(),
                     "scope_digest": hashlib.sha256(canonical_json(applies_to).encode()).hexdigest()}
+        yield router, identity
+    finally:
+        for provider in router.providers.values():
+            close = getattr(getattr(provider, "transport", None), "close", None)
+            if callable(close):
+                close()
+
+
+@contextmanager
+def configured_probe_composer(config, *, cycle_id, applies_to, private=False):
+    with configured_design_router(config, cycle_id=cycle_id, applies_to=applies_to, private=private) as (router, identity):
         path = config.paths.state / "eval/v2/development_cycles" / cycle_id / "composer-trajectory.json"
 
         def compose(parents, reports):
@@ -42,8 +53,3 @@ def configured_probe_composer(config, *, cycle_id, applies_to, private=False):
                 write_json(path, logger.data)
 
         yield compose, identity
-    finally:
-        for provider in router.providers.values():
-            close = getattr(getattr(provider, "transport", None), "close", None)
-            if callable(close):
-                close()

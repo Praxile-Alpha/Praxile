@@ -93,6 +93,32 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 结果和轨迹。本地文件/事件一致性检查不等于防恶意篡改的来源认证，尚无真实
 模型验收或独立 attestation；不能把 fixture 链路通过说成经验质量提升。
 
+### 从轨迹生成文件
+
+```sh
+praxile eval design-context prior-development.first \
+  --design-id focused-design-001 --arm baseline --scope applies-to.json \
+  --development-task-id owner__repo-dev --heldout-task-id owner__repo-heldout
+```
+
+`applies-to.json` 是显式范围对象，例如：
+
+```json
+{"repositories":["owner/repo"],"task_signals":["regression"],"does_not_apply_when":["documentation-only"]}
+```
+
+需替换实际实验 ID、任务 ID 与范围；来源必须是已经完成的 development A/B。
+命令调用配置的 proposal_composer，支持 `--private`、`--resume` 和 `--json`。
+输出位于 `eval/v2/candidate_designs/<design-id>/`：冻结 manifest、trajectory、
+generated.json、三个候选 JSON 和报告。弃权时没有候选文件，不伪造结果。
+候选文件可交给前述 `eval ab`，命令本身不启动实验、不写长期资产。
+
+manifest 冻结来源投影、开发/held-out 名单、作用范围和去敏模型配置摘要；改变
+这些输入必须另用 design-id。生成响应先保存，再生成派生候选文件，恢复可修复
+缺失文件且不重复模型调用；已有文件不一致则拒绝覆盖。若模型响应与 generated
+文件之间崩溃，仍可能重新请求模型，不能保证外部 API 恰好一次。轨迹在失败
+路径同样保存已知用量，尚不代表完整跨阶段成本账本。
+
 CLI 沿用 `eval ab`，同时提供以下参数启用组合流程：
 
 ```sh

@@ -237,6 +237,37 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
     assert evals.cmd_eval_ab(args, tmp_path) == 0
     assert read_json(root / "composer-trajectory.json", {})["cost"]["model_calls"] == 1
     assert len(closed) == 2
+    design_calls = []
+    def design_chat(self, messages, **kwargs):
+        design_calls.append(messages)
+        allowed = json.loads(messages[1]["content"])["allowed_refs"]
+        generated = [{**item, "evidence_refs": allowed} for item in drafts]
+        return {"content": json.dumps({"decision": "propose", "candidates": generated[:2],
+                                        "composition": generated[2]}), "usage": {"prompt_tokens": 21}}
+    monkeypatch.setattr(ComposerRouter, "chat", design_chat)
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text(json.dumps(candidates[0].applies_to))
+    design_args = build_parser().parse_args(["eval", "design-context", "dev-cycle.first",
+        "--design-id", "cli-design", "--scope", str(scope_path),
+        "--development-task-id", task.task_id, "--heldout-task-id", "heldout"])
+    assert design_args.func(design_args, tmp_path) == 0
+    design_root = config.paths.state / "eval/v2/candidate_designs/cli-design"
+    design_report = read_json(design_root / "report.json", {})
+    assert len(design_report["candidate_files"]) == 3
+    assert not design_report["experiments_started"]
+    for filename in design_report["candidate_files"]:
+        ContextCandidate.load(design_root / filename)
+    (design_root / design_report["candidate_files"][0]).unlink()
+    design_args.resume = True
+    assert design_args.func(design_args, tmp_path) == 0
+    assert (design_root / design_report["candidate_files"][0]).is_file()
+    assert len(design_calls) == 1
+    changed_scope = dict(candidates[0].applies_to)
+    changed_scope["task_signals"] = ["different"]
+    scope_path.write_text(json.dumps(changed_scope))
+    with pytest.raises(EvalSchemaError, match="different content"):
+        design_args.func(design_args, tmp_path)
+    assert len(design_calls) == 1
 
 
 def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tmp_path: Path) -> None:
