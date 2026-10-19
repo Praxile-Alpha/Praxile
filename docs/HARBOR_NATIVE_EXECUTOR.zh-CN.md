@@ -117,3 +117,35 @@ python -m praxile.eval.jobbench_results \
 - 上游 renderer 生成的两任务 manifest SHA-256：`246cdeca67266141ddb35172279e5d1c9be5ceb8d5bca1f68102d276ea6a0b18`。main 任务含一个待搜索参考文件，受限检索接口仍待实现，不能声称材料访问能力已完整。
 - 使用真实 main rubric 对空输出运行官方 verifier，获得 10 个评审项、`0/66`、reward `0.0`。此分支不调用模型；报告的默认 judge 名称不代表实际发起了模型请求。
 - 以上均不构成 Praxile 真实任务完成率或演化收益证据。执行模型、独立 judge 与费用上限确认后再进行正式任务运行。
+
+## WorkBuddy 数据冻结与准备
+
+`praxile.eval.archives.extract_dataset` 校验下载包 SHA-256 后，在临时目录中解包并整体发布；拒绝路径穿越、链接、特殊文件、重复成员和超限文件。只展开外层数据包，`workspace.tar.gz` 不在宿主机展开。此检查不代表 Dockerfile 或脚本安全审计。
+
+`praxile.eval.workbuddy` 校验数据集契约、文件清单摘要、任务身份与官方评分器引用。私有 tests/plugin 参与冻结摘要，不进入 AgentTask 投影。命令只检查或准备材料，不运行模型：
+
+```sh
+python -m praxile.eval.workbuddy \
+  --dataset /absolute/wb-bench-office-v1.0 \
+  --revision DATASET_COMMIT
+
+# 需要已安装受信任、固定版本的上游 workbuddy_bench。
+# 使用第一次检查获得的摘要；原始目录保持不变。
+python -m praxile.eval.workbuddy \
+  --dataset /absolute/wb-bench-office-v1.0 \
+  --revision DATASET_COMMIT \
+  --inventory-sha256 RECORDED_DIGEST \
+  --prepare-copy /absolute/office-prepared
+```
+
+准备调用上游 `ensure_composite_verifier_contract` 和 `ensure_task_user`，在新副本绑定官方 CompositeVerifier，并在每个 task.toml 中设置 agent/verifier 用户为 `dev`。Harbor 不从 job 的 agents 配置读取该用户。副本包含源清单摘要、准备模块 SHA-256 和变更数量；准备失败不发布副本。重新运行时必须选择新目录，不覆盖已有材料。
+
+`WorkBuddyPraxileAgent` 只在固定 setup 阶段以 root 创建 dev 并移交 `/workspace` 所有权，随后复用原生执行器。模型不能通过此入口传入 root 命令。此能力不等于完整 WorkBuddy job 集成，也不提供 Security 子集所需的网络隔离。
+
+2026-10-19 验证记录：
+
+- HF revision `3e8ad839685c589d83a1dd60fe2d15eabb75f27a`；已下载 Code 80 条、Office 50 条，未下载 Web/Security。
+- 原始 Code 清单 SHA-256：`cabdc886431828bab24a96c2af197b463a83f9f2d56526ea4ca89f4d6adeb720`。
+- 原始 Office 清单 SHA-256：`6ff1386c35a9fef611b426096e2c26f2c9912965f82f85e6d0109c2cba9bf20a`。
+- 真实 Office 50 条任务副本准备成功，清单 SHA-256：`769487c35f09022ff682d7be0789cbb35dc42da512d5808e14ca92c83bbbaf0f`。
+- 解包/清单/官方准备测试 19 项通过；未运行真实 WorkBuddy 任务或付费 judge，不报告完成率。

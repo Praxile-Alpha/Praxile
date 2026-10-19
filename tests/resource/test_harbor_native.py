@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("harbor")
 from harbor.models.agent.context import AgentContext
-from praxile.adapters.harbor_native import PraxileAgent
+from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
@@ -44,7 +44,8 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
 @pytest.mark.slow
 @pytest.mark.timeout(300)
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
-def test_harbor_owned_container_executes_native_worker(tmp_path):
+@pytest.mark.parametrize("workbuddy", [False, True])
+def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy):
     from harbor.environments.docker.docker import DockerEnvironment
     from harbor.models.task.config import EnvironmentConfig
     from harbor.models.trial.paths import TrialPaths
@@ -80,11 +81,17 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
             await environment.upload_file(server, "/tmp/fixture_model.py")
             result = await environment.exec("mkdir -p /workspace && python3 /tmp/fixture_model.py >/tmp/fixture-model.log 2>&1 &", cwd="/", timeout_sec=10)
             assert result.return_code == 0
-            agent = PraxileAgent(logs_dir=paths.agent_dir, wheel_path=str(wheel),
+            agent_type = WorkBuddyPraxileAgent if workbuddy else PraxileAgent
+            if workbuddy:
+                environment.default_user = "dev"
+            agent = agent_type(logs_dir=paths.agent_dir, wheel_path=str(wheel),
                 wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
                 workspace="/workspace", base_url="http://127.0.0.1:18888/v1",
                 model_name="fixture", max_steps=2, timeout_seconds=90)
             await agent.setup(environment)
+            if workbuddy:
+                identity = await environment.exec("id -un", timeout_sec=10)
+                assert identity.stdout.strip() == "dev"
             context = AgentContext()
             await agent.run("Summarize the available project.", environment, context)
             assert context.n_input_tokens == 12

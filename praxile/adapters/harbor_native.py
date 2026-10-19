@@ -103,3 +103,24 @@ class PraxileAgent(BaseAgent):
             "result": trajectory.get("result"), "official_evaluation": "external",
             "experience_mode": result["experience_mode"],
         }}
+
+
+class WorkBuddyPraxileAgent(PraxileAgent):
+    """Match WorkBuddy's non-root rollout without modifying upstream agents."""
+
+    @staticmethod
+    def name() -> str:
+        return "praxile-workbuddy"
+
+    async def setup(self, environment) -> None:
+        if self.workspace != "/workspace" or getattr(environment, "default_user", None) != "dev":
+            raise ValueError("WorkBuddy native executor requires /workspace and agent_user=dev")
+        # This fixed setup command is control-plane code, not an agent tool.
+        result = await environment.exec(
+            "set -eu; if ! id dev >/dev/null 2>&1; then useradd -m -s /bin/bash dev; fi; "
+            'test "$(id -u dev)" != 0; mkdir -p /workspace; chown -hR dev /workspace',
+            user="root", cwd="/", timeout_sec=self.timeout_seconds,
+        )
+        if result.return_code != 0:
+            raise RuntimeError("could not initialize WorkBuddy non-root execution user")
+        await super().setup(environment)
