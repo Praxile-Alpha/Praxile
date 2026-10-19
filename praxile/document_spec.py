@@ -10,7 +10,8 @@ def docx_spec_prompt():
         '{"type":"bullet","text":"..."}, {"type":"table","rows":[["cell","cell"]]}, '
         '{"type":"page_break"}. Heading level is 1..3; tables must be rectangular strings '
         '(1..100 rows, 1..12 columns). Maximum 200 blocks / 256 KiB spec. '
-        'Use an existing parent directory and a new .docx path; existing files are never overwritten.'
+        'create_docx requires an existing parent directory and a new .docx path; it never overwrites. '
+        'For an existing file, revise_docx requires its current expected_sha256 and complete replacement blocks.'
     )
 
 

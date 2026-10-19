@@ -193,7 +193,7 @@ class AgentRuntime:
                         "data": {
                             **analysis,
                             "implementation_blocked": True,
-                            "blocked_action_types": ["edit_file", "create_docx", "run_command"],
+                            "blocked_action_types": ["edit_file", "create_docx", "revise_docx", "run_command"],
                             "resume_policy": "Accept or edit the architecture-gate proposal, then start an explicit implementation task.",
                         },
                         "risk_level": "medium",
@@ -1218,7 +1218,7 @@ class AgentRuntime:
         action_type: str | None,
         observation: dict[str, Any],
     ) -> None:
-        if action_type not in {"edit_file", "create_docx", "run_command"}:
+        if action_type not in {"edit_file", "create_docx", "revise_docx", "run_command"}:
             return
         if observation.get("status") not in {"success", "failure"}:
             return

@@ -52,10 +52,36 @@ Harbor 适配器新增 `inherit_task_packages: true` 显式选项，允许 Praxi
 动作归类为 mutating，dry-run 不写入，不允许并发 batch；成功后刷新快照，
 轨迹记录路径、大小、SHA-256。任务回滚只删除仍匹配该摘要的新文件，若人工已
 修改则记录 skipped_modified，避免删除后续工作。不支持在原文件上修改 Word
-复杂样式或保持修订历史；要修订内容必须另存新路径，再由用户决定最终版本。
+复杂样式或保持修订历史；同路径完整重建使用下述 revise_docx，不能把它当成
+保留模板/批注/修订历史的局部 Word 编辑器。
 
 使用默认 Word 样式、Calibri 11pt 与表格网格，不声称符合机构模板。创建成功
 只代表结构化文件写出，事实正确、页数、视觉排版及官方评分均未验证。
+
+### 摘要保护的同路径修订
+
+```json
+{"type":"revise_docx","path":"output/memo.docx","expected_sha256":"<CURRENT_SHA256>","document":{"blocks":[{"type":"paragraph","text":"Shortened memo."}]}}
+```
+
+expected_sha256 必须是 read_document、check_document_layout 或前次写入观察
+得到的当前文件摘要；schema 要求 64 位小写十六进制。完整 blocks 重新生成
+DOCX，旧样式/批注不会被自动保留。只允许现有项目内 DOCX，拒绝符号链接组件。
+原稿上限 10 MB，生成器沿用 create_docx 的资源限制和声明式白名单。
+
+新稿在目标目录的临时子目录中完整生成后，获取项目内按路径归一化的文件锁，
+重新核对当前摘要；原始二进制备份写入 `.praxile/backups/document-revisions/`
+并 fsync，再核对一次后原子替换。备份失败不替换，替换失败保留原稿和备份，
+临时生成目录清理。轨迹记录 before_sha256、sha256、备份路径及 changed。
+修订动作受写权限、架构门禁、dry-run、非并发 mutating 分类和快照刷新约束。
+
+回滚只在当前摘要仍等于该次修订结果、备份路径/摘要均有效时恢复原稿；人工
+后改则 skipped_modified，损坏备份则 backup_digest_mismatch，不静默覆盖。
+这是协作进程锁与摘要检查，不是抵御所有非协作进程竞态的 OS compare-and-swap。
+不承诺备份与轨迹的断电原子事务；崩溃或日志写入失败后可能需人工检查保留备份。
+
+真实 LibreOffice + 模型 fixture 已验证：两页稿完成被拒绝、同路径修订、
+再检查为一页、完成、按轨迹恢复原稿。尚未进行真实模型自动修订验收。
 
 ## 验证与剩余边界
 
@@ -117,7 +143,8 @@ R1 专业交付能力，也不能宣称 benchmark 得分提升。
 
 返回真实渲染 PDF 页数、输入/PDF 摘要、page_limit_met；超页为 failure，未
 指定上限只报告页数。上限来源标记为 action_argument，不伪装成用户确认的契约。
-提示模型缩短内容、新建修订路径、再次检查；不覆盖原文件，不静默缩字号。
+提示模型缩短内容、用摘要保护的 revise_docx 修订、再次检查；检查动作本身
+不覆盖原文件，不静默缩字号。
 已用真实两页 fixture 验证失败及一页修订通过；上一轮真实 checklist 的离线
 复查同样返回 pages=5、page_limit_met=false，未调用模型、未修改原始产物。
 
@@ -151,9 +178,8 @@ Runtime 在 completed finish 前重检绑定契约，不通过则将证据返给
 fixture 验证了 JSON 产物的拒绝/修复/完成，真实 LibreOffice 验证 DOCX 超页
 拒绝；无渲染器的模型 completed 被降为 needs_human。
 
-真实模型 DOCX 自动修订尚未验收：create_docx 不覆盖既有路径，而固定契约不
-允许换路径绕过，需要后续引入带摘要冲突检查及备份回滚的同路径修订。完整
-自主修订闭环仍未完成。
+同路径修订工具已实现并通过真实渲染 + fixture 流程；真实模型 DOCX 自动
+修订尚未验收，完整自主修订能力仍不能宣称完成。
 
 ### Benchmark 公共契约输入
 

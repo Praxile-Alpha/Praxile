@@ -14,7 +14,7 @@ from .utils import utc_now
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
-MUTATING_ACTIONS = {"edit_file", "create_docx", "run_command", "browser_click", "browser_fill", "browser_download"}
+MUTATING_ACTIONS = {"edit_file", "create_docx", "revise_docx", "run_command", "browser_click", "browser_fill", "browser_download"}
 
 
 class ToolRegistry:
@@ -73,6 +73,7 @@ class ToolRegistry:
             {"name": "check_deliverables", "description": "Check public user-request output contracts locally; not official evaluation or semantic judgment."},
             {"name": "edit_file", "description": "Write UTF-8 text with backup, never DOCX/XLSX/PPTX/PDF bytes or base64."},
             {"name": "create_docx", "description": "Create a new DOCX from paragraph/heading/bullet/table/page_break blocks; never overwrite, no model code execution."},
+            {"name": "revise_docx", "description": "Rebuild an existing DOCX from complete blocks; requires current SHA-256, creates backup, rejects conflicts."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "check_document_layout", "description": "Opt-in DOCX rendering and page-count check; not visual quality verification."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
@@ -130,6 +131,10 @@ class ToolRegistry:
         if action_type == "create_docx":
             from .documents import create_docx
             return create_docx(self.config, self.safety, str(action.get("path", "")), action.get("document")).to_dict()
+        if action_type == "revise_docx":
+            from .document_revision import revise_docx
+            return revise_docx(self.config, self.safety, str(action.get("path", "")),
+                action.get("document"), action.get("expected_sha256")).to_dict()
         if action_type == "edit_file":
             return self.fs.write_file(
                 str(action.get("path", "")),

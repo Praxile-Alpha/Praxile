@@ -38,6 +38,7 @@ class ActionSchemaRegistry:
                 "ttl_steps": int, "requirements": dict}, "optional": {}},
             "edit_file": {"required": {"path": str, "content": str}, "optional": {}},
             "create_docx": {"required": {"path": str, "document": dict}, "optional": {}},
+            "revise_docx": {"required": {"path": str, "document": dict, "expected_sha256": str}, "optional": {}},
             "run_command": {"required": {"command": str}, "optional": {}},
             "finish": {"required": {"summary": str}, "optional": {"status": str}},
         }
@@ -64,12 +65,16 @@ class ActionSchemaRegistry:
         for key, expected_type in schema["optional"].items():
             if key in action and action[key] is not None and not isinstance(action[key], expected_type):
                 errors.append(f"{action_type}.{key} must be {expected_type.__name__}")
-        if action_type == "create_docx":
+        if action_type in {"create_docx", "revise_docx"}:
             from .document_spec import validate_docx_spec
             try:
                 validate_docx_spec(action.get("document"))
             except (ValueError, TypeError) as error:
                 errors.append(str(error))
+        if action_type == "revise_docx":
+            digest = action.get("expected_sha256")
+            if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+                errors.append("revise_docx.expected_sha256 must be the current SHA-256 from a document observation")
         if action_type == "check_document_layout" and "max_pages" in action:
             if type(action["max_pages"]) is not int or not 1 <= action["max_pages"] <= 2000:
                 errors.append("check_document_layout.max_pages must be an integer in [1, 2000]")
@@ -121,10 +126,12 @@ class ActionSchemaRegistry:
         lines.append(docx_spec_prompt())
         lines.append("check_document_layout renders DOCX using an opt-in trusted renderer; max_pages checks an explicit page limit. "
                      "Use before claiming a page requirement is met. Missing renderer is not a pass. "
-                     "If over limit, shorten content and create a revised document at a new path, then check again. "
+                     "If over limit, shorten content and use revise_docx with the observed source_sha256, then check again. "
                      "It does not verify visual or factual quality.")
         lines.append("edit_file writes UTF-8 text only. Never use it for .docx/.xlsx/.pptx/.pdf, "
                      "including base64 strings. Use create_docx for Word output.")
+        lines.append("revise_docx takes the same document blocks as create_docx and rebuilds the entire DOCX at its existing path. "
+                     "Provide current expected_sha256; conflicts are rejected, originals backed up. It does not preserve complex styles or revisions.")
         lines.append("read_document pagination: start is 1-based; limit is 1..20 (default 5); "
                      "char_offset resumes truncated unit text; optional sheet selects an XLSX sheet.")
         return "\n".join(lines)

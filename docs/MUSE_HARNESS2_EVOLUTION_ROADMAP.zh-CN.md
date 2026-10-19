@@ -225,9 +225,11 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 不通过。JSON fixture 修复闭环、真实 DOCX 超页拦截已验证。benchmark 公共
 契约输入通道已补：Harbor 构造时冻结对象，上传后由 worker 在模型调用前检查
 文件摘要、大小及严格 JSON 并绑定 Runtime；未提供保持原行为。HTTP fixture
-和真实 Docker 普通/dev 用户验证了门禁，不读取隐藏 rubric。同路径安全 DOCX
-修订及真实模型修订验收仍缺，完整自检/
-修订项不勾选。具体边界见 `DOCUMENT_TOOLS.zh-CN.md`。
+和真实 Docker 普通/dev 用户验证了门禁，不读取隐藏 rubric。同路径 revise_docx
+已补：期望摘要、生成后重新比对、二进制备份、原子替换及摘要保护回滚；
+真实 LibreOffice + 模型 fixture 验证两页拒绝/修订为一页/完成/回滚。此锁只
+协调遵守协议的进程，不是完整 OS CAS 或断电事务。真实模型修订验收仍缺，
+完整自检/修订项不勾选。具体边界见 `DOCUMENT_TOOLS.zh-CN.md`。
 
 产物回收边界增补：原生 worker/Harbor 可显式配置输出目录，执行后生成独立
 artifact_inventory，区分不存在、空、格式问题、不支持和未检查完；来源是
