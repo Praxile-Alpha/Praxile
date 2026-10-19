@@ -117,6 +117,15 @@ implementation 已升级，旧设计不能混用新提示词继续生成；应�
 不记录异常正文或原始模型响应；fixture 验证字段、长度、引用、重复候选和弃权
 分支可区分。这个改动不放宽校验，也不触发自动重试。
 
+阶段诊断版真实单次验收：返回合规 NO_ENTRY，reason=insufficient_evidence，
+missing_evidence=[before_after_observations,counterexamples]，2443 input / 506 output、
+7.35 秒。该结论仍是未验证的模型自述：输入实际含三组页数前后对比（均为 0），
+不能把标签解释为完全没有前后观察；确实未提供成功修订对照或独立反例。
+本次没有复现上一轮 schema 错误，也不能据此解释上一轮失败。
+证据见 `results/jobbench-candidate-staged-20261019.json`。停止对同源轨迹重复生成；
+后续需建立公开开发对照及原生候选执行，再讨论实际效用，不能靠增加重试次数
+获得可发布的性能结论。
+
 开发实验采集器现支持 `check_document_layout` 的结构化结果：只投影页数、
 调用参数中的上限、是否满足上限和调用引用；参数使用摘要，不暴露路径、正文或
 renderer 路径。结果的路径、上限、布尔值、状态须与调用及页数一致，否则跳过。
