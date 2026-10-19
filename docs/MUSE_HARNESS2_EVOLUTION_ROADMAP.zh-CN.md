@@ -276,6 +276,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。
+  V3 增补调用方冻结的 unchanged_files 路径/SHA-256 约束，最终字节变化、缺失、
+  符号链接或超限均失败；与输出/终态要求联合检查，沿用 runtime 完成门禁。
+  629 项快速单元测试通过，仍不证明运行途中无修改、目录无增删或外发，完整
+  状态变化项不勾选。协议与限制见 `DELIVERABLE_CHECKS.zh-CN.md`。
 - [ ] 按实际任务依赖建立版本化 capability profiles：表格读写/公式重算、文档/PDF抽取与渲染、网页浏览器操作、代码与脚本执行。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22

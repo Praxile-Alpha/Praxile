@@ -58,6 +58,36 @@ V2 的前后状态变化、可信观测持久化和官方评分仍是独立未�
 验证含 CLI 分发、不可变副本、模型弱化拒绝、终态强制复验与 resume 冻结；
 完整快速单元测试为 458 passed / 6 skipped / 10 deselected。
 
+### V3 文件保留约束
+
+V3 在 V2 基础上增加必填 `unchanged_files`：1 到 100 个项目相对路径映射到
+调用方指定的小写 SHA-256。`state_equals` 可为空；`outputs` 可为空，从而支持
+“完成其他操作但保持这些文件最终字节不变”的检查。V1/V2 严格字段规则不变，
+不能在旧版本契约里偷偷加入新约束。
+
+```json
+{
+  "schema_version": "praxile.deliverable_contract.v3",
+  "source": "user_request",
+  "outputs": [{"path": "output/checklist.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "structure": {"max_pages": 1}}],
+  "state_equals": {},
+  "unchanged_files": {
+    "output/memo.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4"
+  }
+}
+```
+
+摘要应由可信调用方读取原文件计算，不由模型猜测。与已有契约一样，通过 run
+参数绑定后深拷贝、记录摘要、checkpoint 冻结、结束时复验；模型不能换成更弱
+契约。逐文件报告保存期望/实际摘要、字节数及 matched/content_changed/not_found
+等原因；缺文件、符号链接、非普通文件和超过读取上限均不通过。runtime 对所有
+保留路径执行敏感文件读取策略，不通过摘要检查绕过 `.env` 等保护。
+
+这仅证明本次观测到的最终字节相同：`preservation_scope=observed_final_bytes_only`，
+`state_transitions_verified=false`。不证明执行途中未修改、未外发、文件元数据未变，
+不验证目录树未增删，也不是对恶意同机进程的竞态隔离。摘要来源仍是调用方声明，
+不是自动签名审批；完整允许状态变化控制仍未完成。
+
 ### V2 终态约束
 
 V1 文件契约与报告保持原样。V2 增加必填 `state_equals`（1 到 20 条精确终态要求），

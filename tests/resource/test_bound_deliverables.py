@@ -8,6 +8,42 @@ from praxile.trajectory import TrajectoryLogger
 pytestmark = [pytest.mark.resource, pytest.mark.runtime_resource, pytest.mark.sqlite_resource]
 
 
+@pytest.mark.parametrize('changed', [False, True])
+def test_frozen_preservation_contract_gates_completion(tmp_path, monkeypatch, changed):
+    import hashlib
+    path = tmp_path / 'memo.txt'
+    path.write_text('original')
+    request = {'schema_version': 'praxile.deliverable_contract.v3', 'source': 'user_request',
+               'outputs': [], 'state_equals': {},
+               'unchanged_files': {'memo.txt': hashlib.sha256(path.read_bytes()).hexdigest()}}
+    runtime = AgentRuntime(Config.load(tmp_path))
+    def loop(*args, **kwargs):
+        if changed:
+            path.write_text('modified')
+        return 'completed', 'model claims done'
+    monkeypatch.setattr(runtime, '_run_action_loop', loop)
+    result = runtime.run('Preserve memo', deliverable_contract=request, max_steps=1, use_experience=False)
+    assert result['result']['status'] == ('needs_human' if changed else 'completed')
+    evidence = result['deliverable_verification']['data']
+    assert evidence['unchanged_files'][0]['passed'] is (not changed)
+    assert evidence['contract_sha256'] == result['deliverable_contract_sha256']
+
+
+def test_preservation_cannot_bypass_sensitive_file_policy(tmp_path):
+    import hashlib
+    (tmp_path / '.env').write_text('private')
+    request = {'schema_version': 'praxile.deliverable_contract.v3', 'source': 'user_request',
+               'outputs': [], 'state_equals': {},
+               'unchanged_files': {'.env': hashlib.sha256(b'private').hexdigest()}}
+    runtime = AgentRuntime(Config.load(tmp_path))
+    try:
+        result = runtime.tools.execute({'type': 'check_deliverables', 'contract': request}, task_id='test', step=1)
+        assert result['status'] == 'blocked'
+        assert result['data'] == {}
+    finally:
+        runtime.tools.close()
+
+
 def contract():
     return {"schema_version": "praxile.deliverable_contract.v1", "source": "user_request",
             "outputs": [{"path": "report.json", "media_type": "application/json"}]}

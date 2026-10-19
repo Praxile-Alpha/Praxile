@@ -164,13 +164,15 @@ class ToolRegistry:
                         contract, sort_keys=True, separators=(",", ":")) != self._deliverable_contract_json:
                     return {"status": "blocked", "output": "Cannot replace the caller-bound deliverable contract",
                             "data": {}, "risk_level": "low"}
-                for item in validate_contract(contract):
-                    decision = self.safety.check_path(item["path"], write=False)
+                paths = [item["path"] for item in validate_contract(contract)]
+                paths.extend(contract.get("unchanged_files", {}))
+                for path in paths:
+                    decision = self.safety.check_path(path, write=False)
                     if not decision.allowed:
                         return {"status": "blocked", "output": decision.reason, "data": {}, "risk_level": decision.risk_level}
                 observed_state = None
                 observed_at = None
-                if contract["schema_version"] == "praxile.deliverable_contract.v2":
+                if contract.get("state_equals"):
                     # Never accept an action's claimed observation as evidence.
                     observed_at = utc_now()
                     try:

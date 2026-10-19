@@ -46,24 +46,34 @@ def validate_contract(value: object) -> list[dict]:
         raise EvalSchemaError("invalid deliverable contract fields")
     version = value.get("schema_version")
     fields = {"schema_version", "source", "outputs"}
-    if version == "praxile.deliverable_contract.v2":
+    if version in {"praxile.deliverable_contract.v2", "praxile.deliverable_contract.v3"}:
         fields.add("state_equals")
+    if version == "praxile.deliverable_contract.v3":
+        fields.add("unchanged_files")
     if set(value) != fields:
         raise EvalSchemaError("invalid deliverable contract fields")
-    if version not in {"praxile.deliverable_contract.v1", "praxile.deliverable_contract.v2"} or value["source"] != "user_request":
+    if version not in {"praxile.deliverable_contract.v1", "praxile.deliverable_contract.v2", "praxile.deliverable_contract.v3"} or value["source"] != "user_request":
         raise EvalSchemaError("deliverables require a versioned public user_request contract")
     states = value.get("state_equals", {})
-    if version == "praxile.deliverable_contract.v2":
-        if not isinstance(states, dict) or not 1 <= len(states) <= 20:
-            raise EvalSchemaError("v2 requires 1 to 20 state constraints")
+    if version in {"praxile.deliverable_contract.v2", "praxile.deliverable_contract.v3"}:
+        if not isinstance(states, dict) or not (0 if version.endswith("v3") else 1) <= len(states) <= 20:
+            raise EvalSchemaError("invalid number of state constraints")
         for key, expected in states.items():
             if (not isinstance(key, str) or len(key) > 120
                     or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,4}", key)
                     or type(expected) not in (str, bool, int)
                     or isinstance(expected, str) and len(expected) > 2000):
                 raise EvalSchemaError("invalid bounded state constraint")
+    unchanged = value.get("unchanged_files", {})
+    if version == "praxile.deliverable_contract.v3":
+        if not isinstance(unchanged, dict) or not 1 <= len(unchanged) <= 100:
+            raise EvalSchemaError("v3 requires 1 to 100 unchanged files")
+        for path, digest in unchanged.items():
+            OutputContract(path, "application/octet-stream")
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise EvalSchemaError("unchanged files require lowercase SHA-256")
     outputs = value["outputs"]
-    if not isinstance(outputs, list) or not (0 if states else 1) <= len(outputs) <= 100:
+    if not isinstance(outputs, list) or not (0 if states or unchanged else 1) <= len(outputs) <= 100:
         raise EvalSchemaError("deliverable contract requires outputs or v2 state constraints")
     seen = set()
     for item in outputs:
@@ -225,8 +235,9 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
     report = {"schema_version": "praxile.deliverable_check.v1", "passed": passed, "outputs": results,
             "official_evaluation": False, "semantic_quality_verified": False,
             "contract_sha256": hashlib.sha256(json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
-    if contract["schema_version"] == "praxile.deliverable_contract.v2":
-        state_check = check_conditions({"state_equals": contract["state_equals"]}, {"state": observed_state})
+    if contract["schema_version"] in {"praxile.deliverable_contract.v2", "praxile.deliverable_contract.v3"}:
+        state_check = check_conditions({"state_equals": contract["state_equals"]} if contract["state_equals"] else None,
+                                       {"state": observed_state})
         evidence = []
         for name in contract["state_equals"]:
             actual = observed_state
@@ -255,6 +266,34 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
         digest = hashlib.sha256(json.dumps(state_evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         report.update(schema_version="praxile.deliverable_check.v2", state_check=state_check,
                       state_evidence=state_evidence, state_evidence_sha256=digest,
-                      passed=passed and state_check["status"] == "matched",
+                      passed=passed and state_check["status"] in {"matched", "not_required"},
                       state_transitions_verified=False, contract_provenance_verified=False)
+    if contract["schema_version"] == "praxile.deliverable_contract.v3":
+        preserved = []
+        for name, expected in contract["unchanged_files"].items():
+            path = root / name
+            item = {"path": name, "expected_sha256": expected, "passed": False}
+            preserved.append(item)
+            if any(part.is_symlink() for part in (path, *path.parents) if part != root and part.is_relative_to(root)):
+                item["reason"] = "symlink_forbidden"
+                continue
+            try:
+                if not stat.S_ISREG(path.stat().st_mode):
+                    item["reason"] = "not_a_regular_file"
+                    continue
+                with path.open("rb") as handle:
+                    content = handle.read(max_bytes + 1)
+                if len(content) > max_bytes:
+                    item["reason"] = "size_limit"
+                    continue
+                actual = hashlib.sha256(content).hexdigest()
+                item.update(actual_sha256=actual, size_bytes=len(content), passed=actual == expected,
+                            reason="matched" if actual == expected else "content_changed")
+            except FileNotFoundError:
+                item["reason"] = "not_found"
+            except OSError as error:
+                item["reason"] = type(error).__name__
+        report.update(schema_version="praxile.deliverable_check.v3", unchanged_files=preserved,
+                      passed=report["passed"] and all(item["passed"] for item in preserved),
+                      preservation_scope="observed_final_bytes_only")
     return report
