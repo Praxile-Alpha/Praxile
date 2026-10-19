@@ -207,6 +207,7 @@
     "shard_by": "month"
   },
   "browser": {
+    "allow_interactions": false,
     "enabled": false,
     "adapter": "playwright",
     "dev_server_url": null,

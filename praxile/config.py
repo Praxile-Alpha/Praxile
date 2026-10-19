@@ -218,6 +218,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
         },
         "browser": {
             "enabled": False,
+            "allow_interactions": False,
             "adapter": "playwright",
             "dev_server_url": None,
             "artifact_dir": ".praxile/experience/artifacts",

@@ -69,7 +69,10 @@ class SafetyPolicy:
                 if not decision.allowed:
                     return decision
             return SafetyDecision(True)
-        if tool_name in {"browser_open", "browser_screenshot"}:
+        if tool_name in {"browser_navigate", "browser_click", "browser_fill", "browser_assert_text", "browser_capture"}:
+            if self.config.get("browser", "allow_interactions", default=False) is not True:
+                return SafetyDecision(False, "browser interactions are disabled", "medium")
+        if tool_name in {"browser_open", "browser_screenshot", "browser_navigate"}:
             return self._check_browser_url(str(args.get("url", "")))
         return SafetyDecision(True)
 

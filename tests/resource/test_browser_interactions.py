@@ -1,0 +1,57 @@
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import pytest
+
+from praxile.browser import BrowserEnv
+from praxile.config import Config, ProjectPaths, default_config
+
+pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.browser_resource,
+              pytest.mark.timeout(60)]
+
+
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_BROWSER"), reason="explicit Chromium integration opt-in required")
+def test_real_browser_session_interaction_and_capture(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "https://example.com/")
+                self.end_headers()
+                return
+            body = b'''<input id="name"><button onclick="document.querySelector('#result').textContent=document.querySelector('#name').value">Save</button><output id="result"></output>'''
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
+    config.data["browser"].update(enabled=True, allow_interactions=True, timeout_ms=5000)
+    try:
+        with BrowserEnv(config) as browser:
+            assert browser.interact("navigate", url=f"http://127.0.0.1:{server.server_port}").status == "success"
+            assert browser.interact("fill", selector="#name", value="Saved state").status == "success"
+            assert browser.interact("click", selector="button").status == "success"
+            assert browser.interact("assert_text", selector="#result", value="Saved state").status == "success"
+            shot = browser.interact("capture")
+            assert shot.status == "success"
+            image = tmp_path / shot.data["artifact"]
+            assert image.read_bytes().startswith(b"\x89PNG")
+            assert not shot.data["visual_quality_verified"]
+            assert browser.interact("navigate", url="https://example.com").status == "blocked"
+            redirected = browser.interact("navigate", url=f"http://127.0.0.1:{server.server_port}/redirect")
+            assert redirected.status in {"blocked", "failure"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert not thread.is_alive()

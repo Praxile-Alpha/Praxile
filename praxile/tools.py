@@ -48,6 +48,11 @@ class ToolRegistry:
             {"name": "batch", "description": "Run up to 8 read-only actions concurrently."},
             {"name": "browser_open", "description": "Open a URL with the optional Playwright browser adapter."},
             {"name": "browser_screenshot", "description": "Capture a screenshot artifact with the optional Playwright adapter."},
+            {"name": "browser_navigate", "description": "Navigate the opt-in persistent browser session to an allowed URL."},
+            {"name": "browser_click", "description": "Click a selector in the current opt-in browser session."},
+            {"name": "browser_fill", "description": "Fill a selector in the current opt-in browser session."},
+            {"name": "browser_assert_text", "description": "Assert exact visible element text in the current browser session."},
+            {"name": "browser_capture", "description": "Capture current session state without reloading; not a visual quality judgment."},
             {"name": "edit_file", "description": "Write a full project-relative file with backup."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
@@ -106,6 +111,9 @@ class ToolRegistry:
             return self.browser.open(str(action.get("url", ""))).to_dict()
         if action_type == "browser_screenshot":
             return self.browser.screenshot(str(action.get("url", "")), name=action.get("name")).to_dict()
+        if action_type in {"browser_navigate", "browser_click", "browser_fill", "browser_assert_text", "browser_capture"}:
+            return self.browser.interact(action_type.removeprefix("browser_"), url=str(action.get("url", "")),
+                selector=str(action.get("selector", "")), value=str(action.get("value", ""))).to_dict()
         if action_type == "finish":
             return {"status": "success", "output": action.get("summary", "finished"), "data": {}, "risk_level": "low"}
         return {"status": "failure", "output": f"unknown action type: {action_type}", "data": {}, "risk_level": "low"}

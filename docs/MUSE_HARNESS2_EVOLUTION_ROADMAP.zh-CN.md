@@ -147,6 +147,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+增量进展（2026-10-19）：新增默认关闭的任务内浏览器会话，navigate/click/fill/精确文本断言/当前状态截图已接入 runtime action 工具链；请求白名单、Socket/Service Worker 限制、错误脱敏与生命周期清理已覆盖。8 项会话单元测试、1 项真实 Chromium 集成测试通过。下载、接管、完整状态断言与恢复未完成，浏览器总项仍不勾选；详见 `BROWSER_SESSIONS.zh-CN.md`。
+
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。
