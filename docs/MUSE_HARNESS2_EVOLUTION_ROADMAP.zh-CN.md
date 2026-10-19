@@ -96,6 +96,7 @@ R0 是首个实现阶段，不沿用旧 P0/P1 编号，避免与已完成的 V2 
 - [ ] 任务输入和最终评分材料分别下载/存储/挂载；不把含 rubric 的原始数据行直接传给执行器。
 - [ ] 旧 SWE-bench task 经显式兼容映射继续运行；旧 manifest 的 digest 和 resume 语义不变。
 - [ ] doctor 输出缺失依赖、容器架构、磁盘、执行模型和评审模型状态；Linux 环境与 Mac Docker Desktop 分别给出实测支持矩阵。
+  自检增补：在线查询 daemon OS/架构，主机磁盘容量只读观测；离线未查询 daemon 时不宣称 infrastructure_available。10 项测试通过，本机离线查询已验证；Docker VM 磁盘、模型/judge 连通性和 Linux/Mac 完整实测矩阵仍未完成。
 
 代码落点：在 `eval` 下增加通用协议与插件，不先大改 legacy runtime；通过桥接保留现有 `eval/v2`。benchmark 可选依赖使用独立环境，避免上游 Python/Harbor 版本拖动基础安装。
 

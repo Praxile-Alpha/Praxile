@@ -237,7 +237,7 @@ def cmd_demo(args: argparse.Namespace, project_root: Path) -> int:
 def cmd_doctor(args: argparse.Namespace, project_root: Path) -> int:
     if getattr(args, "benchmark", None):
         from ..services.benchmark_health import inspect_benchmark
-        report = inspect_benchmark(args.benchmark, online=args.online)
+        report = inspect_benchmark(args.benchmark, online=args.online, workspace=project_root)
         print(json.dumps(report, indent=2))
         return 0 if report["infrastructure_available"] else 1
     config, store = load(project_root)

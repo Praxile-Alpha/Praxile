@@ -208,7 +208,9 @@ praxile doctor --benchmark jobbench --online
 
 分别在隔离 Harbor 0.18.0 / 0.22.0 环境运行，不需要初始化项目，不创建 `.praxile/`。检查固定 Harbor 版本、插件导入、Docker CLI；`--online` 在这个模式下只探测 Docker daemon，不调用模型或消费额度。插件导入 15 秒、daemon 查询 10 秒超时。Key 仅检查环境变量是否存在，不输出值，也不证明容器能访问 Key 或套餐支持该 endpoint。
 
-`infrastructure_available` 和退出码只表达已检查的基础设施是否缺失；`execution_verified` 始终为 false。模型、judge、任务镜像架构兼容仍需真实验收；Security 明确 unsupported。5 项自检测试通过，实际 WorkBuddy 环境的 Harbor、官方插件、Docker 查询通过，模型凭据在当前进程未配置。
+`infrastructure_available` 仅在 Harbor、插件导入、Docker CLI、在线 daemon 与主机磁盘访问都检查通过时为 true；离线 daemon 未检查时不会声称基础设施已可用。`execution_verified` 始终为 false。模型、judge、任务镜像架构兼容仍需真实验收；Security 明确 unsupported。
+
+`--online` 通过有超时的 Docker JSON 查询观察 daemon OS/架构；不以 macOS ARM64 主机架构推断 Linux 容器架构。`disk_access` 只报告项目所在主机文件系统的总量/剩余字节，不创建目录，也不代表 Docker VM 内磁盘可用量。任务最低空间尚未知，required_bytes 保持 null，不臆造通过阈值。10 项自检测试通过；本轮主虚拟环境的离线实测正确报告 Harbor 未安装、daemon 未检查及凭据未配置，未调用模型。此前独立 WorkBuddy 环境的 Harbor/官方插件/Docker 查询记录不等于本轮真实任务验收。
 
 ### 导入命令
 
