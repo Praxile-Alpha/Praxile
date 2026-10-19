@@ -63,6 +63,30 @@ def test_runtime_tools_share_state_and_assertions(session):
     assert context.closed
 
 
+def test_observation_never_starts_browser_and_strips_url_secrets(tmp_path):
+    config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
+    env = BrowserEnv(config, sync_playwright_factory=lambda: pytest.fail("must not launch"))
+    assert env.observe_state() == {"session_active": False}
+    env._browser_instance = SimpleNamespace(is_connected=lambda: True, version="123.4", close=lambda: None)
+    env._session_page = SimpleNamespace(is_closed=lambda: False,
+        url="https://user:password@example.com/private/token?secret=key#fragment")
+    assert env.observe_state() == {"session_active": True, "chromium_version": "123.4",
+                                   "origin": "https://example.com:443"}
+    env._session_page.url = "http://[::1]:8000/path"
+    assert env.observe_state()["origin"] == "http://[::1]:8000"
+    env._session_page.is_closed = lambda: True
+    assert env.observe_state() == {"session_active": False, "chromium_version": "123.4"}
+    env.close()
+
+
+def test_observation_error_remains_unknown(session):
+    _, env, _ = session
+    def disconnected():
+        raise RuntimeError("private transport detail")
+    env._browser_instance.is_connected = disconnected
+    assert env.observe_state() == {}
+
+
 def test_requires_optin_session_and_explicit_hosts(session):
     config, env, _ = session
     assert env.interact("click", selector="button").status == "blocked"

@@ -25,6 +25,34 @@ class BrowserEnv:
         self._session_context: Any | None = None
         self._session_page: Any | None = None
 
+    def observe_state(self) -> dict[str, Any]:
+        """Inspect existing handles without launching or navigating a browser."""
+        result: dict[str, Any] = {"session_active": False}
+        browser = self._browser_instance
+        if browser is None:
+            return result
+        try:
+            if not browser.is_connected():
+                return result
+            version = browser.version
+            if isinstance(version, str) and 0 < len(version) <= 100:
+                result["chromium_version"] = version
+            page = self._session_page
+            if page is None or page.is_closed():
+                return result
+            result["session_active"] = True
+            parsed = urlparse(page.url)
+            if parsed.scheme in {"http", "https"} and parsed.hostname:
+                host = parsed.hostname
+                if ":" in host:
+                    host = f"[{host}]"
+                port = parsed.port or (443 if parsed.scheme == "https" else 80)
+                result["origin"] = f"{parsed.scheme}://{host}:{port}"
+        except Exception:
+            # Unknown state must not be reported as a matching observation.
+            return {}
+        return result
+
     def interact(self, operation: str, *, url: str = "", selector: str = "", value: str = "") -> Observation:
         if self.config.get("browser", "allow_interactions", default=False) is not True:
             return Observation("blocked", "browser interactions require browser.allow_interactions=true", risk_level="medium")

@@ -39,6 +39,10 @@ def test_real_browser_session_interaction_and_capture(tmp_path):
     try:
         with BrowserEnv(config) as browser:
             assert browser.interact("navigate", url=f"http://127.0.0.1:{server.server_port}").status == "success"
+            state = browser.observe_state()
+            assert state["session_active"] is True
+            assert state["origin"] == f"http://127.0.0.1:{server.server_port}"
+            assert state["chromium_version"]
             assert browser.interact("fill", selector="#name", value="Saved state").status == "success"
             assert browser.interact("click", selector="button").status == "success"
             assert browser.interact("assert_text", selector="#result", value="Saved state").status == "success"

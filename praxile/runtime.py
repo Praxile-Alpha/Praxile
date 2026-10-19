@@ -108,7 +108,7 @@ class AgentRuntime:
             analysis_rules = [item for item in retrieved if item.get("kind") == "rule"]
             analysis = self.analyzer.analyze(task, analysis_rules)
             logger.set_task_analysis(analysis)
-            activation_observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+            activation_observations = self._activation_observations(snapshot)
             logger.data["activation_observations"] = activation_observations
             prompt_context, representation_decisions = RuntimeExperienceContext(self.config, self.store).plan(
                 task, logger.task_id, analysis, retrieved, observations=activation_observations
@@ -240,6 +240,17 @@ class AgentRuntime:
         finally:
             self.tools.close()
 
+    def _activation_observations(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        state = dict(snapshot)
+        versions = observe_tool_versions()
+        browser = getattr(self.tools, "browser", None)
+        if browser is not None:
+            observed = browser.observe_state()
+            state["browser"] = {key: value for key, value in observed.items() if key != "chromium_version"}
+            if "chromium_version" in observed:
+                versions["chromium"] = observed["chromium_version"]
+        return {"state": state, "tool_versions": versions}
+
     def _resume_run(
         self,
         task_id: str,
@@ -271,7 +282,7 @@ class AgentRuntime:
         if any(item.get("activation_requirements") is not None for item in retrieved):
             snapshot = self.project.snapshot(refresh=True)
             snapshot["interop"] = interop_policy(self.config)
-            observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+            observations = self._activation_observations(snapshot)
             checks = [{"path": item.get("path"), **check_conditions(
                 item.get("activation_requirements"), observations)} for item in retrieved]
             rejected = any(check["status"] == "abstained" for check in checks)
@@ -824,7 +835,7 @@ class AgentRuntime:
                 if conditional:
                     snapshot = self.project.snapshot(refresh=True)
                     snapshot["interop"] = interop_policy(self.config)
-                    observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+                    observations = self._activation_observations(snapshot)
                     checks = [{"path": item.get("path"), **check_conditions(
                         item["activation_requirements"], observations)} for item in conditional]
                     rejected = any(check["status"] == "abstained" for check in checks)
