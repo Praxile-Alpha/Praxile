@@ -1,0 +1,593 @@
+{
+  "schema_version": "praxile.public_seeded_docx_execution.v1",
+  "date": "2026-10-20",
+  "independent_task_count": 1,
+  "pair_count": 3,
+  "official_evaluation": "not_run",
+  "content_preservation_verified": false,
+  "promotion_eligible": false,
+  "cost_scope": "execution_only_excludes_design_search_judge",
+  "total_cost_usd": null,
+  "container_cleanup_observed": true,
+  "pairs": [
+    {
+      "candidate": "first",
+      "manifest": {
+        "schema_version": "praxile.seeded_docx_pair.v1",
+        "scope": "development_not_official_benchmark",
+        "image": "sha256:ab091d47aad612a3d2d6be3ec102e8870e0d44a1d09de7b9cab5740c7601e55c",
+        "wheel_sha256": "b2c6637462a9ea79a2d4a567b15932e4e7dd2764a8ab81111e51ba405db661bc",
+        "dependency_sha256": "553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b",
+        "seed_sha256": {
+          "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+          "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4"
+        },
+        "candidate_file_sha256": "c791e1e57fc44cbd55fc690eb8d0e5459db9ffa7d576868ca7d80e19c9cf1f51",
+        "instruction_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+        "model": "MiniMax-M3.1-Flash",
+        "model_request_options": {
+          "reasoning_effort": "low"
+        },
+        "max_steps_per_arm": 12,
+        "timeout_seconds_per_arm": 600,
+        "order": [
+          "baseline",
+          "candidate"
+        ],
+        "public_contract": {
+          "schema_version": "praxile.deliverable_contract.v1",
+          "source": "user_request",
+          "outputs": [
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "structure": {
+                "max_pages": 1
+              }
+            }
+          ]
+        },
+        "independent_checks": [
+          "page_count",
+          "memo_bytes_unchanged"
+        ],
+        "semantic_content_preservation": "unverified",
+        "promotion_eligible": false,
+        "source_commit": "0b9911c",
+        "build_note": "local wheel includes existing user README edits; no code edits at build"
+      },
+      "source_manifest_sha256": "25887c95504e233035582e478c2c0d63ecd59d831d8edbe1a104c17f69ec6d06",
+      "arms": [
+        {
+          "arm": "baseline",
+          "runtime_status": "needs_human",
+          "model_calls": 12,
+          "input_tokens": 103462,
+          "output_tokens": 6134,
+          "tool_calls": 11,
+          "worker_seconds": 41.12046558299335,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "baseline",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 1,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "3588ee4c7161c016b09143c1f6fae550be5ae668404f81940ab3d228d0b9b616"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "b0ffaef609974c371323d96ac3406a041b92f310168caf1670c726d84269a092",
+            "praxile-execution.json": "d37b8b168bcb75942c3829f28018b439f7d0b4d141ef01ff0d3f50cf8345b857",
+            "praxile-broker-usage.json": "27fdc321b5ca20630ef017629a74f4453d478dec44641e407cea872d0fc7fcea"
+          },
+          "experience_mode": "fresh_disabled",
+          "development_context": null
+        },
+        {
+          "arm": "candidate",
+          "runtime_status": "completed",
+          "model_calls": 10,
+          "input_tokens": 87138,
+          "output_tokens": 3226,
+          "tool_calls": 10,
+          "worker_seconds": 31.109688750002533,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "candidate",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 1,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "8fbfb30529ffb05e88cde200831acb33b93ed37de28cc9066e393562e820d62b"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "3d2242d19522df7e43bbdba59b9fbb9738ebd4502a76325a66991484daedb600",
+            "praxile-execution.json": "d1097c8641dfb8d820a98a9fc1f5cc6fef2b251956fefdfbfb76c8036be91675",
+            "praxile-broker-usage.json": "1789ba7f895428b32178e0a1b2c8fad694d89152bd79d5d1ef3d711f156db184"
+          },
+          "experience_mode": "development_candidate",
+          "development_context": {
+            "schema_version": "praxile.native_development_context.v1",
+            "track": "development",
+            "candidate_digest": "sha256:288617721ba5600a3dbb31bc54f1e98dc23fa0301de4c62596706e110af5c9ff",
+            "task_body_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+            "activation": {
+              "schema_version": "praxile.context_activation.v1",
+              "task_id": "native-759fc24ba1b5e4d9",
+              "candidate_id": "docx-repair-typed-actions-001.first",
+              "status": "activated",
+              "activated": true,
+              "repository": "jobbench/easy-technical-writers",
+              "repository_matched": true,
+              "matched_signals": [
+                {
+                  "signal": "one-page checklist",
+                  "score": 1.0,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "checklist",
+                    "one",
+                    "page"
+                  ]
+                },
+                {
+                  "signal": "DOCX page limit",
+                  "score": 0.6667,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "docx",
+                    "page"
+                  ]
+                }
+              ],
+              "matched_anti_scopes": [],
+              "signal_threshold": 0.6,
+              "anti_scope_threshold": 0.75,
+              "reasons": [
+                "candidate scope and semantic task signals matched"
+              ],
+              "evidence_basis": [
+                "task.instruction",
+                "task.metadata",
+                "task.repository.repo"
+              ]
+            },
+            "promotion_eligible": false,
+            "permission_granted": false,
+            "injected": true
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "second",
+      "manifest": {
+        "schema_version": "praxile.seeded_docx_pair.v1",
+        "scope": "development_not_official_benchmark",
+        "image": "sha256:ab091d47aad612a3d2d6be3ec102e8870e0d44a1d09de7b9cab5740c7601e55c",
+        "wheel_sha256": "b2c6637462a9ea79a2d4a567b15932e4e7dd2764a8ab81111e51ba405db661bc",
+        "dependency_sha256": "553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b",
+        "seed_sha256": {
+          "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+          "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4"
+        },
+        "candidate_file_sha256": "a234bb87c49bf62887f6c5e511c86c99031efe21ecfc476a2b4dc27d8f8892cc",
+        "instruction_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+        "model": "MiniMax-M3.1-Flash",
+        "model_request_options": {
+          "reasoning_effort": "low"
+        },
+        "max_steps_per_arm": 12,
+        "timeout_seconds_per_arm": 600,
+        "order": [
+          "baseline",
+          "candidate"
+        ],
+        "public_contract": {
+          "schema_version": "praxile.deliverable_contract.v1",
+          "source": "user_request",
+          "outputs": [
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "structure": {
+                "max_pages": 1
+              }
+            }
+          ]
+        },
+        "independent_checks": [
+          "page_count",
+          "memo_bytes_unchanged"
+        ],
+        "semantic_content_preservation": "unverified",
+        "promotion_eligible": false,
+        "source_commit": "0b9911c",
+        "build_note": "local wheel includes existing user README edits; no code edits at build"
+      },
+      "source_manifest_sha256": "d063932b9ee7f85f54b82c33b9b6a9908cee279e986b6a51dc25a6194bd193db",
+      "arms": [
+        {
+          "arm": "baseline",
+          "runtime_status": "completed",
+          "model_calls": 11,
+          "input_tokens": 83148,
+          "output_tokens": 3005,
+          "tool_calls": 10,
+          "worker_seconds": 29.05794624995906,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "baseline",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 1,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "3f8894c9e82b2c29e95a124814acef4f230e5b54a476aad55de6f2038a746a50"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "e3e9c0e9af3114a87dc1d0a1e10a209439b74e1a1c49740a77503301cd97528d",
+            "praxile-execution.json": "b92ab118a75497d6a92a7cd3a59e6d92205e9b18f3f52c38e3565f6bd8b1e3c1",
+            "praxile-broker-usage.json": "08804572e580693ec5726400bf630c8df42191aa15683dea8d05cd03825b6f44"
+          },
+          "experience_mode": "fresh_disabled",
+          "development_context": null
+        },
+        {
+          "arm": "candidate",
+          "runtime_status": "completed",
+          "model_calls": 6,
+          "input_tokens": 44413,
+          "output_tokens": 2373,
+          "tool_calls": 6,
+          "worker_seconds": 21.791912875021808,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "candidate",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 1,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "1233bd89cbd482e847eeed1f5ffd21b4bf68c5730e62750054039d6a8a818139"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "bb1c0b536432d750b42c474702191593b041c9b7f2582121fc9f42d1a79eee8f",
+            "praxile-execution.json": "beb9c9b4d467a4bf6d919449f999d9215b0d3b3aa1677d815e1e66c298998dfb",
+            "praxile-broker-usage.json": "4d0dd2a3e68ab6dff86f8a425891f9453d982635e8d60a2840b03283a1e2531f"
+          },
+          "experience_mode": "development_candidate",
+          "development_context": {
+            "schema_version": "praxile.native_development_context.v1",
+            "track": "development",
+            "candidate_digest": "sha256:61f6dff8f1f9c2258435122f0a70c30c06e0b4270f9525bed4c54b5b8cb792da",
+            "task_body_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+            "activation": {
+              "schema_version": "praxile.context_activation.v1",
+              "task_id": "native-759fc24ba1b5e4d9",
+              "candidate_id": "docx-repair-typed-actions-001.second",
+              "status": "activated",
+              "activated": true,
+              "repository": "jobbench/easy-technical-writers",
+              "repository_matched": true,
+              "matched_signals": [
+                {
+                  "signal": "one-page checklist",
+                  "score": 1.0,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "checklist",
+                    "one",
+                    "page"
+                  ]
+                },
+                {
+                  "signal": "DOCX page limit",
+                  "score": 0.6667,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "docx",
+                    "page"
+                  ]
+                }
+              ],
+              "matched_anti_scopes": [],
+              "signal_threshold": 0.6,
+              "anti_scope_threshold": 0.75,
+              "reasons": [
+                "candidate scope and semantic task signals matched"
+              ],
+              "evidence_basis": [
+                "task.instruction",
+                "task.metadata",
+                "task.repository.repo"
+              ]
+            },
+            "promotion_eligible": false,
+            "permission_granted": false,
+            "injected": true
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "composition",
+      "manifest": {
+        "schema_version": "praxile.seeded_docx_pair.v1",
+        "scope": "development_not_official_benchmark",
+        "image": "sha256:ab091d47aad612a3d2d6be3ec102e8870e0d44a1d09de7b9cab5740c7601e55c",
+        "wheel_sha256": "b2c6637462a9ea79a2d4a567b15932e4e7dd2764a8ab81111e51ba405db661bc",
+        "dependency_sha256": "553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b",
+        "seed_sha256": {
+          "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+          "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4"
+        },
+        "candidate_file_sha256": "c7e9653ac78a19fcb50fce6a3d8f3da69fba08a6c555d119ea9f6e7d840b12ed",
+        "instruction_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+        "model": "MiniMax-M3.1-Flash",
+        "model_request_options": {
+          "reasoning_effort": "low"
+        },
+        "max_steps_per_arm": 12,
+        "timeout_seconds_per_arm": 600,
+        "order": [
+          "baseline",
+          "candidate"
+        ],
+        "public_contract": {
+          "schema_version": "praxile.deliverable_contract.v1",
+          "source": "user_request",
+          "outputs": [
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+              "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "structure": {
+                "max_pages": 1
+              }
+            }
+          ]
+        },
+        "independent_checks": [
+          "page_count",
+          "memo_bytes_unchanged"
+        ],
+        "semantic_content_preservation": "unverified",
+        "promotion_eligible": false,
+        "source_commit": "0b9911c",
+        "build_note": "local wheel includes existing user README edits; no code edits at build"
+      },
+      "source_manifest_sha256": "91e205959a4a6ed46792b6270299ce48ac8da35d699e145a7af6a92f3b9fe5d2",
+      "arms": [
+        {
+          "arm": "baseline",
+          "runtime_status": "needs_human",
+          "model_calls": 6,
+          "input_tokens": 37645,
+          "output_tokens": 3805,
+          "tool_calls": 2,
+          "worker_seconds": 26.701433957961854,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "baseline",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "815d0739fb98d11f33cee48a08265d7bda91ed6432c7ebb2b37a0decd0ea78c8",
+            "praxile-execution.json": "a4db16f64d26eb2b088a735701722b4051c71da17d1f2c3682fc8ea096792f53",
+            "praxile-broker-usage.json": "f2df03ef7310ef5096f74468367913b6ecdbd48d0bc511caf3ba3d10586190db"
+          },
+          "experience_mode": "fresh_disabled",
+          "development_context": null
+        },
+        {
+          "arm": "candidate",
+          "runtime_status": "completed",
+          "model_calls": 10,
+          "input_tokens": 76189,
+          "output_tokens": 2914,
+          "tool_calls": 9,
+          "worker_seconds": 28.63818974996684,
+          "broker_revoked": true,
+          "broker_failed_calls": 0,
+          "broker_inflight_calls": 0,
+          "worker_environment_sha256": "7eb2cb6b329bea18a60938e1e7a21e80cb16bb82eb027391902b168508ac7b97",
+          "checks": {
+            "arm": "candidate",
+            "status": "executor_returned",
+            "scope": "seeded_development_repair",
+            "promotion_eligible": false,
+            "official_evaluation": "not_run",
+            "before": {
+              "pages": 5,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "after": {
+              "pages": 1,
+              "memo_unchanged": true,
+              "content_preservation_verified": false,
+              "official_evaluation": "not_run"
+            },
+            "artifacts": {
+              "FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+              "FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx": "106c03c18b96e7629f5f4b677222c77ab91a795f571532e7a415d7b5debefe1d"
+            },
+            "environment_stop_returned": true,
+            "seed_unchanged": true
+          },
+          "source_sha256": {
+            "praxile-result.json": "f9a459a54ffa3a1231d46d53dcbe1b87d6079462df9096c6fddb4e0ec1a491c6",
+            "praxile-execution.json": "f6ddc30e4568035679b622afc9cb1d3444a703c5042e617a8bf081d19c9b2bcf",
+            "praxile-broker-usage.json": "68ba83337b9dae6004f981cd84e3539386f35e3d5a41c720e6511722c10170c7"
+          },
+          "experience_mode": "development_candidate",
+          "development_context": {
+            "schema_version": "praxile.native_development_context.v1",
+            "track": "development",
+            "candidate_digest": "sha256:5df81ae95a8063220f12671b07c8746bf5c2c3d147adb85b1b9bb56d5dd09cd5",
+            "task_body_sha256": "759fc24ba1b5e4d9f41e5e8bc9a05e0816324d60b423c922912e18d98eb09088",
+            "activation": {
+              "schema_version": "praxile.context_activation.v1",
+              "task_id": "native-759fc24ba1b5e4d9",
+              "candidate_id": "docx-repair-typed-actions-001.composition",
+              "status": "activated",
+              "activated": true,
+              "repository": "jobbench/easy-technical-writers",
+              "repository_matched": true,
+              "matched_signals": [
+                {
+                  "signal": "one-page checklist",
+                  "score": 1.0,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "checklist",
+                    "one",
+                    "page"
+                  ]
+                },
+                {
+                  "signal": "DOCX page limit",
+                  "score": 0.6667,
+                  "exact_phrase": false,
+                  "matched_terms": [
+                    "docx",
+                    "page"
+                  ]
+                }
+              ],
+              "matched_anti_scopes": [],
+              "signal_threshold": 0.6,
+              "anti_scope_threshold": 0.75,
+              "reasons": [
+                "candidate scope and semantic task signals matched"
+              ],
+              "evidence_basis": [
+                "task.instruction",
+                "task.metadata",
+                "task.repository.repo"
+              ]
+            },
+            "promotion_eligible": false,
+            "permission_granted": false,
+            "injected": true
+          }
+        }
+      ]
+    }
+  ]
+}
