@@ -390,6 +390,10 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   审查发现任意页边距、未实现估页和无证据达标保证等能力错配，未执行/未晋升。
   下一步需执行器 capability 约束与独立内容保持验证，不能据此勾选质量验收。
   证据见 results/jobbench-candidate-design-20261019.json。
+  能力约束增补：design-context 可传原生 executor action profile，提示词含实际
+  动作字段和固定 DOCX 约束，三个草案均须给出通过注册表校验的动作样例；
+  候选携带 profile 摘要，A/B 拒绝执行器不匹配并复核。未声称正文语义与样例
+  一致或工具已可用；能力感知后组合当前显式拒绝而不丢约束，真实复验未完成。
   两阶段组合增补：Python API 支持两组开发 probe 后调用组合器，模型输入只
   含父候选与白名单任务 verdict；组合/弃权先冻结，恢复不重复生成，组合独立
   重跑。fixture 验证执行、恢复和弃权；CLI 已接 compose-after-probes 与

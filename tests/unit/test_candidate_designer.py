@@ -68,6 +68,22 @@ def test_unclosed_reasoning_never_becomes_a_candidate():
     assert kwargs["logger"].data["development_candidate_designs"][0]["response_decode"]["reason"] == "unclosed_reasoning"
 
 
+def test_capability_profile_is_in_prompt_and_schema_checked_on_each_draft():
+    value = proposal()
+    for draft in [*value["candidates"], value["composition"]]:
+        draft["action_examples"] = [{"type": "check_document_layout", "path": "out.docx", "max_pages": 1}]
+    kwargs, calls = inputs({"content": json.dumps(value)})
+    profile = {"schema_version": "praxile.executor_action_profile.v1", "executor": "praxile", "version": "1",
+               "actions": ["check_document_layout"]}
+    result = design_development_candidates(**kwargs, executor_profile=profile)
+    assert "executor_capability" in json.loads(calls[0][0][1]["content"])
+    assert result["composition"]["context_item"]["executor_requirements"]["schema_validated"] is True
+    value["composition"]["action_examples"][0]["type"] = "estimate_pages"
+    kwargs, _ = inputs({"content": json.dumps(value)})
+    with pytest.raises(EvalSchemaError, match="not declared"):
+        design_development_candidates(**kwargs, executor_profile=profile)
+
+
 @pytest.mark.parametrize("failure", ["unknown_ref", "duplicate", "extra_field", "truncated", "bad_json"])
 def test_invalid_drafts_never_become_candidates_and_usage_is_kept(failure):
     value = proposal()

@@ -60,6 +60,14 @@ class ControlledABExperiment:
     ) -> dict[str, Any]:
         if baseline_policy.context:
             raise EvalSchemaError("controlled P0 baseline policy must have empty context")
+        requirements = candidate.context_item.get("executor_requirements")
+        if requirements is not None:
+            if not isinstance(requirements, Mapping) or requirements.get("executor") != adapter.name:
+                raise EvalSchemaError("candidate executor requirements do not match the selected adapter")
+            from .executor_profile import profile_context, validate_action_examples
+            checked = validate_action_examples(requirements.get("action_examples"), profile_context(requirements.get("profile")))
+            if checked != requirements:
+                raise EvalSchemaError("candidate executor requirement validation or digest changed")
         if development_only and capability_protocol is not None:
             raise EvalSchemaError("development-only experiments cannot use a held-out capability protocol")
         if capability_protocol is not None:

@@ -100,6 +100,24 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 
 ### 从轨迹生成文件
 
+可选 `--executor-profile native-profile.json` 为生成器提供版本化原生动作范围：
+
+```json
+{"schema_version":"praxile.executor_action_profile.v1","executor":"praxile","version":"1","actions":["read_document","revise_docx","check_document_layout"]}
+```
+
+该模式要求每个候选及组合附带 1..8 个 action_examples，按实际 ActionSchemaRegistry
+及 DOCX spec 校验；固定 standard/compact 版式约束进入提示词，不接受任意页边距、
+字体字段或不存在的估页工具。profile 和接口摘要进入设计 manifest 与候选。
+样例仅是具体 JSON，不会执行；其中摘要/路径不能代替运行时重新观察。
+
+A/B 入口拒绝 executor 不匹配并重新校验 profile 摘要和样例。当前仅支持原生
+praxile profile，不能把它标成 mini-SWE-agent 后直接运行；batch 暂不支持。
+probe 后组合器尚不能保留这些约束，因此显式拒绝带 executor_requirements 的
+父候选，而不是悄悄丢掉要求。普通未绑定 profile 的候选保留原兼容行为。
+接口匹配不是环境可用性、权限或语义证明：模型正文仍可能出现与合法样例不一致
+的建议，不能据此宣称草案整体可执行。工具健康检测、能力感知组合与真实复验仍缺。
+
 ```sh
 praxile eval design-context prior-development.first \
   --design-id focused-design-001 --arm baseline --scope applies-to.json \

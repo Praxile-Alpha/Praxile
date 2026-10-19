@@ -6,11 +6,12 @@ import re
 from ...action_protocol import decode_action
 from .candidate import ContextCandidate
 from .schema import EvalSchemaError, canonical_json
+from .executor_profile import profile_context, validate_action_examples
 
 
 def design_development_candidates(*, evidence, development_task_ids, heldout_task_ids,
                                   applies_to, design_id, router, logger, private=False,
-                                  cancel_requested=None):
+                                  cancel_requested=None, executor_profile=None):
     """Consume explicitly supplied public development observations, not raw evaluator reports."""
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", design_id):
         raise EvalSchemaError("unsafe design ID")
@@ -40,6 +41,9 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 or any(not isinstance(value, str) or not 1 <= len(value) <= 200 for value in values)):
             raise EvalSchemaError(f"invalid explicit scope: {name}")
     payload = {"evidence": evidence, "allowed_refs": list(refs), "scope": applies_to}
+    capability = profile_context(executor_profile) if executor_profile is not None else None
+    if capability is not None:
+        payload["executor_capability"] = capability
     serialized = canonical_json(payload)
     record = {"design_id": design_id, "status": "requested",
               "input_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
@@ -57,7 +61,11 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 "{content: string, hypothesis: string, evidence_refs: [ref]}}. "
                 "The two candidates must be distinct bounded interventions; the composition must "
                 "explain their interaction in its hypothesis. Cite only allowed_refs. "
-                "All three are untested drafts; composition cannot inherit a parent's success.")},
+                "All three are untested drafts; composition cannot inherit a parent's success. "
+                "If executor_capability is supplied, each draft must additionally include action_examples: "
+                "1..8 concrete action JSON objects matching only its declared interfaces and constraints. "
+                "Do not invent layout settings, estimators, tools or permissions. Examples are never executed; "
+                "runtime observations such as current file hashes must be refreshed before any real use.")},
             {"role": "user", "content": serialized},
         ], purpose="proposal_composer", private=private, high_risk=False,
             max_tokens=4000, timeout=60, temperature=0, cancel_requested=cancel_requested)
@@ -79,7 +87,8 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             raise EvalSchemaError("design must propose exactly two candidates and one composition")
         candidates = []
         for name, draft in zip(("first", "second", "composition"), [*result["candidates"], result["composition"]]):
-            if not isinstance(draft, dict) or set(draft) != {"content", "hypothesis", "evidence_refs"}:
+            fields = {"content", "hypothesis", "evidence_refs"} | ({"action_examples"} if capability is not None else set())
+            if not isinstance(draft, dict) or set(draft) != fields:
                 raise EvalSchemaError("invalid candidate design fields")
             if any(not isinstance(draft[key], str) or not draft[key].strip()
                    or len(draft[key]) > limit for key, limit in (("content", 6000), ("hypothesis", 2000))):
@@ -88,9 +97,12 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             if (not isinstance(cited, list) or not 1 <= len(cited) <= len(refs)
                     or any(not isinstance(ref, str) or ref not in refs for ref in cited)):
                 raise EvalSchemaError("candidate must cite only supplied evidence")
+            context = {"content": draft["content"]}
+            if capability is not None:
+                context["executor_requirements"] = validate_action_examples(draft["action_examples"], capability)
             candidates.append(ContextCandidate(candidate_id=f"{design_id}.{name}", version="1",
                 title=f"Development {name}", candidate_type="context_policy",
-                context_item={"content": draft["content"]}, confidence=0.0,
+                context_item=context, confidence=0.0,
                 evidence_refs=tuple(dict.fromkeys(cited)), source_task_ids=tuple(sorted({refs[ref] for ref in cited})),
                 expected_effect={"hypothesis": draft["hypothesis"]},
                 applies_to=json.loads(canonical_json(applies_to))))

@@ -10,6 +10,8 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
                                     applies_to, private=False, cancel_requested=None):
     if len(candidates) != 2 or len(reports) != 2:
         raise EvalSchemaError("composition requires two independently executed development probes")
+    if any(candidate.context_item.get("executor_requirements") is not None for candidate in candidates):
+        raise EvalSchemaError("profile-constrained parents require a capability-aware composer; cannot discard requirements")
     feedback, task_ids = [], set()
     for candidate, report in zip(candidates, reports):
         if (report.get("track") != "development" or report.get("candidate_digest") != candidate.digest

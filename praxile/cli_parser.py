@@ -606,6 +606,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_design.add_argument("--design-id", required=True)
     p_design.add_argument("--arm", choices=("baseline", "candidate"), default="baseline")
     p_design.add_argument("--scope", required=True, help="Explicit applies_to JSON object")
+    p_design.add_argument("--executor-profile", help="Versioned native action capability JSON; checks draft examples, grants no permissions")
     p_design.add_argument("--development-task-id", action="append", required=True)
     p_design.add_argument("--heldout-task-id", action="append", required=True)
     p_design.add_argument("--private", action="store_true")
