@@ -1,0 +1,18 @@
+{
+  "schema_version": "praxile.worker_dependency_acceptance.v1",
+  "date": "2026-10-19",
+  "implementation_revision": "92b1589",
+  "wheel_sha256": "09b740bd8963bfb7d1b0e9e658a59f6e9b05b3dcd40f6e50c9ab44fa0d0e7034",
+  "build_note": "Built from local checkout; existing README edits affect package metadata. Wheel was used locally, not published.",
+  "dependency": {"filename": "pypdf-6.21.1-py3-none-any.whl", "sha256": "553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b"},
+  "image": "python:3.12-slim",
+  "image_id": "sha256:ce9a404c2c0138e747a43e6ea022d2f7e670ed868df35d627a663ba7fb940ea9",
+  "architecture": "arm64",
+  "test": "tests/resource/test_harbor_native.py::test_offline_dependency_installs_only_in_worker_venv",
+  "results": [{"harbor": "0.18", "passed": 1, "seconds": 9.29}, {"harbor": "0.22", "passed": 1, "seconds": 9.33}],
+  "initial_failure": "Test environment lacked /workspace; initialization fixed before successful reruns.",
+  "verified": ["pypdf absent in system Python before setup", "offline worker venv installation and pip check", "pypdf.PdfReader import in worker", "pypdf remains absent in system Python after setup", "extra dependency environment recorded"],
+  "model_calls": 0,
+  "official_evaluation": false,
+  "limitations": ["Not a full document renderer or task acceptance test", "Not a held-out A/B or performance result", "Container cleanup requested in finally; daemon failure recovery not covered"]
+}

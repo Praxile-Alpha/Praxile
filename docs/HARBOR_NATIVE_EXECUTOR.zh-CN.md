@@ -23,8 +23,16 @@
 `inherit_task_packages` 默认仍关闭；启用后清单摘要并不代表继承包已经完整锁定。
 
 Harbor 0.18 / 0.22 的适配器回归各 30 passed、8 skipped，覆盖离线安装命令、
-摘要变更、失败阻断和版本区分；本轮未启动真实 Docker 安装验收，不能以 fixture
-通过替代真实环境证明。原始任务镜像、材料和评分器不由此接口修改。
+摘要变更、失败阻断和版本区分。后续真实 Docker 验收在两版 Harbor 各 1 passed：
+系统 Python 安装前后均无法导入 pypdf，worker venv 安装后可导入 PdfReader，
+pip check 通过，记录明确标为额外依赖环境。首次因测试缺少工作目录失败，补齐
+初始化后重跑通过。未调用模型，不代表渲染器或任务验收通过；摘要及边界见
+`results/worker-dependency-docker-20261019.json`。
+
+复验需显式设置 `PRAXILE_TEST_WHEEL` 和 `PRAXILE_TEST_DEPENDENCY_WHEEL`（pypdf wheel），
+再运行 `tests/resource/test_harbor_native.py::test_offline_dependency_installs_only_in_worker_venv`。
+该测试具有 slow/integration/resource 标记，默认快速测试不会启动 Docker。
+原始任务镜像、材料和评分器不由此接口修改。
 
 ### 容器内执行期限
 

@@ -414,6 +414,55 @@ def test_renderer_setup_checks_worker_dependencies_before_run(tmp_path, exit_cod
 
 @pytest.mark.slow
 @pytest.mark.timeout(300)
+@pytest.mark.skipif(not (os.environ.get("PRAXILE_TEST_WHEEL") and os.environ.get("PRAXILE_TEST_DEPENDENCY_WHEEL")),
+                   reason="explicit Praxile and pypdf wheels and Docker required")
+def test_offline_dependency_installs_only_in_worker_venv(tmp_path):
+    import shlex
+    from harbor.environments.docker.docker import DockerEnvironment
+    from harbor.models.task.config import EnvironmentConfig
+    from harbor.models.trial.paths import TrialPaths
+
+    wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
+    dependency = Path(os.environ["PRAXILE_TEST_DEPENDENCY_WHEEL"]).resolve()
+    environment_dir = tmp_path / "environment"
+    environment_dir.mkdir()
+    paths = TrialPaths(tmp_path / "trial")
+    paths.mkdir()
+    environment = DockerEnvironment(environment_dir=environment_dir,
+        environment_name="praxile-worker-dependencies",
+        session_id="praxile-deps-" + tmp_path.name.lower().replace("_", "-")[-24:],
+        trial_paths=paths,
+        task_env_config=EnvironmentConfig(docker_image="python:3.12-slim", workdir="/workspace"))
+    agent = PraxileAgent(logs_dir=paths.agent_dir, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        dependency_wheels=[{"path": str(dependency), "sha256": hashlib.sha256(dependency.read_bytes()).hexdigest()}],
+        base_url="http://model-must-not-be-called.invalid/v1", model_name="unused", timeout_seconds=90)
+
+    async def exercise():
+        try:
+            await environment.start(force_build=False)
+            absent = "import importlib.util; assert importlib.util.find_spec('pypdf') is None"
+            workspace = await environment.exec("mkdir -p /workspace", cwd="/", timeout_sec=10)
+            assert workspace.return_code == 0
+            before = await environment.exec(shlex.join(["python3", "-I", "-c", absent]), timeout_sec=10)
+            assert before.return_code == 0
+            await agent.setup(environment)
+            probe = "from pypdf import PdfReader; import pypdf; print(pypdf.__version__)"
+            installed = await environment.exec(shlex.join([
+                agent.remote_root + "/venv/bin/python", "-I", "-c", probe]), timeout_sec=10)
+            assert installed.return_code == 0 and installed.stdout.strip()
+            after = await environment.exec(shlex.join(["python3", "-I", "-c", absent]), timeout_sec=10)
+            assert after.return_code == 0
+            record = json.loads((paths.agent_dir / "praxile-worker-environment.json").read_text())
+            assert record["status"] == "installed" and record["extra_dependency_environment"]
+            assert not record["strict_environment_equivalence_verified"]
+        finally:
+            await environment.stop(delete=True)
+    asyncio.run(exercise())
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(300)
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
 @pytest.mark.parametrize("workbuddy", [False, True])
 @pytest.mark.parametrize("cancel_run", [False, True])
