@@ -308,6 +308,41 @@ Praxile 原先支持 low/medium/high，本轮补齐 xhigh/max 的有界枚举；
 采用新 effort 必须冻结新设计配置与 ID。官方默认 max 与本次推理耗尽现象一致，
 但尚未通过对照证明因果，也没有 low 强度生成有效候选的实测证据。
 
+low 强度独立实测（`b3fed9d`）：相同证据与预算、零重试，14.587 秒返回完整
+NO_ENTRY；2105 input / 1243 output，其中 1195 reasoning。模型自报证据不足，
+缺 action_parameters / before_after_observations / public_content_constraints，
+verified=false。生成/报告文件正常保留，未生成候选，不是任务完成率提升。
+见 `results/office-flash-low-design-20261019.json`。这次没有追加第二次模型请求。
+
+### 显式公开任务上下文
+
+原生白名单投影不包含原始命令/输出或任务目标；为补足公开要求，新增可选参数
+`--public-task-context public-task.json --public-task-context-sha256 <SHA256>`。
+两者必须同时提供。JSON 仅接受以下字段（示例不是官方任务定义）：
+
+```json
+{
+  "schema_version": "praxile.public_task_context.v1",
+  "visibility": "public_task",
+  "task_id": "actual-native-development-task-id",
+  "goal": "Split the supplied workbook into the requested sheets",
+  "constraints": ["Preserve the input workbook", "Write the requested output workbook"]
+}
+```
+
+文件须无符号链接、JSON 无重复字段，至多 64 KiB；goal 至多 4000 字符，constraints
+为 1..20 条、每条至多 1000 字符。task_id 必须等于原生来源的开发任务且不属于
+held-out。摘要和内容进入冻结 manifest，变更或删除已冻结上下文不能复用旧设计。
+不扫描相邻目录、不从 evaluator/rubric 自动生成、不修改旧轨迹。空证据仍不会
+仅凭任务要求触发设计请求。新增字段只在显式提供时进入模型上下文，不新增事件
+引用、不赋予执行成功或来源认证；提示词明确它是未信任、未验证的要求。
+
+`visibility=public_task` 是调用方声明，schema 无法判断自然语言是否暗含私有评分
+标准或错误要求。调用方必须选择真正公开的任务材料，不得把 held-out 题目/答案/
+rubric 填入 goal 或 constraints。该机制不是物理信息隔离证明；权限隔离仍应由
+独立执行环境承担。低层设计 API 同样验证字段与开发成员。动作参数与前后状态的
+更细证据仍未补齐，此公开上下文入口尚未做真实模型质量验证，不据此勾选完整 R2。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

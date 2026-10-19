@@ -612,6 +612,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_native_design.add_argument("native_result", help="Native benchmark result JSON, not an evaluator report")
     p_native_design.add_argument("--source-sha256", required=True)
     p_native_design.add_argument("--track", choices=("development",), required=True)
+    p_native_design.add_argument("--public-task-context", help="Optional caller-declared public requirements JSON, never an evaluator report")
+    p_native_design.add_argument("--public-task-context-sha256", help="Required SHA256 when public task context is supplied")
     for design_parser in (p_design, p_native_design):
         design_parser.add_argument("--design-id", required=True)
         design_parser.add_argument("--scope", required=True, help="Explicit applies_to JSON object")

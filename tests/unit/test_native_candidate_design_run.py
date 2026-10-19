@@ -93,15 +93,59 @@ def test_native_cli_dispatches_without_legacy_event_store(setup_native, monkeypa
     config, source, options, calls = setup_native
     scope = source.parent / "scope.json"
     scope.write_text(json.dumps(options["applies_to"]))
+    public_context = source.parent / "public-task.json"
+    public_context.write_text(json.dumps({"schema_version": "praxile.public_task_context.v1",
+        "visibility": "public_task", "task_id": "dev", "goal": "Split workbook",
+        "constraints": ["Preserve source"]}))
     monkeypatch.setattr(evals, "load", lambda root: (config, SimpleNamespace(initialize=lambda _: None)))
     monkeypatch.setattr(evals, "EventStore", lambda *a: pytest.fail("legacy EventStore opened"))
     args = build_parser().parse_args(["eval", "design-native-context", str(source),
         "--source-sha256", options["expected_sha256"], "--track", "development",
         "--design-id", "native-design", "--scope", str(scope),
         "--development-task-id", "dev", "--heldout-task-id", "heldout",
-        "--request-timeout", "120", "--json"])
+        "--public-task-context", str(public_context), "--public-task-context-sha256",
+        hashlib.sha256(public_context.read_bytes()).hexdigest(), "--request-timeout", "120", "--json"])
     assert args.func(args, source.parent) == 0
     assert json.loads(capsys.readouterr().out)["experiments_started"] is False
     assert len(calls) == 1
+    assert json.loads(calls[0][1]["content"])["public_task_context"]["goal"] == "Split workbook"
     root = config.paths.state / "eval/v2/candidate_designs/native-design"
     assert json.loads((root / "manifest.json").read_text())["generation_budget"]["timeout_seconds"] == 120
+
+
+def test_public_task_context_is_explicit_bound_and_not_execution_evidence(setup_native):
+    config, source, options, calls = setup_native
+    context = {"schema_version": "praxile.public_task_context.v1", "visibility": "public_task",
+               "task_id": "dev", "goal": "Split a workbook", "constraints": ["Keep the input unchanged"]}
+    path = source.parent / "public-context.json"
+    path.write_text(json.dumps(context))
+    options.update(public_task_context_path=path,
+                   public_task_context_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    module.run_native_candidate_design(config, source, **options)
+    payload = json.loads(calls[0][1]["content"])
+    assert payload["public_task_context"] == context
+    assert payload["public_task_context_provenance_attested"] is False
+    assert len(payload["allowed_refs"]) == 1
+    assert "not verified execution evidence" in calls[0][0]["content"]
+    module.run_native_candidate_design(config, source, **options, resume=True)
+    assert len(calls) == 1
+    path.write_text(json.dumps({**context, "constraints": ["Different requirement"]}))
+    options["public_task_context_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    with pytest.raises(EvalSchemaError):
+        module.run_native_candidate_design(config, source, **options, resume=True)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("context", [
+    {"task_id": "heldout"}, {"rubric": "not allowed"}, {"visibility": "private"}])
+def test_invalid_public_context_rejected_before_router(setup_native, monkeypatch, context):
+    config, source, options, calls = setup_native
+    value = {"schema_version": "praxile.public_task_context.v1", "visibility": "public_task",
+             "task_id": "dev", "goal": "Public goal", "constraints": ["Public requirement"], **context}
+    path = source.parent / "public-context.json"
+    path.write_text(json.dumps(value))
+    monkeypatch.setattr(module, "configured_design_router", lambda *a, **k: pytest.fail("router accessed"))
+    with pytest.raises(EvalSchemaError):
+        module.run_native_candidate_design(config, source, **options, public_task_context_path=path,
+            public_task_context_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    assert calls == []

@@ -28,13 +28,22 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
 def run_native_candidate_design(config, result_path, *, expected_sha256, track,
                                 design_id, development_task_ids, heldout_task_ids, applies_to,
                                 private=False, resume=False, executor_profile=None, max_output_tokens=None,
-                                request_timeout_seconds=None):
+                                request_timeout_seconds=None, public_task_context_path=None,
+                                public_task_context_sha256=None):
     from .native_development_evidence import collect_native_evidence
     _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
         raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
     bundle = collect_native_evidence(result_path, expected_sha256=expected_sha256,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids, track=track)
+    if (public_task_context_path is None) != (public_task_context_sha256 is None):
+        raise EvalSchemaError("public task context requires both file and SHA256")
+    if public_task_context_path is not None:
+        from .public_task_context import load_public_task_context
+        bundle["public_task_context"] = load_public_task_context(public_task_context_path,
+            public_task_context_sha256, bundle["task_id"], heldout_task_ids)
+        bundle["public_task_context_sha256"] = public_task_context_sha256
+        bundle["public_task_context_provenance_attested"] = False
     return _run_design(config, bundle, design_id=design_id,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
@@ -94,6 +103,7 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                     development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
                     applies_to=applies_to, design_id=design_id, router=router, logger=logger,
                     private=private, executor_profile=executor_profile,
+                    public_task_context=bundle.get("public_task_context"),
                     request_timeout_seconds=request_timeout_seconds if request_timeout_seconds is not None else 60,
                     max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {
                         "decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}

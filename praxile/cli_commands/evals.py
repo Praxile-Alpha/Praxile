@@ -257,7 +257,9 @@ def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int
         request_timeout_seconds=getattr(args, "request_timeout", None))
     if getattr(args, "native_result", None) is not None:
         report = run_native_candidate_design(config, Path(args.native_result).expanduser(),
-            expected_sha256=args.source_sha256, track=args.track, **options)
+            expected_sha256=args.source_sha256, track=args.track,
+            public_task_context_path=(Path(args.public_task_context).expanduser() if args.public_task_context else None),
+            public_task_context_sha256=args.public_task_context_sha256, **options)
     else:
         report = run_candidate_design(config, EventStore(config.paths),
             experiment_id=args.experiment_id, arm=args.arm, **options)

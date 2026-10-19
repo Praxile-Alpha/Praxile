@@ -109,6 +109,12 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 ### R0-B WorkBuddy Adapter
 
+low 强度实测：`b3fed9d` 同证据同预算一次请求 14.587 秒返回完整 NO_ENTRY，
+2105 input / 1243 output，模型自报缺少动作参数、前后状态和公开内容约束。
+这是结构化弃权而非有效候选或性能提升。新增 opt-in、摘要绑定的公开任务上下文
+入口，保留调用方声明而非认证的边界；未加入私有 rubric，尚无新上下文质量验收。
+结果见 `results/office-flash-low-design-20261019.json`，完整经验闭环仍不勾选。
+
 120 秒设计请求复验：`ed38302` 的 M3.1 Flash 在 87.560 秒完整返回，但 8000 输出
 token 全部为 reasoning，最终正文为空、length 截断；无候选/无晋升。官方文档
 确认默认 effort=max，下一步应冻结较低强度的新配置，不继续盲目增加预算。
