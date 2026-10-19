@@ -17,6 +17,45 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+@pytest.mark.parametrize("cancel", [False, True])
+def test_broker_is_revoked_when_run_fails(tmp_path, monkeypatch, cancel):
+    from types import SimpleNamespace
+    import praxile.eval.credential_broker as module
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    key = tmp_path / "private-key"
+    key.write_text("host-only-fixture")
+    key.chmod(0o600)
+    states = []
+    class Broker:
+        capability = "temporary-capability"
+        def __init__(self, **kwargs):
+            assert kwargs["key"] == "host-only-fixture"
+        def start(self):
+            return "127.0.0.1", 12345
+        def revoke(self):
+            states.append("revoked")
+        def close(self):
+            states.append("closed")
+    monkeypatch.setattr(module, "ChatCredentialBroker", Broker)
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        base_url="https://provider.invalid/v1", model_name="fixture", credential_file=str(key),
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
+    class Environment:
+        async def upload_file(self, path, remote):
+            assert path.read_text() == "temporary-capability"
+        async def exec(self, command, **kwargs):
+            assert "temporary-capability" not in command and "host-only-fixture" not in command
+            return SimpleNamespace(return_code=0)
+    async def fail(*args, **kwargs):
+        assert kwargs["endpoint"] == "http://host.docker.internal:12345/v1"
+        raise asyncio.CancelledError() if cancel else RuntimeError("fixture failure")
+    monkeypatch.setattr(agent, "_run_with_endpoint", fail)
+    with pytest.raises(asyncio.CancelledError if cancel else RuntimeError):
+        asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    assert states == ["revoked", "closed"]
+
+
 @pytest.mark.parametrize("failure", ["timeout", "cancelled", "exit"])
 @pytest.mark.parametrize("result_exists", [False, True])
 def test_failed_execution_preserves_primary_error_and_available_evidence(tmp_path, failure, result_exists):
@@ -178,12 +217,24 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
 @pytest.mark.parametrize("workbuddy", [False, True])
 @pytest.mark.parametrize("cancel_run", [False, True])
-def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run):
+def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run, monkeypatch, broker_mode=False):
     from harbor.environments.docker.docker import DockerEnvironment
     from harbor.models.task.config import EnvironmentConfig
     from harbor.models.trial.paths import TrialPaths
 
     wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
+    credential = tmp_path / "host-key"
+    broker_instances = []
+    if broker_mode:
+        from praxile.eval.credential_broker import ChatCredentialBroker
+        credential.write_text("host-only-fixture-secret")
+        credential.chmod(0o600)
+        def forward(broker, body):
+            assert broker._key == "host-only-fixture-secret"
+            broker_instances.append(broker)
+            return {"choices": [{"message": {"content": json.dumps({"type": "finish", "summary": "fixture completed", "status": "completed"})}}],
+                    "usage": {"prompt_tokens": 12, "completion_tokens": 7}}
+        monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
     environment_dir = tmp_path / "environment"
     environment_dir.mkdir()
     paths = TrialPaths(tmp_path / "trial")
@@ -223,7 +274,9 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 environment.default_user = "dev"
             agent = agent_type(logs_dir=paths.agent_dir, wheel_path=str(wheel),
                 wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
-                workspace="/workspace", base_url="http://127.0.0.1:18888" + ("/block/v1" if cancel_run else "/v1"),
+                workspace="/workspace", base_url=("https://provider.invalid/v1" if broker_mode else
+                    "http://127.0.0.1:18888" + ("/block/v1" if cancel_run else "/v1")),
+                credential_file=str(credential) if broker_mode else None,
                 model_name="fixture", max_steps=2, timeout_seconds=90)
             await agent.setup(environment)
             if workbuddy:
@@ -257,6 +310,13 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                     await asyncio.gather(running_agent, return_exceptions=True)
                 return
             await agent.run("Summarize the available project.", environment, context)
+            if broker_mode:
+                assert broker_instances and all(item.status()["revoked"] for item in broker_instances)
+                assert all(item._thread is None for item in broker_instances)
+                assert "host-only-fixture-secret" not in (paths.agent_dir / "praxile-result.json").read_text()
+                remaining = await environment.exec(f"find {agent.remote_root} -maxdepth 1 -name 'capability_*'", timeout_sec=5)
+                assert remaining.return_code == 0
+                assert not (remaining.stdout or "").strip()
             assert context.n_input_tokens == 12
             assert context.metadata["praxile"]["result"]["status"] == "completed"
             assert (paths.agent_dir / "praxile-result.json").is_file()
@@ -302,3 +362,11 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
             await environment.stop(delete=True)
 
     asyncio.run(exercise())
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(300)
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
+@pytest.mark.parametrize("workbuddy", [False, True])
+def test_harbor_broker_native_worker(tmp_path, workbuddy, monkeypatch):
+    test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, False, monkeypatch, broker_mode=True)

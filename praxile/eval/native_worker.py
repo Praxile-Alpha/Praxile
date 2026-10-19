@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -62,7 +63,13 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--max-steps", type=int, required=True)
+    parser.add_argument("--capability-file", type=Path)
     args = parser.parse_args()
+    if args.capability_file is not None:
+        from .credential_broker import read_private_key
+        capability = read_private_key(args.capability_file)
+        args.capability_file.unlink()
+        os.environ["PRAXILE_BENCHMARK_API_KEY"] = capability
     result = run_native(args.workspace, args.instruction.read_text(encoding="utf-8"),
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps)
     args.result.parent.mkdir(parents=True, exist_ok=True)

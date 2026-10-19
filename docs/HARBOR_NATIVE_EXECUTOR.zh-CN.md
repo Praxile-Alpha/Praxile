@@ -93,8 +93,9 @@ Harbor 0.18 和 0.22 各 **4 passed / 11 deselected**，耗时分别 44.26s / 44
 
 该记录不包含凭据内容或摘要，不确认密钥是否已轮换。后续真实任务仍需要宿主侧
 有范围、期限和调用上限的凭据代理，不能让任务 shell 继承订阅 Key。
-当前 native adapter 只有 endpoint 接口和直接环境变量模式；代理尚未实现，
-因此没有因预检成功而勾选最小权限凭据或真实任务验收。
+后续已增加宿主代理及 `credential_file` 入口，参见
+`MODEL_CREDENTIAL_BROKER.zh-CN.md` 的容器验证与限制。预检成功和 fixture 容器链路
+均不足以勾选完整最小权限凭据或真实任务验收。
 
 在 Praxile 仓库中构建 wheel，再在单独环境安装测试依赖：
 

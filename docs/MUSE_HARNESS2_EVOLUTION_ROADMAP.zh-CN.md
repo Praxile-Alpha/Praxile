@@ -191,7 +191,7 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 - [ ] 任务状态机：queued/running/waiting_approval/paused/completed/failed/cancelled；子任务边界 checkpoint，恢复前重新确认环境与产物状态。
 - [ ] 本地自检检查“产物存在、能打开、结构符合请求”；与官方评分器物理分离。
 - [ ] 模型凭据与 connector 凭据通过最小权限代理使用；工具副作用需要可校验的授权范围、有效期和撤销状态。
-  模型代理增量：已实现宿主 loopback HTTP 服务、固定模型/HTTPS 上游、随机临时 capability、TTL/撤销和调用/输出预留额度，真实 Key 不作为客户端参数。16 项单元测试及 1 项真实本机 HTTP 测试通过；上游使用 fixture。Harbor capability 传递/容器可达性、connector 与工具副作用授权尚未接入，完整项不勾选。见 `MODEL_CREDENTIAL_BROKER.zh-CN.md`。
+  模型代理增量：已实现宿主 loopback HTTP 服务、固定模型/HTTPS 上游、随机临时 capability、TTL/撤销和调用/输出预留额度，真实 Key 不作为客户端参数。16 项单元测试、本机 HTTP/Docker 可达性测试通过；Harbor 已接入临时凭据文件传递、worker 读取后删除和 finally 撤销，0.22 普通/dev 容器均完成 fixture 调用。connector、工具副作用授权、真实 benchmark 和 Linux 原生宿主仍未验证，完整项不勾选。见 `MODEL_CREDENTIAL_BROKER.zh-CN.md`。
 - [ ] Web Console 展示当前子任务、产物预览、实际操作、费用、权限请求、暂停/取消与恢复结果。
 
 验收：长任务中断恢复不重复提交副作用；文件产物重新打开检查；前端任务同时保存功能检查与视觉证据；所有外部能力可被 doctor 明确识别为可用或不支持。

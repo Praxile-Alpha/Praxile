@@ -23,7 +23,7 @@ class PraxileAgent(BaseAgent):
 
     def __init__(self, *args, wheel_path: str, wheel_sha256: str,
                  workspace: str, base_url: str, max_steps: int = 50,
-                 timeout_seconds: int = 900, **kwargs):
+                 timeout_seconds: int = 900, credential_file: str | None = None, **kwargs):
         self.wheel = Path(wheel_path).resolve(strict=True)
         if not self.wheel.name.endswith(".whl") or hashlib.sha256(self.wheel.read_bytes()).hexdigest() != wheel_sha256:
             raise ValueError("Praxile wheel digest mismatch")
@@ -35,6 +35,9 @@ class PraxileAgent(BaseAgent):
         self.wheel_sha256 = wheel_sha256
         self.workspace, self.base_url = workspace, base_url
         self.max_steps, self.timeout_seconds = max_steps, timeout_seconds
+        self.credential_file = Path(credential_file) if credential_file else None
+        if self.credential_file and timeout_seconds > 3540:
+            raise ValueError("broker-backed execution requires timeout_seconds <= 3540")
         self.remote_root = "/tmp/praxile-native-" + wheel_sha256[:16]
         super().__init__(*args, **kwargs)
         if not self.model_name:
@@ -69,21 +72,57 @@ class PraxileAgent(BaseAgent):
         return result
 
     async def run(self, instruction, environment, context) -> None:
+        if self.credential_file is None:
+            return await self._run_with_endpoint(instruction, environment, context)
+        from ..eval.credential_broker import ChatCredentialBroker, read_private_key
+        broker = ChatCredentialBroker(key=read_private_key(self.credential_file),
+            endpoint=self.base_url.rstrip("/") + "/chat/completions", model=self.model_name,
+            max_calls=min(self.max_steps + 10, 1000), max_output=6000,
+            output_budget=min((self.max_steps + 10) * 6000, 10_000_000),
+            ttl_seconds=self.timeout_seconds + 60)
+        remote = self.remote_root + "/" + new_id("capability")
+        try:
+            _, port = broker.start()
+            with tempfile.TemporaryDirectory(prefix="praxile-broker-") as directory:
+                capability = Path(directory) / "capability"
+                capability.touch(mode=0o600)
+                capability.write_text(broker.capability, encoding="utf-8")
+                await environment.upload_file(capability, remote)
+            if getattr(environment, "default_user", None) == "dev":
+                ownership = await environment.exec(shlex.join(["chown", "dev", remote]), user="root", timeout_sec=5)
+                if ownership.return_code != 0:
+                    raise RuntimeError("could not assign temporary capability to task user")
+            await self._exec(environment, shlex.join(["chmod", "600", remote]))
+            await self._run_with_endpoint(instruction, environment, context,
+                endpoint=f"http://host.docker.internal:{port}/v1", capability_file=remote)
+        finally:
+            broker.revoke()
+            await asyncio.to_thread(broker.close)
+            # A revoked leftover capability is unusable even if cleanup fails.
+            try:
+                await asyncio.wait_for(environment.exec(shlex.join(["rm", "-f", remote]), timeout_sec=5), timeout=6)
+            except (Exception, asyncio.CancelledError):
+                pass
+
+    async def _run_with_endpoint(self, instruction, environment, context, *, endpoint=None, capability_file=None) -> None:
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="praxile-public-instruction-") as directory:
             public = Path(directory) / "instruction.txt"
             public.write_text(instruction, encoding="utf-8")
             await environment.upload_file(public, self.remote_root + "/instruction.txt")
         cancel_file = self.remote_root + "/" + new_id("cancel")
-        command = shlex.join([
+        argv = [
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.process_supervisor",
             "--timeout", str(self.timeout_seconds), "--status", self.remote_root + "/supervision.json",
             "--cancel-file", cancel_file, "--",
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.native_worker",
             "--workspace", self.workspace, "--instruction", self.remote_root + "/instruction.txt",
             "--result", self.remote_root + "/result.json", "--model", self.model_name,
-            "--base-url", self.base_url, "--max-steps", str(self.max_steps),
-        ])
+            "--base-url", endpoint or self.base_url, "--max-steps", str(self.max_steps),
+        ]
+        if capability_file:
+            argv.extend(["--capability-file", capability_file])
+        command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
                   "wheel_sha256": self.wheel_sha256, "result_available": False}

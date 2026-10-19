@@ -35,8 +35,27 @@
 上游 header/无跳转/无环境代理约束。1 项真实 loopback HTTP 测试验证鉴权、成功转发、
 撤销拒绝及线程释放；上游是 fixture，不消耗付费 API，不代表真实模型或容器验收。
 
-尚未把 capability 的安全传递及宿主网络入口接入 Harbor；Docker 可达性需要实测，
-不能把 `127.0.0.1` 当成容器宿主地址直接使用。尚无 connector 凭据代理、TLS 服务端、
+Harbor 原生适配器已增加可选 `credential_file`（宿主私有文件路径，非密钥内容）。
+它为单次 run 启动代理，仅上传随机 capability 文件，控制面设置 0600，worker 读取后
+删除文件并使用临时 capability 作为 API key。结束/错误/取消时撤销并关闭代理，再尽力
+删除残留文件；不要把宿主凭据文件挂载进容器。WorkBuddy dev 用户的文件归属由固定
+控制面 chown 操作设置，不授予 Agent root 工具权限。
+
+此模式 `base_url` 指向真实 HTTPS provider，而 worker 使用
+`http://host.docker.internal:<ephemeral-port>/v1`。适配器限制 timeout <=3540 秒，
+TTL 为 timeout+60；调用上限 min(max_steps+10,1000)，单次输出上限 6000，与现有
+action loop 对齐，累计输出预留为 min((max_steps+10)*6000,10000000)。
+没有配置 credential_file 时保留既有直接 endpoint 模式。
+
+真实 Docker Desktop 测试已验证 loopback 服务可由该宿主别名访问。
+Harbor 0.22 普通/dev 用户各一项真实 worker 用例通过，包含上传/读取/模型调用、
+capability 删除、撤销和线程退出；13 项契约测试包含异常/取消撤销。
+独立 Harbor 0.18 环境同样通过 13 项契约与 2 项真实容器用例（15 passed，26.99s）；
+0.22 两项真实容器用例耗时 25.00s。基础快速单元集 494 passed、6 skipped、10 deselected。
+worker wheel SHA-256 为 `ad972e9030b7b065474f35bcc1e6be6b05501e916084351e3058b3dbe4c77088`，
+宿主 adapter 使用后续预算/归属修复；测试上游仍为 fixture，不构成真实 benchmark。
+固定宿主别名仅在本机 macOS Docker Desktop 验证，Linux 原生 Docker/远程 Harbor
+未验证，也不自动开放公网监听。仍无 connector 凭据代理、TLS 服务端、
 恶意多租户抗 DoS、跨进程租约恢复或精确总费用限制。socket timeout 不是严格系统级
 wall timeout，DNS/连接/读取和已接收请求均可能延迟 shutdown。
 
