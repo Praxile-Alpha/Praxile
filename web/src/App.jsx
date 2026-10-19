@@ -207,6 +207,11 @@ function DeliverableReview({ run }) {
   if (!run?.deliverable_contract && !run?.deliverable_verification) return null;
   const verification = run.deliverable_verification;
   const data = verification?.data || {};
+  const preservation = new Map(Object.entries(run.deliverable_contract?.unchanged_files || {})
+    .map(([path, expected_sha256]) => [path, { path, expected_sha256 }]));
+  for (const item of data.unchanged_files || []) {
+    preservation.set(item.path, { ...preservation.get(item.path), ...item });
+  }
   return <section className="deliverable-review" aria-label="Deliverable verification">
     <h2>Deliverable verification</h2>
     <dl>
@@ -220,6 +225,22 @@ function DeliverableReview({ run }) {
       {(data.outputs || []).map((item) => <li key={item.path}><code>{item.path}</code><strong>{item.status}</strong>{item.reason && <span>{item.reason}</span>}</li>)}
       {(data.state_check?.checks || []).map((item) => <li key={item.name}><code>{item.name}</code><strong>{item.status}</strong></li>)}
     </ul>
+    {preservation.size > 0 && <section aria-label="File preservation">
+      <h3>File preservation</h3>
+      <p>Scope: final file bytes only. Intermediate changes and external transfers are not verified.</p>
+      <ul className="preservation-results">
+        {[...preservation.values()].map((item) => <li key={item.path}>
+          <div className="preservation-heading"><code>{item.path}</code><strong>
+            {item.passed === true ? "Verified unchanged" : item.reason === "content_changed" ? "Changed" : "Not verified"}
+          </strong></div>
+          <dl>
+            <dt>Expected SHA-256</dt><dd className="code">{item.expected_sha256 || "Unavailable"}</dd>
+            <dt>Observed SHA-256</dt><dd className="code">{item.actual_sha256 || "Unavailable"}</dd>
+            <dt>Check result</dt><dd>{item.reason || "Not checked"}</dd>
+          </dl>
+        </li>)}
+      </ul>
+    </section>}
     {run.deliverable_contract && <details><summary>Frozen requirements</summary><pre>{JSON.stringify(run.deliverable_contract, null, 2)}</pre></details>}
   </section>;
 }

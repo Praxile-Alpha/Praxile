@@ -49,6 +49,11 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .check-results { list-style: none; padding: 0; }
 .check-results li { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .check-results code { flex: 1; min-width: 0; }
+.preservation-results { list-style: none; padding: 0; }
+.preservation-results li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.preservation-heading { display: flex; flex-wrap: wrap; gap: 12px; }
+.preservation-heading code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.deliverable-review h3 { font-size: 15px; margin: 18px 0 8px; }
 summary { cursor: pointer; }
 @media (max-width: 680px) {
   .app { grid-template-columns: minmax(0, 1fr); }

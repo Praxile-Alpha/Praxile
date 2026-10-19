@@ -10,10 +10,15 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration,
 
 
 @pytest.mark.parametrize("width,height", [(1280, 900), (390, 844)])
-def test_contract_validation_submission_and_verification_view(tmp_path, width, height):
+@pytest.mark.parametrize("preservation", [None, "matched", "content_changed", "not_found", "not_checked"])
+def test_contract_validation_submission_and_verification_view(tmp_path, width, height, preservation):
     from playwright.sync_api import sync_playwright, expect
     contract = {"schema_version": "praxile.deliverable_contract.v1", "source": "user_request",
                 "outputs": [{"path": "report.json", "media_type": "application/json"}]}
+    path_preserved = 'output/' + 'long-project-memo-' * 5 + '.docx'
+    if preservation:
+        contract.update(schema_version='praxile.deliverable_contract.v3', state_equals={},
+                        unchanged_files={path_preserved: 'b' * 64})
     sent = []
     def api(route):
         path = urlsplit(route.request.url).path
@@ -33,6 +38,12 @@ def test_contract_validation_submission_and_verification_view(tmp_path, width, h
                 "deliverable_contract_sha256": "a" * 64,
                 "deliverable_verification": {"status": "failure", "output": "Local deliverable checks completed",
                     "data": {"passed": False, "outputs": [{"path": "report.json", "status": "missing", "reason": "not_found"}]}}}}
+            if preservation and preservation != 'not_checked':
+                item = {'path': path_preserved, 'expected_sha256': 'b' * 64,
+                        'passed': preservation == 'matched', 'reason': preservation}
+                if preservation != 'not_found':
+                    item['actual_sha256'] = ('b' if preservation == 'matched' else 'c') * 64
+                result['result']['deliverable_verification']['data']['unchanged_files'] = [item]
         route.fulfill(json={"ok": True, "result": result})
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -51,9 +62,18 @@ def test_contract_validation_submission_and_verification_view(tmp_path, width, h
             page.screenshot(path=str(tmp_path / f"composer-{width}.png"), full_page=True)
             page.get_by_role("button", name="Run", exact=True).click()
             expect(page.get_by_role("heading", name="Deliverable verification")).to_be_visible()
-            expect(page.get_by_text("Not verified", exact=True)).to_be_visible()
+            expect(page.get_by_text("Not verified", exact=True).first).to_be_visible()
             expect(page.get_by_text("missing", exact=True)).to_be_visible()
             assert sent[0]["deliverable_contract"] == contract
+            panel = page.get_by_role('region', name='File preservation')
+            if preservation:
+                expect(panel).to_be_visible()
+                expect(panel.get_by_text(path_preserved, exact=True)).to_be_visible()
+                expected_status = {'matched': 'Verified unchanged', 'content_changed': 'Changed'}.get(preservation, 'Not verified')
+                expect(panel.get_by_text(expected_status, exact=True)).to_be_visible()
+                expect(panel.get_by_text('Not checked' if preservation == 'not_checked' else preservation, exact=True)).to_be_visible()
+            else:
+                expect(panel).to_have_count(0)
             page.get_by_text("Frozen requirements", exact=True).click()
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             page.screenshot(path=str(tmp_path / f"verification-{width}.png"), full_page=True)
