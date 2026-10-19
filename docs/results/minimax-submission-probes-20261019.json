@@ -1,0 +1,50 @@
+{
+  "schema_version": "praxile.public_experiment_receipt.v1",
+  "scope": "synthetic_submission_copy_checks_only",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "max_output_tokens_per_request": 1024,
+  "request_timeout_seconds": 60,
+  "transport_max_retries": 0,
+  "probes": [
+    {
+      "probe_id": "minimax-flash-001",
+      "contract_profile": "basic",
+      "contract_sha256": "1cd16f1cc3b61bdacfd763041b6609e9d1851b846b8b5ea2f6b1d03f9abdc5f9",
+      "response_sha256": "153ff9ed57c83d69ed51ad1770bd33368cbd07078ec7d5525f797abf4d3be1fa",
+      "status": "passed",
+      "elapsed_ms": 915,
+      "input_tokens": 648,
+      "output_tokens": 126,
+      "exact_payload_and_types": true
+    },
+    {
+      "probe_id": "minimax-flash-candidate-001",
+      "contract_profile": "candidate",
+      "contract_sha256": "c8c08778367906ff2f40d534d090e177651277b42d065853e502f74da5c391b0",
+      "response_sha256": "1b7ce0641a11d4c221765c3d3c2bc7246b6cba15f5e36360f3647fc530e3327d",
+      "status": "failed",
+      "elapsed_ms": 2286,
+      "input_tokens": 1743,
+      "output_tokens": 472,
+      "checks": {
+        "top_level_fields": true,
+        "decision": true,
+        "exactly_two_candidates": true,
+        "not_truncated": true,
+        "exact_payload_and_types": false
+      },
+      "mismatch_category": "unknown"
+    }
+  ],
+  "model_calls": 2,
+  "cost_usd": null,
+  "capabilities_updated": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "One sample per contract does not measure reliability.",
+    "Candidate exact-copy failure may be a text difference; this record cannot establish invalid action parameters or unsupported schemas.",
+    "Field-level checks were added afterward and cannot be backfilled.",
+    "No task files, private rubrics, tool execution or generated candidate assets were involved."
+  ]
+}

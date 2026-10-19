@@ -518,6 +518,18 @@ trajectory。请求前保存 unknown 状态，重复 ID 拒绝；响应仅记录
 失败退出码 1；通过也只代表这一固定样例，不能据此宣称复杂 oneOf 合同、完整
 候选生成或任务质量可靠。不会自动修改 supports_tools/路由配置或晋升资产。
 当前仅通过离线 fixture 验证，尚未做真实模型探针验收。
+
+真实验收更新：MiniMax M3.1 Flash / low 的 basic 探针精确通过（648 输入、
+126 输出 tokens，915 ms）。新增 `--candidate-contract` 复用真实候选函数 schema，
+但内容为固定合成草案；一次调用顶层结构、候选数和完成状态通过，完整原样复制
+失败（1743 输入、472 输出 tokens，2286 ms）。见
+`results/minimax-submission-probes-20261019.json`。该失败尚不能归因为动作类型，
+也不能证明模型不支持复杂 schema：原记录未区分文本、引用、动作差异。
+
+之后为 candidate 探针增加 draft_fields、exact_references、exact_actions_and_types、
+exact_text 分项，仍只记录布尔结论，不保存模型正文；旧记录不可回填。新增分项
+已通过离线测试，尚未追加真实调用。两种模式都只检查合成复制，不替代任务能力
+或独立候选执行验收，不自动改动 supports_tools 声明。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

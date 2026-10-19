@@ -43,6 +43,42 @@ def test_probe_sanitizes_provider_failure_and_does_not_retry():
     assert calls == [1]
 
 
+def test_candidate_probe_reuses_actual_contract_and_never_generates_assets():
+    from praxile.eval.v2.candidate_response import candidate_response_contract
+    from praxile.eval.v2.executor_profile import profile_context
+    calls = []
+    def chat(messages, **options):
+        calls.append(options)
+        assert json.loads(messages[1]["content"])["composition"]["action_examples"][0]["start"] == 1
+        return {"content": messages[1]["content"], "finish_reason": "tool_calls"}
+    report = probe_submission(SimpleNamespace(chat=chat), TrajectoryLogger("probe", {}), candidate_contract=True)
+    capability = profile_context({"schema_version": "praxile.executor_action_profile.v2",
+        "executor": "praxile", "version": "synthetic-protocol-v1",
+        "actions": ["read_document", "revise_docx", "check_document_layout"]})
+    assert calls[0]["response_contract"] == candidate_response_contract(["event:probe:first", "event:probe:second"], capability)
+    assert report["status"] == "passed"
+    assert report["contract_profile"] == "candidate"
+    assert report["capabilities_updated"] is False
+
+
+@pytest.mark.parametrize("field, value, failed_check", [
+    ("content", "PRIVATE", "exact_text"),
+    ("evidence_refs", ["PRIVATE"], "exact_references"),
+    ("action_examples", [{"type": "read_document", "path": "synthetic.docx", "start": "1", "limit": 5}], "exact_actions_and_types"),
+])
+def test_candidate_copy_failure_distinguishes_text_references_and_actions(field, value, failed_check):
+    def chat(messages, **kwargs):
+        response = json.loads(messages[1]["content"])
+        response["candidates"][0][field] = value
+        return {"content": json.dumps(response), "finish_reason": "tool_calls"}
+    report = probe_submission(SimpleNamespace(chat=chat), TrajectoryLogger("probe", {}), candidate_contract=True)
+    assert report["status"] == "failed"
+    assert report["checks"][failed_check] is False
+    for check in {"exact_text", "exact_references", "exact_actions_and_types"} - {failed_check}:
+        assert report["checks"][check] is True
+    assert "PRIVATE" not in json.dumps(report)
+
+
 def test_probe_persists_and_refuses_duplicate_id(tmp_path, monkeypatch):
     from praxile.eval import submission_probe as module
     calls, closed = [], []
