@@ -166,3 +166,43 @@ def test_bound_contract_is_copied_and_cannot_be_weakened(tmp_path):
     result = tools.execute({"type": "check_deliverables", "contract": tools.deliverable_contract}, task_id="t", step=2)
     assert result["status"] == "failure"
     assert result["data"]["contract_binding"] == "run_argument"
+
+
+def test_state_evidence_is_scoped_and_digest_verifiable(tmp_path):
+    import hashlib
+    import json
+    request = state_contract(**{"browser.origin": "https://example.com:443", "browser.session_active": True})
+    observed = {"browser": {"origin": "https://example.com:443", "session_active": True,
+                            "cookie": "PRIVATE_COOKIE"}, "other": "PRIVATE_OTHER"}
+    result = verify_deliverables(tmp_path, request, observed_state=observed)
+    evidence = result["state_evidence"]
+    assert evidence["source"] == "caller_supplied"
+    assert evidence["observed_at"] is None
+    assert not evidence["provenance_attested"]
+    assert [item["value"] for item in evidence["fields"]] == ["https://example.com:443", True]
+    assert "PRIVATE" not in json.dumps(result)
+    assert result["state_evidence_sha256"] == hashlib.sha256(json.dumps(
+        evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    observed["browser"]["origin"] = "changed"
+    assert evidence["fields"][0]["value"] == "https://example.com:443"
+
+
+def test_state_evidence_bounds_values_and_preserves_unknown(tmp_path):
+    result = verify_deliverables(tmp_path, state_contract(**{"browser.origin": "expected", "missing": False}),
+                                 observed_state={"browser": {"origin": "x" * 5000}})
+    fields = result["state_evidence"]["fields"]
+    assert fields[0]["value_omitted"] == "size_limit"
+    assert "value" not in fields[0]
+    assert len(fields[0]["value_sha256"]) == 64
+    assert fields[1] == {"name": "missing", "availability": "unknown"}
+    assert not result["passed"]
+
+
+def test_tool_evidence_records_observer_and_collection_time(tmp_path):
+    tools = ToolRegistry(Config(default_config(tmp_path), ProjectPaths(tmp_path)))
+    result = tools.execute({"type": "check_deliverables",
+        "contract": state_contract(**{"browser.session_active": False})}, task_id="t", step=1)
+    evidence = result["data"]["state_evidence"]
+    assert evidence["source"] == "browser_session_observer"
+    assert evidence["observed_at"]
+    assert evidence["fields"][0]["value"] is False

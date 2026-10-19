@@ -51,3 +51,21 @@ def test_resume_restores_frozen_contract_and_rejects_replacement(tmp_path, monke
     else:
         runtime.run("", resume=logger.task_id)
         assert called == [contract()]
+
+
+def test_final_state_evidence_survives_trajectory_storage(tmp_path, monkeypatch):
+    runtime = AgentRuntime(Config.load(tmp_path))
+    monkeypatch.setattr(runtime, "_run_action_loop", lambda *args, **kwargs: ("completed", "stub"))
+    request = {"schema_version": "praxile.deliverable_contract.v2", "source": "user_request",
+               "outputs": [], "state_equals": {"browser.session_active": False}}
+    result = runtime.run("Keep browser closed", deliverable_contract=request, max_steps=1, use_experience=False)
+    assert result["result"]["status"] == "completed"
+    report = result["deliverable_verification"]["data"]
+    stored = runtime.store.get_trajectory(result["task_id"])
+    assert stored["deliverable_verification"]["data"]["state_evidence"] == report["state_evidence"]
+    assert stored["deliverable_verification"]["data"]["state_evidence_sha256"] == report["state_evidence_sha256"]
+    evidence = report["state_evidence"]
+    assert evidence["source"] == "browser_session_observer"
+    assert evidence["observed_at"]
+    assert evidence["fields"] == [{"name": "browser.session_active", "availability": "observed",
+        "value": False, "value_sha256": evidence["fields"][0]["value_sha256"]}]

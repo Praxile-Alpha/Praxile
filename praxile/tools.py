@@ -10,6 +10,7 @@ from .config import Config
 from .browser import BrowserEnv
 from .environment import FileSystemEnv, GitEnv, ShellEnv, TestEnv
 from .security import SafetyPolicy
+from .utils import utc_now
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
@@ -144,13 +145,16 @@ class ToolRegistry:
                     if not decision.allowed:
                         return {"status": "blocked", "output": decision.reason, "data": {}, "risk_level": decision.risk_level}
                 observed_state = None
+                observed_at = None
                 if contract["schema_version"] == "praxile.deliverable_contract.v2":
                     # Never accept an action's claimed observation as evidence.
+                    observed_at = utc_now()
                     try:
                         observed_state = {"browser": self.browser.observe_state()}
                     except Exception:
                         observed_state = {}
-                report = verify_deliverables(self.config.paths.root, contract, observed_state=observed_state)
+                report = verify_deliverables(self.config.paths.root, contract, observed_state=observed_state,
+                    observed_at=observed_at, observation_source="browser_session_observer")
                 report["contract_binding"] = "run_argument" if self._deliverable_contract_json is not None else "model_proposed"
             except ValueError:
                 return {"status": "failure", "output": "Invalid public deliverable contract", "data": {}, "risk_level": "low"}

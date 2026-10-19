@@ -94,7 +94,8 @@ def validate_contract(value: object) -> list[dict]:
 
 
 def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_000,
-                        observed_state: dict | None = None) -> dict:
+                        observed_state: dict | None = None, observed_at: str | None = None,
+                        observation_source: str = "caller_supplied") -> dict:
     """No code execution, network access, globbing, or symlink traversal.
 
     Checks represent structural evidence only. source labels are not proof of
@@ -206,7 +207,34 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
             "contract_sha256": hashlib.sha256(json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
     if contract["schema_version"] == "praxile.deliverable_contract.v2":
         state_check = check_conditions({"state_equals": contract["state_equals"]}, {"state": observed_state})
+        evidence = []
+        for name in contract["state_equals"]:
+            actual = observed_state
+            for key in name.split("."):
+                actual = actual.get(key) if isinstance(actual, dict) else None
+            item = {"name": name, "availability": "observed" if actual is not None else "unknown"}
+            if type(actual) in (str, int, bool):
+                try:
+                    encoded = json.dumps(actual, ensure_ascii=True).encode()
+                except (ValueError, OverflowError):
+                    encoded = None
+                if encoded is not None:
+                    item["value_sha256"] = hashlib.sha256(encoded).hexdigest()
+                    if len(encoded) <= 4096:
+                        item["value"] = actual
+                    else:
+                        item["value_omitted"] = "size_limit"
+                else:
+                    item["value_omitted"] = "serialization_limit"
+            elif actual is not None:
+                item["value_omitted"] = "unsupported_type"
+            evidence.append(item)
+        state_evidence = {"schema_version": "praxile.deliverable_state_evidence.v1",
+                          "source": observation_source, "observed_at": observed_at, "fields": evidence,
+                          "provenance_attested": False}
+        digest = hashlib.sha256(json.dumps(state_evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         report.update(schema_version="praxile.deliverable_check.v2", state_check=state_check,
+                      state_evidence=state_evidence, state_evidence_sha256=digest,
                       passed=passed and state_check["status"] == "matched",
                       state_transitions_verified=False, contract_provenance_verified=False)
     return report

@@ -89,6 +89,18 @@ V2 报告明确 `state_transitions_verified=false` 和
 `contract_provenance_verified=false`：这是本次检查时的终态，不证明执行途中
 没有越界变化；source 标签也不是用户确实确认该契约的证据。
 前后状态差异、允许变化范围、可信用户确认及持久化观测来源仍待接入。
+
+后续已增加 `state_evidence`：只记录契约引用的点路径、是否有观测、受限标量值、
+值摘要、source 与 observed_at。正常工具的来源为 browser_session_observer，时间在
+读取会话状态前采集；直接库调用默认 caller_supplied、时间未知，不把检查时间伪造成
+采集时间。无关字段不进入证据；超过 4096 字节的序列化值仅留摘要及省略原因。
+对象/数组等非标量不序列化为值，未知值不补成 false。
+
+报告还包含 state_evidence_sha256，可对规范 JSON 重算；该摘要不是数字签名，
+`provenance_attested=false`，不证明来源经过独立见证。证据随检查动作与最终复验结果
+进入原 trajectory，能通过 ExperienceStore 读回，无第二套状态存储。
+37 项交付单元测试与 19 项绑定/Gateway 资源回归通过，其中验证了实际轨迹存储往返。
+当前完成的是观测记录，前后允许变化与外部独立见证仍未完成。
 33 项交付单元测试通过，完整快速单元测试 455 passed / 6 skipped / 10 deselected。
 
 ### V1 文件要求
