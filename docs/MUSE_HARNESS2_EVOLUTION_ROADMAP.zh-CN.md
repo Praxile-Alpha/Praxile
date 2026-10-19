@@ -109,6 +109,8 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 ### R0-B WorkBuddy Adapter
 
+R0-A worktree 后端增补：新增 WorktreeLease，复用既有 preparer，生成独立租约身份并固定初次解析的 commit；支持真实 reset、执行取消、创建取消后的回收及幂等 cleanup。重置失败后禁止继续执行。11 项 Git/租约/旧 runner 资源测试通过；旧 runner 未迁移，Harbor 生命周期统一接入、只读挂载和跨进程恢复仍缺，完整租约项保持未勾选。见 `WORKTREE_LEASE.zh-CN.md`。
+
 阶段进展（2026-10-19）：新增受摘要与资源限制保护的数据包解包、WorkBuddy 清单冻结及只修改新副本的官方准备流程。真实 Code 80 条、Office 50 条材料已冻结；Office 50 条已在副本绑定官方评分器和 dev 用户，19 项相关测试通过。原生执行器增加固定的非 root 初始化。仍缺真实任务执行、结果导入、Web/Security 环境与恢复验收，下列总项不勾选；具体摘要与命令见 `HARBOR_NATIVE_EXECUTOR.zh-CN.md`。
 
 后续进展：新增固定 Harbor 0.18.0 的 job 生成，显式任务选择、单并发、零自动重试、结束清理；Security 在专用网络策略验收前拒绝执行。发现 task TOML 的 verifier import_path 被 Harbor 忽略，已改为 job 层显式绑定，工厂测试确认 CompositeVerifier。31 项相关测试通过，50 条真实 Office 材料通过 Harbor 配置解析；未开始真实模型任务评分，总项继续保持未完成。
