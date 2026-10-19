@@ -62,15 +62,24 @@ def test_rejects_ambiguous_or_existing_runs(tmp_path, mutation):
         prepare_pair(base, candidate(), repository="docs", output_dir=tmp_path / "pair")
 
 
-def test_cli_freezes_candidate_and_refuses_overwrite(tmp_path, monkeypatch):
+@pytest.mark.parametrize("freeze", [False, True])
+def test_cli_freezes_candidate_and_refuses_overwrite(tmp_path, monkeypatch, freeze):
     source, config, output = tmp_path / "source.json", tmp_path / "job.json", tmp_path / "pair"
     source.write_text(json.dumps(candidate()))
-    config.write_text(json.dumps(job(tmp_path)))
+    base = job(tmp_path)
+    if freeze:
+        (tmp_path / "task").mkdir()
+        (tmp_path / "task/instruction.md").write_text("public task")
+        wheel = tmp_path / "worker.whl"
+        wheel.write_bytes(b"fixture")
+        base["agents"][0]["kwargs"].update(wheel_path=str(wheel), wheel_sha256=hashlib.sha256(b"fixture").hexdigest())
+    config.write_text(json.dumps(base))
     monkeypatch.setattr("sys.argv", ["native_pair", "--job", str(config), "--candidate", str(source),
         "--candidate-sha256", hashlib.sha256(source.read_bytes()).hexdigest(),
-        "--repository", "docs", "--output-dir", str(output)])
+        "--repository", "docs", "--output-dir", str(output), *(["--freeze-local-inputs"] if freeze else [])])
     main()
     plan = json.loads((output / "manifest.json").read_bytes())
+    assert ("local_inputs" in plan) is freeze
     assert hashlib.sha256((output / "candidate-asset.json").read_bytes()).hexdigest() == plan["candidate_file_sha256"]
     assert (output.stat().st_mode & 0o777) == 0o700
     assert (output / "manifest.json").stat().st_mode & 0o777 == 0o600

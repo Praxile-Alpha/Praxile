@@ -85,11 +85,17 @@ def main():
     parser.add_argument("--candidate-sha256", required=True)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--freeze-local-inputs", action="store_true",
+                        help="Snapshot task trees and worker wheels for verification before each arm")
     args = parser.parse_args()
     output = args.output_dir.resolve()
     candidate = load_candidate(args.candidate, args.candidate_sha256)
     job = json.loads(args.job.read_bytes())
     plan, jobs = prepare_pair(job, candidate, repository=args.repository, output_dir=output)
+    if args.freeze_local_inputs:
+        from .native_input_snapshot import snapshot_inputs
+        plan["schema_version"] = "praxile.native_pair_plan.v2"
+        plan["local_inputs"] = snapshot_inputs(jobs["baseline"])
     # Exclusive directory creation leaves any interrupted plan visibly incomplete.
     # Write the manifest last; never overwrite a previous experiment definition.
     output.mkdir(mode=0o700, parents=False, exist_ok=False)

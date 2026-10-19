@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .native_context import load_candidate
 from .native_pair import encoded, prepare_pair
+from .native_input_snapshot import snapshot_inputs
 from ..utils import write_json
 
 
@@ -32,7 +33,8 @@ def read_json(path):
 def load_pair(root):
     root = Path(root).resolve(strict=True)
     plan, plan_hash = read_json(root / "manifest.json")
-    if not isinstance(plan, dict) or plan.get("schema_version") != "praxile.native_pair_plan.v1":
+    if not isinstance(plan, dict) or plan.get("schema_version") not in {
+            "praxile.native_pair_plan.v1", "praxile.native_pair_plan.v2"}:
         raise ValueError("unsupported native pair plan")
     candidate = load_candidate(root / "candidate-asset.json", plan.get("candidate_file_sha256"))
     baseline, baseline_hash = read_json(root / "baseline.json")
@@ -43,6 +45,9 @@ def load_pair(root):
         raise ValueError("invalid baseline job identity")
     base = dict(baseline, job_name=baseline["job_name"][:-len("-baseline")])
     expected, arms = prepare_pair(base, candidate, repository=plan.get("repository"), output_dir=root)
+    if plan["schema_version"] == "praxile.native_pair_plan.v2":
+        expected["schema_version"] = plan["schema_version"]
+        expected["local_inputs"] = snapshot_inputs(arms["baseline"])
     if encoded(expected) != encoded(plan) or encoded(arms["candidate"]) != encoded(proposed):
         raise ValueError("pair manifest or arm configuration differs from frozen plan")
     if encoded(arms["baseline"]) != encoded(baseline):
@@ -70,6 +75,7 @@ async def run_pair(root):
     state = {"schema_version": "praxile.native_pair_execution.v1", "status": "starting",
         "plan_sha256": snapshots["manifest.json"], "harbor_version": harbor_version,
         "order": ["baseline", "candidate"], "arms": {}, "promotion_eligible": False,
+        "local_inputs_frozen": "local_inputs" in plan,
         "controlled_experiment_verified": False}
     # Exclusive durable claim prevents duplicate calls, including after crashes.
     with os.fdopen(os.open(state_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as handle:
@@ -82,6 +88,8 @@ async def run_pair(root):
             for name, checksum in snapshots.items():
                 if read_json(root / name)[1] != checksum:
                     raise ValueError("pair inputs changed after execution claim")
+            if "local_inputs" in plan and encoded(snapshot_inputs(arms[current])) != encoded(plan["local_inputs"]):
+                raise ValueError("local task or worker inputs changed between arms")
             output = Path(arms[current]["jobs_dir"]) / arms[current]["job_name"]
             if output.exists() or output.is_symlink():
                 raise ValueError("arm output already exists; implicit resume forbidden")

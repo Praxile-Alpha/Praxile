@@ -12,6 +12,7 @@ pytest.importorskip("harbor")
 from praxile.eval.credential_broker import ChatCredentialBroker
 from praxile.eval.native_pair import encoded, prepare_pair
 from praxile.eval.native_pair_run import run_pair
+from praxile.eval.native_input_snapshot import snapshot_inputs
 from praxile.eval.native_trial_binding import bind_native_trace
 from praxile.eval.v2.candidate import ContextCandidate
 
@@ -75,11 +76,13 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     root = tmp_path / "pair"
     root.mkdir()
     plan, arms = prepare_pair(job, candidate, repository="fixture/repo" if active else "other/repo", output_dir=root)
+    plan.update(schema_version="praxile.native_pair_plan.v2", local_inputs=snapshot_inputs(job))
     for name, value in [("manifest.json", plan), ("candidate-asset.json", candidate),
                         *[(arm + ".json", config) for arm, config in arms.items()]]:
         (root / name).write_bytes(encoded(value))
     state = asyncio.run(run_pair(root))
     assert state["status"] == "jobs_returned"
+    assert state["local_inputs_frozen"] is True
     assert observed == [False, active]
     assert brokers and all(broker.status()["revoked"] for broker in brokers)
     if workbuddy:

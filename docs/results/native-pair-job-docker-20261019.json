@@ -9,6 +9,17 @@
   "test": "tests/resource/test_native_pair_docker.py::test_real_harbor_job_pair_runs_native_workers",
   "results": {"passed": 2, "seconds": 40.65, "trials": 4, "fixture_model_requests": 4},
   "paid_model_calls": 0,
+  "local_input_snapshot_followup": {
+    "host_base_revision": "e16784c",
+    "plan_schema": "praxile.native_pair_plan.v2",
+    "harbor_version": "0.22.0",
+    "passed": 2,
+    "seconds": 46.06,
+    "trials": 4,
+    "verified": "Task tree and worker snapshot remained equal before both arms; activation and trace checks retained",
+    "paid_model_calls": 0,
+    "limitation": "Pre-execution comparison, not immutable mounts or remote environment freeze"
+  },
   "initial_failure": "Fixture tried json.dumps on broker bytes, causing upstream 502. Both workers returned needs_human despite constant fixture verifier reward. Corrected byte inspection and added completed-state assertions.",
   "verified": [
     "Real Harbor Job.create/run and Docker Trial lifecycle for both arms",

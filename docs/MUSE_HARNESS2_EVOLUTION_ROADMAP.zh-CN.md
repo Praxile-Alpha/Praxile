@@ -349,6 +349,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   active/abstain 双臂四 Trial 均完成，2 项通过；额外实测 setup 后非 root UID
   和 dev 默认身份。仍为 fixture 模型/评分，真实任务与官方 CompositeVerifier、
   image mount 和恢复未验收，不据此勾选完整 benchmark 支持。
+  本地输入冻结增补：native_pair --freeze-local-inputs 生成 v2 plan，记录任务树
+  内容/权限与 worker/dependency wheels，启动和每臂前复核，变更后停止后续臂。
+  v1 保持兼容并标未冻结；清单不含文件正文/凭据。此为启动时检测，不是不可变
+  挂载，远端模型/judge/镜像与运行时并发修改仍未解决，完整冻结项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

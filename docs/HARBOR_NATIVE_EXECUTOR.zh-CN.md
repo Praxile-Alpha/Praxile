@@ -618,6 +618,7 @@ python -m praxile.eval.native_pair \
   --candidate /absolute/private/development-candidate.json \
   --candidate-sha256 CANDIDATE_FILE_SHA256 \
   --repository EXACT_SCOPE_REPOSITORY \
+  --freeze-local-inputs \
   --output-dir /absolute/private/new-pair
 ```
 
@@ -628,6 +629,14 @@ python -m praxile.eval.native_pair \
 
 两臂固定单并发、单次尝试和零自动重试，其余共用原配置，只改变 job 名称与
 候选注入参数。此命令不启动 Harbor、不调用模型，也不自动评分或批准经验。
+推荐使用 `--freeze-local-inputs` 生成 v2 plan：保存任务树（包括文件权限、空目录）
+和显式 worker/dependency wheels 的本地摘要清单。准备时检查 wheel 声明摘要，
+运行入口及每臂启动前重新计算清单；增删文件、内容/权限变化或 wheel 变化均拒绝
+继续。最多读取 2 GiB/50000 个文件，拒绝符号链接和非普通文件，不读取配置中的
+credential_file；清单只保存摘要和元数据，不保存任务/rubric 正文，仍应私有保管。
+这是启动时检测，不是不可变挂载：执行期间并发修改、镜像 tag、远程依赖、模型
+端点和 judge 服务的状态尚未冻结，`controlled_experiment_verified` 继续为 false。
+不带该参数的旧 v1 plan 仍兼容，执行记录明确 `local_inputs_frozen=false`。
 正式执行前应在对应的隔离 Harbor 环境校验配置与材料；冻结镜像、模型端点、
 judge、外部文件和运行顺序仍需进一步验证，当前 manifest 不宣称受控实验通过。
 真实双臂执行验收、结果收集和恢复编排仍待完成。

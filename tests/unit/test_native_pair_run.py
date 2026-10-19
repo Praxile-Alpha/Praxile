@@ -96,3 +96,27 @@ def test_execute_flag_required_without_starting_anything(pair, monkeypatch):
     with pytest.raises(SystemExit):
         runner.main()
     assert not (pair / "execution.json").exists()
+
+
+def test_v2_local_snapshot_stops_changed_task_between_arms(pair, monkeypatch):
+    import hashlib
+    from praxile.eval.native_input_snapshot import snapshot_inputs
+    task = pair.parent / "task"
+    task.mkdir()
+    (task / "instruction.md").write_text("initial")
+    wheel = pair.parent / "worker.whl"
+    wheel.write_bytes(b"fixture")
+    base = json.loads((pair / "baseline.json").read_text())
+    base["job_name"] = "paired"
+    base["agents"][0]["kwargs"].update(wheel_path=str(wheel), wheel_sha256=hashlib.sha256(b"fixture").hexdigest())
+    candidate = json.loads((pair / "candidate-asset.json").read_text())
+    plan, arms = prepare_pair(base, candidate, repository="docs", output_dir=pair)
+    plan.update(schema_version="praxile.native_pair_plan.v2", local_inputs=snapshot_inputs(base))
+    (pair / "manifest.json").write_bytes(encoded(plan))
+    for arm, config in arms.items():
+        (pair / (arm + ".json")).write_bytes(encoded(config))
+    calls = backend(monkeypatch, lambda config: (task / "instruction.md").write_text("changed"))
+    with pytest.raises(ValueError, match="between arms"):
+        asyncio.run(runner.run_pair(pair))
+    assert calls == ["paired-baseline"]
+    assert json.loads((pair / "execution.json").read_text())["local_inputs_frozen"] is True
