@@ -1,0 +1,43 @@
+{
+  "schema_version": "praxile.public_candidate_design_evidence.v1",
+  "date": "2026-10-19",
+  "model": "MiniMax-M3.1-Flash",
+  "source_result_sha256": "351865f7c0cf274d95d72ad526e4f877d1d0388331e42a97f84d8641be248ad6",
+  "public_observation_count": 7,
+  "source_membership": "caller_declared_development",
+  "attempts": [
+    {
+      "configuration": "provider_default_thinking",
+      "max_output_tokens": 4000,
+      "timeout_seconds": 60,
+      "status": "rejected_truncated_response",
+      "finish_reason": "length",
+      "final_content_chars": 0,
+      "input_tokens": 2105,
+      "output_tokens": 4000,
+      "reasoning_tokens": 4000,
+      "latency_ms": 41932,
+      "cost_usd": null
+    },
+    {
+      "configuration": "thinking_disabled",
+      "max_output_tokens": 4000,
+      "timeout_seconds": 60,
+      "status": "provider_rejected_configuration",
+      "http_status": 400,
+      "provider_constraint": "Model requires adaptive thinking; disabled and reasoning effort none are not allowed",
+      "input_tokens": null,
+      "output_tokens": null,
+      "cost_usd": null
+    }
+  ],
+  "candidate_count": 0,
+  "experiments_started": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Two separately recorded configurations, not automatic retry or A/B task evaluation",
+    "No private evaluator material was sent to the designer",
+    "No valid design response; evidence sufficiency and candidate quality remain unassessed",
+    "No reasoning text or credential is included in this public record"
+  ]
+}

@@ -53,6 +53,27 @@ def test_abstention_is_normal_no_entry():
     assert result["abstention"]["reason"] == "unspecified"
 
 
+def test_explicit_budget_is_recorded_and_never_automatically_expanded():
+    kwargs, calls = inputs({"content": "", "finish_reason": "length",
+        "usage": {"completion_tokens": 8000, "completion_tokens_details": {"reasoning_tokens": 8000}}})
+    with pytest.raises(EvalSchemaError, match="truncated"):
+        design_development_candidates(**kwargs, max_output_tokens=8000)
+    assert len(calls) == 1 and calls[0][1]["max_tokens"] == 8000
+    record = kwargs["logger"].data["development_candidate_designs"][0]
+    assert record["max_output_tokens"] == 8000
+    assert record["reasoning_tokens"] == 8000 and record["final_content_chars"] == 0
+    assert record["truncation_diagnostic"] == "reasoning_consumed_budget_without_final_content"
+    assert record["status"] == "failed"
+
+
+@pytest.mark.parametrize("budget", [True, 0, 255, 16385, "8000"])
+def test_invalid_output_budget_rejected_before_model(budget):
+    kwargs, calls = inputs({"content": '{"decision":"abstain"}'})
+    with pytest.raises(EvalSchemaError, match="budget"):
+        design_development_candidates(**kwargs, max_output_tokens=budget)
+    assert calls == []
+
+
 def test_bounded_abstention_diagnostics_are_unverified_and_durable(tmp_path):
     from praxile.eval.v2.candidate_design_run import _finish
     kwargs, calls = inputs({"content": json.dumps({"decision": "abstain",

@@ -16,8 +16,10 @@ MISSING_EVIDENCE = ("before_after_observations", "action_parameters", "public_co
 
 def design_development_candidates(*, evidence, development_task_ids, heldout_task_ids,
                                   applies_to, design_id, router, logger, private=False,
-                                  cancel_requested=None, executor_profile=None):
+                                  cancel_requested=None, executor_profile=None, max_output_tokens=4000):
     """Consume explicitly supplied public development observations, not raw evaluator reports."""
+    if type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384:
+        raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", design_id):
         raise EvalSchemaError("unsafe design ID")
     dev, heldout = set(development_task_ids), set(heldout_task_ids)
@@ -51,6 +53,7 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
         payload["executor_capability"] = capability
     serialized = canonical_json(payload)
     record = {"design_id": design_id, "status": "requested",
+              "max_output_tokens": max_output_tokens, "timeout_seconds": 60,
               "input_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
               "source_task_ids": sorted(set(refs.values())), "promotion_eligible": False}
     logger.data.setdefault("development_candidate_designs", []).append(record)
@@ -77,15 +80,25 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 "runtime observations such as current file hashes must be refreshed before any real use.")},
             {"role": "user", "content": serialized},
         ], purpose="proposal_composer", private=private, high_risk=False,
-            max_tokens=4000, timeout=60, temperature=0, cancel_requested=cancel_requested)
+            max_tokens=max_output_tokens, timeout=60, temperature=0, cancel_requested=cancel_requested)
         logger.add_model_cost(response.get("usage", {}), route={**response.get("route", {}),
             "purpose": "proposal_composer", "latency_ms": response.get("latency_ms")})
         stage = "response_decode"
         result, decoding = decode_action(response.get("content", ""))
         record["response_decode"] = decoding
         record["finish_reason"] = response.get("finish_reason")
+        usage = response.get("usage")
+        details = usage.get("completion_tokens_details") if isinstance(usage, dict) else None
+        reasoning = details.get("reasoning_tokens") if isinstance(details, dict) else None
+        record["reasoning_tokens"] = reasoning if type(reasoning) is int and reasoning >= 0 else None
+        content = response.get("content")
+        record["final_content_chars"] = len(content) if isinstance(content, str) else None
         stage = "response_completion"
         if response.get("finish_reason") in {"length", "max_tokens"}:
+            record["truncation_diagnostic"] = (
+                "reasoning_consumed_budget_without_final_content"
+                if record["final_content_chars"] == 0 and record["reasoning_tokens"] is not None
+                and record["reasoning_tokens"] >= max_output_tokens else "output_limit_reached")
             raise EvalSchemaError("truncated candidate design response")
         if result is None:
             raise EvalSchemaError("candidate design response is not a complete JSON object")

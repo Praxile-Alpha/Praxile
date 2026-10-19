@@ -145,6 +145,20 @@ Shell 的 `returncode` 与旧适配器 `exit_code` 均可读取；冲突或类�
 未调用模型，未修改原轨迹或历史评分，也未生成候选。新 bundle 标记
 `projection_version=2`，旧 bundle 不覆盖。证据覆盖增加不等于经验有效性提升。
 
+M3.1 Flash 真实设计验收（2026-10-19）：仅发送上述 7 条公开证据及声明的工具接口，
+默认 thinking、4000 输出 token/60 秒上限。请求报告 2105 input、4000 output，
+其中 reasoning_tokens=4000，最终正文为空、finish_reason=length；系统拒绝截断，
+没有候选。另一次独立 `thinking=disabled` 配置验证被 API 以 HTTP 400 拒绝：
+该模型要求 adaptive thinking，不允许 disabled/effort none。两份记录均保留，
+不覆盖旧失败，不把它们算作任务 A/B，也不推断 NO_ENTRY 或证据质量。
+见 [脱敏验收记录](results/office-flash-candidate-design-20261019.json)。
+
+`design_development_candidates(..., max_output_tokens=4000)` 现允许调用方显式传入
+256..16384 的整数预算，默认不变，并记录请求预算、reasoning token 数、正文长度
+和截断诊断。它不会自动增加预算、切模型或重试；调整预算应成为新实验计划的一部分。
+该参数当前为 Python API，既有 CLI 的冻结设计仍使用默认 4000；不要认为修改它
+已经改变所有 CLI、worker 或执行器角色。模型请求选项也必须按 provider 实际支持配置。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
