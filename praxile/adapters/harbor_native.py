@@ -26,7 +26,11 @@ class PraxileAgent(BaseAgent):
                  timeout_seconds: int = 900, credential_file: str | None = None,
                  task_body_file: str | None = None, task_body_sha256: str | None = None,
                  inherit_task_packages: bool = False, model_timeout_seconds: int = 30,
-                 output_directory: str | None = None, **kwargs):
+                 output_directory: str | None = None, renderer_executable: str = "", **kwargs):
+        if not isinstance(renderer_executable, str) or (renderer_executable and
+                (not PurePosixPath(renderer_executable).is_absolute() or ".." in PurePosixPath(renderer_executable).parts)):
+            raise ValueError("renderer_executable must be empty or a trusted absolute container path")
+        self.renderer_executable = renderer_executable
         if output_directory is not None:
             output_path = PurePosixPath(output_directory)
             if output_path.is_absolute() or ".." in output_path.parts or not output_path.parts:
@@ -154,12 +158,15 @@ class PraxileAgent(BaseAgent):
             argv.extend(["--task-body-file", self.task_body_file, "--task-body-sha256", self.task_body_sha256])
         if self.output_directory is not None:
             argv.extend(["--output-directory", self.output_directory])
+        if self.renderer_executable:
+            argv.extend(["--renderer-executable", self.renderer_executable])
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
                   "wheel_sha256": self.wheel_sha256, "result_available": False,
                   "inherit_task_packages": self.inherit_task_packages,
                   "output_directory": self.output_directory,
+                  "renderer_executable": self.renderer_executable,
                   "model_timeout_seconds": self.model_timeout_seconds}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:

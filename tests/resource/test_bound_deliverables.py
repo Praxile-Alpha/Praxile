@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from praxile.config import Config
 from praxile.runtime import AgentRuntime
@@ -69,3 +70,38 @@ def test_final_state_evidence_survives_trajectory_storage(tmp_path, monkeypatch)
     assert evidence["observed_at"]
     assert evidence["fields"] == [{"name": "browser.session_active", "availability": "observed",
         "value": False, "value_sha256": evidence["fields"][0]["value_sha256"]}]
+
+
+def test_finish_gate_allows_repair_within_existing_budget(tmp_path, monkeypatch):
+    runtime = AgentRuntime(Config.load(tmp_path))
+    actions = iter([
+        {"type": "finish", "summary": "premature completion"},
+        {"type": "edit_file", "path": "report.json", "content": "{}"},
+        {"type": "finish", "summary": "repaired"},
+    ])
+    prompts = []
+    def chat(*args, **kwargs):
+        prompts.append(json.dumps(kwargs.get("messages", args), default=str))
+        return {"content": json.dumps(next(actions)), "usage": {}, "route": {}}
+    monkeypatch.setattr(runtime.router, "chat", chat)
+    result = runtime.run("Produce report", deliverable_contract=contract(), max_steps=3, use_experience=False)
+    assert result["result"]["status"] == "completed"
+    gates = [a for a in result["actions"] if a["action_type"] == "deliverable_finish_gate"]
+    assert [a["status"] for a in gates] == ["failure", "success"]
+    assert any("Completion rejected" in p for p in prompts)
+    assert result["deliverable_verification"]["status"] == "success"
+
+
+def test_unconfigured_renderer_cannot_pass_bound_docx_completion(tmp_path, monkeypatch):
+    docx = pytest.importorskip("docx")
+    docx.Document().save(tmp_path / "checklist.docx")
+    request = {"schema_version": "praxile.deliverable_contract.v1", "source": "user_request", "outputs": [
+        {"path": "checklist.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+         "structure": {"max_pages": 1}}]}
+    runtime = AgentRuntime(Config.load(tmp_path))
+    monkeypatch.setattr(runtime.router, "chat", lambda *a, **k: {
+        "content": json.dumps({"type": "finish", "summary": "claimed one page"}), "usage": {}, "route": {}})
+    result = runtime.run("Produce a one-page checklist", deliverable_contract=request, max_steps=1, use_experience=False)
+    assert result["result"]["status"] == "needs_human"
+    assert result["deliverable_verification"]["status"] == "failure"
+    assert any(a["action_type"] == "deliverable_finish_gate" and a["status"] == "failure" for a in result["actions"])

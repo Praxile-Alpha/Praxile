@@ -172,8 +172,11 @@ class ToolRegistry:
                         observed_state = {"browser": self.browser.observe_state()}
                     except Exception:
                         observed_state = {}
+                from .document_layout import check_layout
                 report = verify_deliverables(self.config.paths.root, contract, observed_state=observed_state,
-                    observed_at=observed_at, observation_source="browser_session_observer")
+                    observed_at=observed_at, observation_source="browser_session_observer",
+                    layout_checker=lambda path, limit: check_layout(
+                        self.config, self.safety, path, max_pages=limit).to_dict())
                 report["contract_binding"] = "run_argument" if self._deliverable_contract_json is not None else "model_proposed"
             except ValueError:
                 return {"status": "failure", "output": "Invalid public deliverable contract", "data": {}, "risk_level": "low"}

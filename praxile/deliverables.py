@@ -21,7 +21,7 @@ from .experience_conditions import check_conditions
 STRUCTURE_FIELDS = {
     "pdf": {"min_pages": "pages"},
     "pptx": {"min_slides": "slides"},
-    "docx": {"min_tables": "tables", "required_headings": "headings"},
+    "docx": {"min_tables": "tables", "required_headings": "headings", "max_pages": "pages"},
     "xlsx": {"required_sheets": "sheets"},
     "text/csv": {"min_rows": "data_rows"},
 }
@@ -32,8 +32,8 @@ def _structure_checks(requirement: dict, observed: dict) -> list[dict]:
     checks = []
     for name, expected in requirement.get("structure", {}).items():
         actual = observed.get(mapping[name])
-        if name.startswith("min_"):
-            passed = type(actual) is int and actual >= expected
+        if name.startswith(("min_", "max_")):
+            passed = type(actual) is int and (actual >= expected if name.startswith("min_") else actual <= expected)
             checks.append({"requirement": name, "expected": expected, "actual": actual, "passed": passed})
         else:
             missing = [item for item in expected if not isinstance(actual, list) or item not in actual]
@@ -84,7 +84,10 @@ def validate_contract(value: object) -> list[dict]:
         if not isinstance(structure, dict) or set(structure) - set(allowed):
             raise EvalSchemaError("unsupported structure constraint for deliverable format")
         for name, expected in structure.items():
-            if name.startswith("min_"):
+            if name == "max_pages":
+                if type(expected) is not int or not 1 <= expected <= 2000:
+                    raise EvalSchemaError("max_pages must be an integer in [1, 2000]")
+            elif name.startswith("min_"):
                 if type(expected) is not int or not 0 <= expected <= 1_000_000:
                     raise EvalSchemaError("structural minimum must be an integer in [0, 1000000]")
             elif (not isinstance(expected, list) or not 1 <= len(expected) <= 100
@@ -95,11 +98,12 @@ def validate_contract(value: object) -> list[dict]:
 
 def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_000,
                         observed_state: dict | None = None, observed_at: str | None = None,
-                        observation_source: str = "caller_supplied") -> dict:
-    """No code execution, network access, globbing, or symlink traversal.
+                        observation_source: str = "caller_supplied", layout_checker=None) -> dict:
+    """No model code execution, globbing, or symlink traversal.
 
     Checks represent structural evidence only. source labels are not proof of
-    provenance; callers must supply the approved public contract.
+    provenance; callers must supply the approved public contract. Optional
+    layout_checker is a trusted caller service, never part of model JSON.
     """
     outputs = validate_contract(contract)
     if type(max_bytes) is not int or not 1 <= max_bytes <= 100_000_000:
@@ -186,7 +190,23 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
                     raise ValueError("invalid parser result")
                 result.update(parsed)
                 if parsed["status"] == "passed":
-                    checks = _structure_checks(requirement, parsed.get("structure", {}))
+                    page_limit = requirement.get("structure", {}).get("max_pages")
+                    if page_limit is not None:
+                        if layout_checker is None:
+                            result.update(status="unsupported", reason="layout_renderer_unavailable")
+                            continue
+                        layout = layout_checker(requirement["path"], page_limit)
+                        result["layout_check"] = layout
+                        data = layout.get("data", {})
+                        if data.get("source_sha256") != result["sha256"]:
+                            result.update(status="failed", reason="layout_snapshot_unverified")
+                            continue
+                        if layout.get("status") != "success" or data.get("page_limit_met") is not True:
+                            result.update(status="failed", reason="layout_requirement_unverified")
+                            continue
+                        result.setdefault("structure", {})["pages"] = data.get("pages")
+                        result["rendered"] = True
+                    checks = _structure_checks(requirement, result.get("structure", {}))
                     result["structure_checks"] = checks
                     if not all(check["passed"] for check in checks):
                         result.update(status="failed", reason="user_structure_requirement_unmet")

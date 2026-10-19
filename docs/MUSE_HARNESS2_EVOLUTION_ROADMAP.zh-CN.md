@@ -220,8 +220,11 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 显式配置可信 LibreOffice 后，以快照和限时进程组获取真实页数，超页失败；
 不继承模型密钥、不覆盖原稿。真实两页与一页修订 fixture 通过，旧 checklist
 离线复查为 5 页且失败。页数来源不冒充可信用户契约，视觉验收仍为 false。
-Harbor 配置透传、强制完成门禁和真实 Agent 自动修订尚缺，完整自检/修订项
-不勾选。具体边界见 `DOCUMENT_TOOLS.zh-CN.md`。
+后续补齐 Harbor renderer 配置透传及 caller-bound DOCX max_pages：完成前
+校验不通过会向模型反馈并在剩余步数内重试，最终再检查；缺依赖/摘要变化均
+不通过。JSON fixture 修复闭环、真实 DOCX 超页拦截已验证。但 benchmark
+公共契约输入通道、同路径安全 DOCX 修订及真实模型修订验收仍缺，完整自检/
+修订项不勾选。具体边界见 `DOCUMENT_TOOLS.zh-CN.md`。
 
 产物回收边界增补：原生 worker/Harbor 可显式配置输出目录，执行后生成独立
 artifact_inventory，区分不存在、空、格式问题、不支持和未检查完；来源是

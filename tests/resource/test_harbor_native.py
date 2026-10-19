@@ -238,6 +238,34 @@ def test_task_dependency_inheritance_is_explicit(tmp_path, inherit):
     assert any("--system-site-packages" in command for command in commands) is inherit
 
 
+def test_renderer_configuration_reaches_worker_and_execution_record(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import shlex
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    kwargs = dict(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture")
+    for invalid in [True, "soffice", "/tmp/../bin/soffice"]:
+        with pytest.raises(ValueError, match="renderer_executable"):
+            PraxileAgent(**kwargs, renderer_executable=invalid)
+    renderer = "/opt/Office Suite/soffice"
+    agent = PraxileAgent(**kwargs, renderer_executable=renderer)
+    commands = []
+    class Environment:
+        async def exec(self, command, **kwargs):
+            commands.append(shlex.split(command))
+            return SimpleNamespace(return_code=0)
+        async def upload_file(self, *args):
+            pass
+    monkeypatch.setattr(agent, "_collect_result", AsyncMock())
+    monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
+    asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    assert commands[0][commands[0].index("--renderer-executable") + 1] == renderer
+    assert json.loads((tmp_path / "praxile-execution.json").read_text())["renderer_executable"] == renderer
+
+
 @pytest.mark.slow
 @pytest.mark.timeout(300)
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")

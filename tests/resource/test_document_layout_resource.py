@@ -34,6 +34,14 @@ def test_real_renderer_detects_page_overflow_and_revision(tmp_path):
         assert result["data"]["source_sha256"] == hashlib.sha256(before).hexdigest()
         assert result["data"]["visual_quality_verified"] is False
         assert (tmp_path / "checklist.docx").read_bytes() == before
+        contract = {"schema_version": "praxile.deliverable_contract.v1", "source": "user_request", "outputs": [
+            {"path": "checklist.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+             "structure": {"max_pages": 1}}]}
+        tools.bind_deliverable_contract(contract)
+        checked = tools.execute({"type": "check_deliverables", "contract": contract}, task_id="layout", step=2)
+        assert checked["status"] == "failure"
+        assert checked["data"]["contract_binding"] == "run_argument"
+        assert checked["data"]["outputs"][0]["layout_check"]["data"]["pages"] == 2
         revised = docx.Document()
         revised.add_paragraph("Short checklist")
         revised.save(tmp_path / "revised.docx")

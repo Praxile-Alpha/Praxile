@@ -34,7 +34,8 @@ def load_task_input(root: Path, instruction: str, relative_path: str, expected_s
     return TaskInput(raw.decode("utf-8"), instruction, relative_path)
 
 
-def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, model_timeout_seconds: int = 30) -> Config:
+def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, model_timeout_seconds: int = 30,
+                     renderer_executable: str = "") -> Config:
     root = root.resolve(strict=True)
     if not root.is_dir() or (root / ".praxile").exists() or (root / ".praxile").is_symlink():
         raise ValueError("native benchmark worker requires a workspace without .praxile state")
@@ -44,6 +45,7 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
     if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password or url.query or url.fragment:
         raise ValueError("base_url must be an HTTP endpoint without embedded credentials or query")
     data = default_config(root)
+    data["documents"]["renderer_executable"] = renderer_executable
     if type(model_timeout_seconds) is not int or not 1 <= model_timeout_seconds <= 110:
         raise ValueError("model_timeout_seconds must be an integer in [1, 110]")
     data["runtime"]["model_timeout_seconds"] = model_timeout_seconds
@@ -60,7 +62,8 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
 
 
 def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url: str, max_steps: int,
-               model_timeout_seconds: int = 30, output_directory: str | None = None) -> dict[str, Any]:
+               model_timeout_seconds: int = 30, output_directory: str | None = None,
+               renderer_executable: str = "") -> dict[str, Any]:
     if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
     if output_directory is not None:
@@ -68,7 +71,7 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
         if path.is_absolute() or ".." in path.parts or not path.parts:
             raise ValueError("output directory must be workspace-relative")
     config = benchmark_config(root, model=model, base_url=base_url, max_steps=max_steps,
-                              model_timeout_seconds=model_timeout_seconds)
+                              model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable)
     runtime = AgentRuntime(config)
     try:
         trajectory = runtime.run(instruction, max_steps=max_steps, use_experience=False)
@@ -96,6 +99,7 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, required=True)
     parser.add_argument("--model-timeout-seconds", type=int, default=30)
     parser.add_argument("--output-directory")
+    parser.add_argument("--renderer-executable", default="")
     parser.add_argument("--capability-file", type=Path)
     parser.add_argument("--task-body-file")
     parser.add_argument("--task-body-sha256")
@@ -112,7 +116,8 @@ def main() -> None:
         os.environ["PRAXILE_BENCHMARK_API_KEY"] = capability
     result = run_native(args.workspace, instruction,
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps,
-                        model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory)
+                        model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory,
+                        renderer_executable=args.renderer_executable)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

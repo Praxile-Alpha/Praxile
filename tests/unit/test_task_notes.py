@@ -49,6 +49,7 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     runtime.action_schemas = ActionSchemaRegistry()
     runtime.project = SimpleNamespace(snapshot=lambda **kwargs: {"git": {"is_repo": True}})
     runtime.tools = SimpleNamespace(
+        deliverable_contract=None,
         safety=SimpleNamespace(check_tool_call=lambda *args, **kwargs:
             SimpleNamespace(allowed=not denied, reason="policy denied", risk_level="medium")),
         execute=Mock(return_value={"status": "success", "output": "observed", "data": {}}))

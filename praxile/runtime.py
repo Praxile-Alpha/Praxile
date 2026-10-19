@@ -1123,6 +1123,19 @@ class AgentRuntime:
                     status = action.get("status", "completed")
                     if status not in {"completed", "needs_human", "failed"}:
                         status = "completed"
+                    if status == "completed" and self.tools.deliverable_contract is not None:
+                        verification = self.tools.execute(
+                            {"type": "check_deliverables", "contract": self.tools.deliverable_contract},
+                            task_id=logger.task_id, step=len(logger.data["actions"]) + 1)
+                        logger.add_action(action_type="deliverable_finish_gate", input_data={"source": "run_argument"},
+                            observation=verification, status=verification["status"], executor=self._verification_executor())
+                        if verification["status"] != "success":
+                            messages.append({"role": "user", "content":
+                                "Completion rejected: caller-bound deliverable requirements are not verified. "
+                                "Repair the deliverables without changing the contract and check again, or finish with needs_human.\n"
+                                + json.dumps(verification, ensure_ascii=False)})
+                            self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+                            continue
                     self._emit_progress(progress_callback, "finish_action", "Model emitted finish action.", {"status": status})
                     return status, action.get("summary", "Task finished.")
             self._emit_progress(progress_callback, "needs_human", f"Stopped after max_steps={max_steps}; review trajectory and diff.")

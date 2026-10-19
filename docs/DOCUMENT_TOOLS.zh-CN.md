@@ -128,8 +128,33 @@ R1 专业交付能力，也不能宣称 benchmark 得分提升。
 信任配置的可执行文件。PDF 在临时目录中检查后删除，尚不提供页面图像回传。
 
 本动作只验证页数，不检查表格断行、视觉质量或事实正确，也不是官方评分。
-尚未接入 Harbor renderer 配置透传、用户约束强制完成门禁或真实模型自动修订
-验收；因此不能把此工具验收称作完整自主修订闭环。
+Harbor 已支持 `renderer_executable`（容器内可信绝对路径），透传至 worker
+`--renderer-executable` 并记录 execution metadata；空字符串继续禁用。
+配置本身不安装 LibreOffice，也不证明对应镜像具备渲染依赖。
+
+### 用户契约与完成门禁
+
+caller-bound 交付契约中的 DOCX 可以声明：
+
+```json
+{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/checklist.docx","media_type":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","structure":{"max_pages":1}}]}
+```
+
+调用方必须明确提供/确认契约；不从隐藏 rubric 推断，不把模型自拟上限提升为
+用户要求。`check_deliverables` 比较结构检查与渲染输入摘要；缺渲染器、摘要变化
+或超页均不通过。原始纯函数调用未提供 layout_checker 时返回 unsupported，
+不会跳过要求。上限限制 1..2000，不接受布尔值、字符串或零。
+
+Runtime 在 completed finish 前重检绑定契约，不通过则将证据返给模型，允许
+在剩余 max_steps 内修复或转 needs_human；不会扩充步数预算。最终落盘前仍再次
+检查，防止仅凭早期成功结果宣称通过。内部检查不计为模型工具调用。
+fixture 验证了 JSON 产物的拒绝/修复/完成，真实 LibreOffice 验证 DOCX 超页
+拒绝；无渲染器的模型 completed 被降为 needs_human。
+
+真实模型 DOCX 自动修订尚未验收：create_docx 不覆盖既有路径，而固定契约不
+允许换路径绕过，需要后续引入带摘要冲突检查及备份回滚的同路径修订。原生
+benchmark worker 的公共契约输入通道也尚未接入，不能宣称 Harbor 已自动执行
+用户页数门禁。这些缺口意味着完整自主修订闭环仍未完成。
 
 ## 模型输出截断诊断
 
