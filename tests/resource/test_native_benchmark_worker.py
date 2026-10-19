@@ -15,7 +15,8 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 @pytest.mark.parametrize("structured", [False, True])
 @pytest.mark.parametrize("bound", [False, True])
-def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structured, bound):
+@pytest.mark.parametrize("candidate_mode", ["none", "active", "abstain"])
+def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structured, bound, candidate_mode):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -56,6 +57,18 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
                 "structure": {"max_pages": 1}}]}))
         extra += ["--deliverable-contract-file", str(public_contract), "--deliverable-contract-sha256",
                   hashlib.sha256(public_contract.read_bytes()).hexdigest()]
+    if candidate_mode != "none":
+        from praxile.eval.v2.candidate import ContextCandidate
+        candidate = ContextCandidate(candidate_id="development", version="1", title="Fixture",
+            candidate_type="context_policy", context_item={"content": "EXPERIMENT_SENTINEL: inspect files before summarizing."},
+            confidence=0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "test transport"},
+            applies_to={"repositories": ["fixture/repo"], "task_signals": ["available"],
+                        "does_not_apply_when": ["unrelated topic"]})
+        candidate_path = tmp_path / "candidate.json"
+        candidate_path.write_text(json.dumps(candidate.to_dict()))
+        extra += ["--development-candidate", str(candidate_path), "--development-candidate-sha256",
+                  hashlib.sha256(candidate_path.read_bytes()).hexdigest(), "--development-only",
+                  "--repository", "fixture/repo" if candidate_mode == "active" else "other/repo"]
     result = tmp_path / "result.json"
     try:
         process = subprocess.run([
@@ -71,6 +84,12 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
     assert process.returncode == 0, process.stderr
     report = json.loads(result.read_text())
     assert requests
+    injected = any("EXPERIMENT_SENTINEL" in message["content"] for request in requests for message in request["messages"])
+    assert injected is (candidate_mode == "active")
+    if candidate_mode != "none":
+        assert report["development_context"]["injected"] is injected
+        assert report["development_context"]["activation"]["activated"] is injected
+        assert report["development_context"]["promotion_eligible"] is False
     assert report["official_evaluation"] == "not_run"
     assert report["trajectory"]["cost"]["prompt_tokens"] == (24 if bound else 12)
     assert report["trajectory"]["result"]["status"] == ("needs_human" if bound else "completed")

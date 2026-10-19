@@ -86,9 +86,16 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
 
 def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url: str, max_steps: int,
                model_timeout_seconds: int = 30, output_directory: str | None = None,
-               renderer_executable: str = "", deliverable_contract: dict | None = None) -> dict[str, Any]:
+               renderer_executable: str = "", deliverable_contract: dict | None = None,
+               development_candidate: dict | None = None, repository: str | None = None,
+               development_only: bool = False) -> dict[str, Any]:
     from ..services.run_service import normalize_deliverable_contract
     deliverable_contract = normalize_deliverable_contract(deliverable_contract)
+    context_plan = None
+    if development_candidate is not None:
+        from .native_context import plan_candidate
+        context_plan = plan_candidate(development_candidate, instruction, repository,
+                                      development_only=development_only)
     if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
     if output_directory is not None:
@@ -99,8 +106,9 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                               model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable)
     runtime = AgentRuntime(config)
     try:
+        options = {"experimental_context": context_plan["content"]} if context_plan and context_plan["content"] else {}
         trajectory = runtime.run(instruction, max_steps=max_steps, use_experience=False,
-                                 deliverable_contract=deliverable_contract)
+                                 deliverable_contract=deliverable_contract, **options)
     finally:
         # run closes tools; providers also own persistent HTTP transports.
         for provider in runtime.router.providers.values():
@@ -109,6 +117,10 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                 close()
     result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": trajectory,
               "official_evaluation": "not_run", "experience_mode": "fresh_disabled"}
+    if context_plan is not None:
+        result["development_context"] = {key: value for key, value in context_plan.items() if key != "content"}
+        result["experience_mode"] = "development_candidate"
+        result["development_context"]["injected"] = trajectory.get("experimental_context", {}).get("injected", False)
     if output_directory is not None:
         from ..artifact_inventory import inspect_outputs
         result["artifact_inventory"] = inspect_outputs(root, output_directory)
@@ -131,7 +143,17 @@ def main() -> None:
     parser.add_argument("--capability-file", type=Path)
     parser.add_argument("--task-body-file")
     parser.add_argument("--task-body-sha256")
+    parser.add_argument("--development-candidate", type=Path)
+    parser.add_argument("--development-candidate-sha256")
+    parser.add_argument("--development-only", action="store_true")
+    parser.add_argument("--repository")
     args = parser.parse_args()
+    if bool(args.development_candidate) != bool(args.development_candidate_sha256):
+        parser.error("development candidate file and digest must be configured together")
+    candidate = None
+    if args.development_candidate:
+        from .native_context import load_candidate
+        candidate = load_candidate(args.development_candidate, args.development_candidate_sha256)
     if bool(args.task_body_file) != bool(args.task_body_sha256):
         parser.error("task body file and digest must be configured together")
     if bool(args.deliverable_contract_file) != bool(args.deliverable_contract_sha256):
@@ -149,7 +171,8 @@ def main() -> None:
     result = run_native(args.workspace, instruction,
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps,
                         model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory,
-                        renderer_executable=args.renderer_executable, deliverable_contract=contract)
+                        renderer_executable=args.renderer_executable, deliverable_contract=contract,
+                        development_candidate=candidate, repository=args.repository, development_only=args.development_only)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

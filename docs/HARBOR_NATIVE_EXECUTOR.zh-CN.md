@@ -4,6 +4,35 @@
 
 ## 边界
 
+### 原生开发候选通道
+
+`python -m praxile.eval.native_worker` 现可额外接收以下参数（其余 workspace、
+instruction、result、model、base-url、max-steps 参数保持原样）：
+
+```text
+--development-only
+--repository public/docs
+--development-candidate /control/candidate.json
+--development-candidate-sha256 <sha256-of-candidate-file>
+```
+
+仅用于明确的 development 实验，不是 held-out 模式。候选文件须为已有
+ContextCandidate 格式，具备 repository/task_signals/anti-scope；文件摘要、大小、
+重复 JSON 字段、能力 profile、单一上下文表示和 6000 字符上限在执行前校验。
+结构化任务仅用公开 task body 做激活判断，不把环境说明当成任务意图。
+未命中保持 abstained，命中后以不可信建议注入；不赋予工具权限、不接受提案，
+不写成 memory/skill。fresh baseline 默认行为不变。
+
+结果单独记录 development_context.activation 与 injected，候选摘要及任务正文摘要；
+轨迹记录 experimental_context 的实际文本/摘要。若架构门禁提前终止，activation
+可以为真而 injected 为假，二者不能混为一谈。一般 runtime API 只允许 fresh、
+use_experience=False 的显式实验文本，不能覆盖 resume。
+
+本机真实 worker 子进程 + HTTP fixture 的 baseline/激活/弃权、结构化输入、
+交付物门禁组合测试 16 passed；无付费模型调用。Harbor 插件参数转发、标准化
+CONTEXT 事件与完整隔离双 arm 编排尚未接入，不能声称已完成 Harbor 文档 A/B。
+该通道本身不认证候选证据来源或隔离私有评分材料，仍由控制面/实验环境负责。
+
 ### 固定 worker 依赖
 
 适配器接受可选 `dependency_wheels`，每项严格为本机 `path` 和完整 `sha256`：

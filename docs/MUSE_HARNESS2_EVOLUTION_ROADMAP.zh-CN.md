@@ -308,6 +308,11 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   阶段诊断版单次请求成功返回有界弃权：2443/506 token、7.35 秒，0 候选。
   模型要求前后观察及反例，但输入已含三组零页数变化；该诊断不当客观缺失证明。
   不再对同源轨迹重复调用；需公开开发对照和原生候选执行，完整项仍不勾选。
+  原生候选执行增补：native_worker 增加显式 development-only 候选文件/摘要及
+  repository 输入，经已有适用性 gate 后作为不可信建议注入 Runtime；默认
+  baseline 不变，不写资产、不授予权限。结果区分 activation 与实际 injected。
+  16 项本机真实子进程/HTTP fixture 通过，涵盖弃权和交付物门禁；Harbor 转发、
+  规范化事件及完整双 arm 实验仍缺，完整项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
