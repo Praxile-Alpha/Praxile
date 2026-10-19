@@ -17,6 +17,52 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, monkeypatch):
+    import shlex
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from praxile.eval.v2.candidate import ContextCandidate
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture",
+        candidate_type="context_policy", context_item={"content": "Inspect pages before finishing."},
+        confidence=0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "fixture"},
+        applies_to={"repositories": ["public/docs"], "task_signals": ["checklist"],
+                    "does_not_apply_when": ["unrelated task"]})
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(candidate.to_dict()))
+    original_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    kwargs = dict(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture",
+        development_candidate_file=str(path), development_candidate_sha256=original_digest,
+        repository="public/docs")
+    with pytest.raises(ValueError, match="explicit development"):
+        PraxileAgent(**kwargs)
+    agent = PraxileAgent(**kwargs, development_only=True)
+    path.write_text("changed after construction")
+    commands, uploads = [], {}
+    class Environment:
+        async def exec(self, command, **kwargs):
+            commands.append(shlex.split(command))
+            return SimpleNamespace(return_code=0)
+        async def upload_file(self, source, destination):
+            uploads[destination] = source.read_bytes()
+    monkeypatch.setattr(agent, "_collect_result", AsyncMock())
+    monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
+    asyncio.run(agent.run("Make a checklist", Environment(), AgentContext()))
+    argv = commands[0]
+    assert "--development-only" in argv
+    assert argv[argv.index("--repository") + 1] == "public/docs"
+    uploaded = uploads[argv[argv.index("--development-candidate") + 1]]
+    assert json.loads(uploaded) == candidate.to_dict()
+    assert hashlib.sha256(uploaded).hexdigest() == argv[argv.index("--development-candidate-sha256") + 1]
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["development_context_identity"]["candidate_digest"] == ContextCandidate.from_dict(candidate.to_dict()).digest
+    assert record["development_context_identity"]["source_file_sha256"] == original_digest
+    assert str(path) not in json.dumps(record)
+
+
 def test_worker_dependencies_are_verified_offline_and_versioned(tmp_path):
     import shlex
     from types import SimpleNamespace

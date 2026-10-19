@@ -29,9 +29,19 @@ ContextCandidate 格式，具备 repository/task_signals/anti-scope；文件摘�
 use_experience=False 的显式实验文本，不能覆盖 resume。
 
 本机真实 worker 子进程 + HTTP fixture 的 baseline/激活/弃权、结构化输入、
-交付物门禁组合测试 16 passed；无付费模型调用。Harbor 插件参数转发、标准化
-CONTEXT 事件与完整隔离双 arm 编排尚未接入，不能声称已完成 Harbor 文档 A/B。
+交付物门禁组合测试 16 passed；无付费模型调用。标准化 CONTEXT 事件与完整隔离
+双 arm 编排尚未接入，不能声称已完成 Harbor 文档 A/B。
 该通道本身不认证候选证据来源或隔离私有评分材料，仍由控制面/实验环境负责。
+
+Harbor 插件现在支持同名构造参数 `development_candidate_file`、
+`development_candidate_sha256`、`development_only=true`、`repository`，必须一起
+显式提供。构造时读取并验证候选，冻结规范化 JSON；实际运行不重读可变宿主文件。
+上传冻结内容后传递其摘要给 worker 校验，实际激活仍使用 worker 读取的 task body。
+`praxile-execution.json` 及 Harbor metadata 保存源文件摘要、传输摘要、规范化候选
+摘要和 repository，三种摘要不可混淆（例如数值规范化可改变候选摘要）。
+不在公开执行记录中保存宿主候选路径；缺失开发模式/身份/摘要时拒绝构造。
+Harbor 0.18/0.22 各 31 passed、9 skipped，包括冻结与参数转发；本阶段尚未
+执行真实 Docker 候选注入，完整 A/B 收益仍未验收。
 
 ### 固定 worker 依赖
 

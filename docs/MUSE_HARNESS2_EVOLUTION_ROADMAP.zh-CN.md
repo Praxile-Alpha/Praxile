@@ -313,6 +313,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   baseline 不变，不写资产、不授予权限。结果区分 activation 与实际 injected。
   16 项本机真实子进程/HTTP fixture 通过，涵盖弃权和交付物门禁；Harbor 转发、
   规范化事件及完整双 arm 实验仍缺，完整项不勾选。
+  Harbor 转发增补：构造时冻结并校验候选文件，传输摘要随 worker 参数传递；
+  执行记录保留源文件/传输/规范化候选身份与 repository，默认无候选路径不变。
+  两版 Harbor 各 31 passed、9 skipped；真实 Docker 候选注入、规范化事件及
+  完整双 arm 仍待验证，完整项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

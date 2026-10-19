@@ -30,13 +30,34 @@ class PraxileAgent(BaseAgent):
                  inherit_task_packages: bool = False, model_timeout_seconds: int = 30,
                  output_directory: str | None = None, renderer_executable: str = "",
                  deliverable_contract: dict | None = None,
-                 dependency_wheels: list[dict] | None = None, **kwargs):
+                 dependency_wheels: list[dict] | None = None,
+                 development_candidate_file: str | None = None,
+                 development_candidate_sha256: str | None = None,
+                 development_only: bool = False, repository: str | None = None, **kwargs):
         from ..services.run_service import normalize_deliverable_contract
         public_contract = normalize_deliverable_contract(deliverable_contract)
         self._public_contract_json = (json.dumps(public_contract, sort_keys=True, separators=(",", ":"))
                                       if public_contract is not None else None)
         self.public_contract_sha256 = (hashlib.sha256(self._public_contract_json.encode()).hexdigest()
                                        if self._public_contract_json is not None else None)
+        self._development_candidate_json = None
+        self.development_context_identity = None
+        if development_candidate_file is not None or development_candidate_sha256 is not None:
+            from ..eval.native_context import load_candidate, plan_candidate
+            if (not isinstance(development_candidate_file, str)
+                    or not isinstance(development_candidate_sha256, str)):
+                raise ValueError("development candidate file and digest must be configured together")
+            value = load_candidate(Path(development_candidate_file), development_candidate_sha256)
+            # Validate structure/scope before setup; actual activation uses the task body in the worker.
+            validation = plan_candidate(value, "Preflight only", repository, development_only=development_only)
+            self._development_candidate_json = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            self.development_context_identity = {
+                "track": "development", "repository": repository,
+                "source_file_sha256": development_candidate_sha256,
+                "transferred_file_sha256": hashlib.sha256(self._development_candidate_json.encode()).hexdigest(),
+                "candidate_digest": validation["candidate_digest"], "promotion_eligible": False}
+        elif development_only is not False or repository is not None:
+            raise ValueError("development flags require a candidate file and digest")
         if not isinstance(renderer_executable, str) or (renderer_executable and
                 (not PurePosixPath(renderer_executable).is_absolute() or ".." in PurePosixPath(renderer_executable).parts)):
             raise ValueError("renderer_executable must be empty or a trusted absolute container path")
@@ -220,6 +241,10 @@ class PraxileAgent(BaseAgent):
                 contract_file = Path(directory) / "public-deliverables.json"
                 contract_file.write_text(self._public_contract_json, encoding="utf-8")
                 await environment.upload_file(contract_file, self.remote_root + "/public-deliverables.json")
+            if self._development_candidate_json is not None:
+                candidate_file = Path(directory) / "development-candidate.json"
+                candidate_file.write_text(self._development_candidate_json, encoding="utf-8")
+                await environment.upload_file(candidate_file, self.remote_root + "/development-candidate.json")
         cancel_file = self.remote_root + "/" + new_id("cancel")
         argv = [
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.process_supervisor",
@@ -242,6 +267,10 @@ class PraxileAgent(BaseAgent):
         if self._public_contract_json is not None:
             argv.extend(["--deliverable-contract-file", self.remote_root + "/public-deliverables.json",
                          "--deliverable-contract-sha256", self.public_contract_sha256])
+        if self.development_context_identity is not None:
+            argv.extend(["--development-only", "--repository", self.development_context_identity["repository"],
+                "--development-candidate", self.remote_root + "/development-candidate.json",
+                "--development-candidate-sha256", self.development_context_identity["transferred_file_sha256"]])
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
@@ -253,6 +282,8 @@ class PraxileAgent(BaseAgent):
                   "renderer_executable": self.renderer_executable,
                   "public_contract_sha256": self.public_contract_sha256,
                   "model_timeout_seconds": self.model_timeout_seconds}
+        if self.development_context_identity is not None:
+            record["development_context_identity"] = self.development_context_identity
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:
             await self._exec(environment, command, timeout_seconds=self.timeout_seconds + 10)
@@ -381,6 +412,9 @@ class PraxileAgent(BaseAgent):
             "experience_mode": result["experience_mode"],
             "usage_evidence": evidence,
         }}
+        if self.development_context_identity is not None:
+            context.metadata["praxile"]["development_context_identity"] = self.development_context_identity
+            context.metadata["praxile"]["development_context"] = result.get("development_context")
 
 
 class WorkBuddyPraxileAgent(PraxileAgent):
