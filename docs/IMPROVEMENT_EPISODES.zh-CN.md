@@ -26,3 +26,40 @@
 只有两侧各唯一出现一次的同参数操作建立事件引用对；重复、截断或无法识别的动作保持 unpaired/unsupported。参数不同不做模糊猜测。报告包含操作类型、摘要和 event IDs，不复制命令正文；摘要不是加密措施，原始证据仍受原 trace 权限管理。
 
 同一命令不代表同一状态：工作目录、环境与文件内容可能不同，因此每一对均标 state_equivalence=unknown，causal_alignment=false。此步不是完整子任务语义对齐，也不验证行为预测或晋升。4 项专门测试覆盖乱序、重复命令、截断、跨 adapter 结构及不同参数，另有 A/B 回归验证接入。
+
+## 冻结行为测量
+
+候选的 `expected_effect` 可在实验前增加以下精确测量定义；不能在分析时根据
+结果反推或改写预测。现有 candidate digest/冻结协议继续约束该字段。
+
+```json
+{
+  "hypothesis": "The candidate reduces repeated identical searches",
+  "measurement": {
+    "kind": "repeated_exact_operations",
+    "operation": "search",
+    "direction": "decrease"
+  }
+}
+```
+
+operation 支持 search/read_file/run_command，direction 为 increase/decrease。
+`ImprovementEpisode.behavior_probe` 保存版本化 `praxile.behavior_probe.v1`、
+两侧重复数、差值、操作摘要及具体 event IDs；每个同参数组的重复数为
+`max(0, occurrences - 1)`。使用现有 control-plane 操作对齐结果，不按第 N 步配对，
+不依赖模型自报“我少搜索了”。不会把命令正文复制到解释记录。
+
+测量方向符合预测时，嵌套 `prediction_verified=true` 仅代表该算术预测得到观察支持；
+嵌套 verdict 的 helped/hurt 只描述指定指标的方向。原顶层 verdict 仍基于任务结果，
+顶层 prediction_verified=false 仍表示没有证明完整机制假设。例如双方都失败，
+重复搜索从 2 降至 0：任务 verdict=no_observed_effect，行为 verdict=helped，
+promotion_eligible=false，experience_entry=NO_ENTRY。重复减少不证明策略更优。
+
+相关动作参数截断/缺失、未知动作类型可能影响覆盖、重复事件引用、缺测量定义或
+没有观察到目标操作时 abstain；缺执行不变量或候选暴露时行为 verdict=confounded。
+已知非目标动作（如 edit_file）不会让搜索计数一律失效。旧 alignment 缺少类型信息
+时保持保守弃权。环境状态等价性仍 unknown，也没有重复试验或因果显著性声明。
+
+638 项快速单元测试通过，包含完整/不完整证据、长链缺信息、任务失败与行为方向
+分离及旧 A/B 回归。真实模型预测质量、其他行为测量和中性 benchmark 的同类接入
+仍未验证；完整 R2-B 不勾选。

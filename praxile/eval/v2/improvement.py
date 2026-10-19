@@ -2,6 +2,7 @@
 from collections.abc import Mapping
 from copy import deepcopy
 import math
+from .behavior_probe import probe_repetition
 
 
 def improvement_episodes(experiment_id, candidate, baseline, treatment, comparison, invariant_check):
@@ -34,6 +35,19 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
         verdict = "confounded" if confounders else {
             "improved": "helped", "regressed": "hurt", "unchanged": "no_observed_effect"
         }.get(transition, "confounded")
+        behavior = probe_repetition(candidate.expected_effect, row.get("operation_alignment"))
+        behavior["comparison_invariants_verified"] = invariant_check.get("valid") is True
+        behavior["candidate_exposure_verified"] = bool(isinstance(activation, Mapping) and activation.get("injected_context_items"))
+        if not behavior["comparison_invariants_verified"] or not behavior["candidate_exposure_verified"]:
+            behavior["prediction_verified"] = False
+            behavior["verdict"] = "confounded"
+        elif behavior["status"] != "measured":
+            behavior["verdict"] = "confounded"
+        elif behavior["delta"] == 0:
+            behavior["verdict"] = "no_observed_effect"
+        else:
+            behavior["verdict"] = "helped" if behavior["prediction_verified"] else "hurt"
+        behavior["verdict_scope"] = "direction of frozen measurement only, not task success or mechanism causality"
         episodes.append({
             "schema_version": "praxile.improvement_episode.v1",
             "episode_id": f"{experiment_id}:{task_id}", "experiment_id": experiment_id, "task_id": task_id,
@@ -54,6 +68,7 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
             "uncertainty": ["Single pair does not establish statistical significance or transferable causality.",
                             "Metric deltas do not prove the predicted behavior occurred."],
             "prediction_verified": False, "promotion_eligible": False,
+            "behavior_probe": behavior,
             "operation_alignment": deepcopy(row.get("operation_alignment")),
             "next_action": "collect missing evidence" if confounders else "repeat and perform component ablation",
             "experience_entry": "NO_ENTRY",

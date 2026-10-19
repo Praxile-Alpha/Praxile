@@ -347,6 +347,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 
 - [ ] `ImprovementEpisode` 记录基线、候选、组件 diff、行为预测、probe、观察差异、混杂因素与后续决定。
 - [ ] 每项修改 verdict 支持 helped/hurt/no_observed_effect/confounded；区分行为改善与最终任务成功。
+  增补冻结的重复操作测量：从 control-plane 操作事件引用复算 search/read_file/
+  run_command 同参数重复次数，生成独立 behavior_probe 与行为方向 verdict。
+  任务结果 verdict 不随成本/次数改善改变，缺覆盖/暴露/不变量证据则弃权或
+  confounded；638 项快速单元测试通过。没有机制因果、真实模型质量或晋升声明，
+  其他行为预测与中性 benchmark 支持仍缺。详见 `IMPROVEMENT_EPISODES.zh-CN.md`。
 - [ ] 不同轨迹按子任务/语义事件对齐，不能把不同执行的第 N 步当作同一状态。
   已接入保守操作身份对齐：唯一且参数完整的 read_file/search/run_command 按摘要建立事件引用，乱序不影响配对，重复/截断保留未对齐；不使用 step 序号。状态等价性仍 unknown，不做因果判断。4 项专门测试通过；完整子任务语义状态对齐未完成。
   原生 SubtaskEpisode 现可通过 V1/AgentEvent 转换保留：追加回顾性 SUBTASK_EPISODE，不改写已有事件 ID；保存动作到事件映射与 unresolved refs，反向投影恢复引用。19 项 trace/兼容性测试通过。跨执行主体的子任务语义等价判定仍未完成。
