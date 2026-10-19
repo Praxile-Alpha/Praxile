@@ -251,19 +251,31 @@ def test_renderer_configuration_reaches_worker_and_execution_record(tmp_path, mo
         with pytest.raises(ValueError, match="renderer_executable"):
             PraxileAgent(**kwargs, renderer_executable=invalid)
     renderer = "/opt/Office Suite/soffice"
-    agent = PraxileAgent(**kwargs, renderer_executable=renderer)
+    contract = {"schema_version": "praxile.deliverable_contract.v1", "source": "user_request", "outputs": [
+        {"path": "report.json", "media_type": "application/json"}]}
+    expected_contract = json.loads(json.dumps(contract))
+    agent = PraxileAgent(**kwargs, renderer_executable=renderer, deliverable_contract=contract)
+    contract["outputs"][0]["path"] = "tampered.json"
     commands = []
+    uploaded = []
     class Environment:
         async def exec(self, command, **kwargs):
             commands.append(shlex.split(command))
             return SimpleNamespace(return_code=0)
         async def upload_file(self, *args):
-            pass
+            uploaded.append((args[1], args[0].read_bytes()))
     monkeypatch.setattr(agent, "_collect_result", AsyncMock())
     monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
     asyncio.run(agent.run("public task", Environment(), AgentContext()))
     assert commands[0][commands[0].index("--renderer-executable") + 1] == renderer
-    assert json.loads((tmp_path / "praxile-execution.json").read_text())["renderer_executable"] == renderer
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["renderer_executable"] == renderer
+    remote, payload = next(item for item in uploaded if item[0].endswith("public-deliverables.json"))
+    assert json.loads(payload) == expected_contract
+    digest = hashlib.sha256(payload).hexdigest()
+    assert record["public_contract_sha256"] == digest
+    assert commands[0][commands[0].index("--deliverable-contract-sha256") + 1] == digest
+    assert commands[0][commands[0].index("--deliverable-contract-file") + 1] == remote
 
 
 @pytest.mark.slow
@@ -271,7 +283,8 @@ def test_renderer_configuration_reaches_worker_and_execution_record(tmp_path, mo
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
 @pytest.mark.parametrize("workbuddy", [False, True])
 @pytest.mark.parametrize("cancel_run", [False, True])
-def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run, monkeypatch, broker_mode=False):
+def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run, monkeypatch, broker_mode=False,
+                                                      bound_contract=False):
     from harbor.environments.docker.docker import DockerEnvironment
     from harbor.models.task.config import EnvironmentConfig
     from harbor.models.trial.paths import TrialPaths
@@ -331,7 +344,9 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 workspace="/workspace", base_url=("https://provider.invalid/v1" if broker_mode else
                     "http://127.0.0.1:18888" + ("/block/v1" if cancel_run else "/v1")),
                 credential_file=str(credential) if broker_mode else None,
-                model_name="fixture", max_steps=2, timeout_seconds=90)
+                model_name="fixture", max_steps=2, timeout_seconds=90,
+                deliverable_contract=({"schema_version": "praxile.deliverable_contract.v1", "source": "user_request",
+                    "outputs": [{"path": "report.json", "media_type": "application/json"}]} if bound_contract else None))
             await agent.setup(environment)
             if workbuddy:
                 identity = await environment.exec("id -un", timeout_sec=10)
@@ -371,9 +386,13 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 remaining = await environment.exec(f"find {agent.remote_root} -maxdepth 1 -name 'capability_*'", timeout_sec=5)
                 assert remaining.return_code == 0
                 assert not (remaining.stdout or "").strip()
-            assert context.n_input_tokens == 12
-            assert context.metadata["praxile"]["result"]["status"] == "completed"
+            assert context.n_input_tokens == (24 if bound_contract else 12)
+            assert context.metadata["praxile"]["result"]["status"] == ("needs_human" if bound_contract else "completed")
             assert (paths.agent_dir / "praxile-result.json").is_file()
+            if bound_contract:
+                trajectory = json.loads((paths.agent_dir / "praxile-result.json").read_text())["trajectory"]
+                assert trajectory["deliverable_verification"]["status"] == "failure"
+                assert trajectory["deliverable_contract_sha256"] == agent.public_contract_sha256
             execution = json.loads((paths.agent_dir / "praxile-execution.json").read_text())
             assert execution["worker_supervision"] == {"status": "completed", "returncode": 0}
             # Exercise the shipped supervisor inside the container, including
@@ -424,3 +443,11 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
 @pytest.mark.parametrize("workbuddy", [False, True])
 def test_harbor_broker_native_worker(tmp_path, workbuddy, monkeypatch):
     test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, False, monkeypatch, broker_mode=True)
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(300)
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
+@pytest.mark.parametrize("workbuddy", [False, True])
+def test_harbor_public_contract_rejects_false_completion(tmp_path, workbuddy, monkeypatch):
+    test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, False, monkeypatch, bound_contract=True)

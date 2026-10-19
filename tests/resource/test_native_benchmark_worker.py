@@ -14,7 +14,8 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
 @pytest.mark.parametrize("structured", [False, True])
-def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structured):
+@pytest.mark.parametrize("bound", [False, True])
+def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structured, bound):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -47,6 +48,14 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
         body = workspace / "task.txt"
         body.write_text("Summarize the available files.")
         extra = ["--task-body-file", "task.txt", "--task-body-sha256", hashlib.sha256(body.read_bytes()).hexdigest()]
+    if bound:
+        public_contract = tmp_path / "public-contract.json"
+        public_contract.write_text(json.dumps({"schema_version": "praxile.deliverable_contract.v1",
+            "source": "user_request", "outputs": [{"path": "output/fake.docx",
+                "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "structure": {"max_pages": 1}}]}))
+        extra += ["--deliverable-contract-file", str(public_contract), "--deliverable-contract-sha256",
+                  hashlib.sha256(public_contract.read_bytes()).hexdigest()]
     result = tmp_path / "result.json"
     try:
         process = subprocess.run([
@@ -63,8 +72,12 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
     report = json.loads(result.read_text())
     assert requests
     assert report["official_evaluation"] == "not_run"
-    assert report["trajectory"]["cost"]["prompt_tokens"] == 12
-    assert report["trajectory"]["result"]["status"] == "completed"
+    assert report["trajectory"]["cost"]["prompt_tokens"] == (24 if bound else 12)
+    assert report["trajectory"]["result"]["status"] == ("needs_human" if bound else "completed")
+    if bound:
+        assert report["trajectory"]["deliverable_contract"] == json.loads(public_contract.read_text())
+        assert report["trajectory"]["deliverable_verification"]["status"] == "failure"
+        assert report["trajectory"]["deliverable_verification"]["data"]["contract_binding"] == "run_argument"
     assert report["artifact_inventory"]["status"] == "issues"
     assert report["artifact_inventory"]["official_evaluation"] == "not_run"
     if structured:

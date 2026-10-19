@@ -26,7 +26,14 @@ class PraxileAgent(BaseAgent):
                  timeout_seconds: int = 900, credential_file: str | None = None,
                  task_body_file: str | None = None, task_body_sha256: str | None = None,
                  inherit_task_packages: bool = False, model_timeout_seconds: int = 30,
-                 output_directory: str | None = None, renderer_executable: str = "", **kwargs):
+                 output_directory: str | None = None, renderer_executable: str = "",
+                 deliverable_contract: dict | None = None, **kwargs):
+        from ..services.run_service import normalize_deliverable_contract
+        public_contract = normalize_deliverable_contract(deliverable_contract)
+        self._public_contract_json = (json.dumps(public_contract, sort_keys=True, separators=(",", ":"))
+                                      if public_contract is not None else None)
+        self.public_contract_sha256 = (hashlib.sha256(self._public_contract_json.encode()).hexdigest()
+                                       if self._public_contract_json is not None else None)
         if not isinstance(renderer_executable, str) or (renderer_executable and
                 (not PurePosixPath(renderer_executable).is_absolute() or ".." in PurePosixPath(renderer_executable).parts)):
             raise ValueError("renderer_executable must be empty or a trusted absolute container path")
@@ -141,6 +148,10 @@ class PraxileAgent(BaseAgent):
             public = Path(directory) / "instruction.txt"
             public.write_text(instruction, encoding="utf-8")
             await environment.upload_file(public, self.remote_root + "/instruction.txt")
+            if self._public_contract_json is not None:
+                contract_file = Path(directory) / "public-deliverables.json"
+                contract_file.write_text(self._public_contract_json, encoding="utf-8")
+                await environment.upload_file(contract_file, self.remote_root + "/public-deliverables.json")
         cancel_file = self.remote_root + "/" + new_id("cancel")
         argv = [
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.process_supervisor",
@@ -160,6 +171,9 @@ class PraxileAgent(BaseAgent):
             argv.extend(["--output-directory", self.output_directory])
         if self.renderer_executable:
             argv.extend(["--renderer-executable", self.renderer_executable])
+        if self._public_contract_json is not None:
+            argv.extend(["--deliverable-contract-file", self.remote_root + "/public-deliverables.json",
+                         "--deliverable-contract-sha256", self.public_contract_sha256])
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
@@ -167,6 +181,7 @@ class PraxileAgent(BaseAgent):
                   "inherit_task_packages": self.inherit_task_packages,
                   "output_directory": self.output_directory,
                   "renderer_executable": self.renderer_executable,
+                  "public_contract_sha256": self.public_contract_sha256,
                   "model_timeout_seconds": self.model_timeout_seconds}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:

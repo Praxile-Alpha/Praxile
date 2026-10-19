@@ -152,9 +152,36 @@ fixture 验证了 JSON 产物的拒绝/修复/完成，真实 LibreOffice 验证
 拒绝；无渲染器的模型 completed 被降为 needs_human。
 
 真实模型 DOCX 自动修订尚未验收：create_docx 不覆盖既有路径，而固定契约不
-允许换路径绕过，需要后续引入带摘要冲突检查及备份回滚的同路径修订。原生
-benchmark worker 的公共契约输入通道也尚未接入，不能宣称 Harbor 已自动执行
-用户页数门禁。这些缺口意味着完整自主修订闭环仍未完成。
+允许换路径绕过，需要后续引入带摘要冲突检查及备份回滚的同路径修订。完整
+自主修订闭环仍未完成。
+
+### Benchmark 公共契约输入
+
+Harbor `PraxileAgent` / `WorkBuddyPraxileAgent` 可通过 `deliverable_contract`
+参数接收上面的公共 JSON 对象。控制面在构造 agent 时验证、深拷贝并规范化为
+不可变字符串；调用方随后修改原字典不会改变实验契约。上传文件的 SHA-256
+写入 `public_contract_sha256`，worker 在读取凭据和创建 Runtime 之前检查摘要、
+64 KiB 上限、普通文件/非符号链接以及严格无重复字段 JSON，再绑定 Runtime。
+
+直接启动 worker 时使用成对参数：
+
+```text
+--deliverable-contract-file /absolute/path/to/public-deliverables.json
+--deliverable-contract-sha256 <SHA256_OF_EXACT_FILE_BYTES>
+```
+
+API `run_native(..., deliverable_contract=...)` 同样在构造 Runtime 前验证并复制。
+未提供契约保持原行为；提供后，既有完成门禁对产物要求生效，包括配置好
+renderer 时的 max_pages。契约只来自调用方明确授权的公开要求；本功能不读取
+rubric，也不能证明任意调用方标注 user_request 的对象真的得到用户确认。
+摘要是完整性校验而非 OS 隔离证明，不能代替隐藏评审材料的独立容器边界。
+
+本机 worker + HTTP fixture 验证有无契约的行为分离，非法摘要/重复字段/过大
+文件/符号链接在模型调用前拒绝。真实 Docker fixture 验证上传、读取、门禁和
+容器回收，不等同于真实模型 DOCX 修订验收。当前验证 wheel 摘要：
+`327b9d47c61888e0050167832096757bb00b905393c44f64e15141098b119316`。
+Harbor 0.18 与 0.22 各 2 项 Docker 测试通过；本机 worker 集成 8 项、输入
+契约单元 7 项通过，fast suite 582 passed。本轮没有付费模型调用。
 
 ## 模型输出截断诊断
 

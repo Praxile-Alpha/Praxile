@@ -18,6 +18,29 @@ from ..runtime import AgentRuntime
 from ..task_input import TaskInput
 
 
+def load_public_contract(path: Path, expected_sha256: str) -> dict:
+    """Load controller-selected public requirements before exposing an executor."""
+    if (len(expected_sha256) != 64 or any(c not in "0123456789abcdef" for c in expected_sha256)
+            or path.resolve(strict=True) != path.absolute() or not path.is_file()):
+        raise ValueError("public contract requires a regular file without symlink components and SHA-256")
+    with path.open("rb") as handle:
+        raw = handle.read(65537)
+    if len(raw) > 65536 or hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError("public contract size or digest mismatch")
+    def unique_fields(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate public contract field")
+            result[key] = value
+        return result
+    from ..services.run_service import normalize_deliverable_contract
+    value = json.loads(raw, object_pairs_hook=unique_fields)
+    if value is None:
+        raise ValueError("public contract cannot be null")
+    return normalize_deliverable_contract(value)
+
+
 def load_task_input(root: Path, instruction: str, relative_path: str, expected_sha256: str) -> TaskInput:
     """Read only a controller-selected public file before starting model execution."""
     path = Path(relative_path)
@@ -63,7 +86,9 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
 
 def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url: str, max_steps: int,
                model_timeout_seconds: int = 30, output_directory: str | None = None,
-               renderer_executable: str = "") -> dict[str, Any]:
+               renderer_executable: str = "", deliverable_contract: dict | None = None) -> dict[str, Any]:
+    from ..services.run_service import normalize_deliverable_contract
+    deliverable_contract = normalize_deliverable_contract(deliverable_contract)
     if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
     if output_directory is not None:
@@ -74,7 +99,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                               model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable)
     runtime = AgentRuntime(config)
     try:
-        trajectory = runtime.run(instruction, max_steps=max_steps, use_experience=False)
+        trajectory = runtime.run(instruction, max_steps=max_steps, use_experience=False,
+                                 deliverable_contract=deliverable_contract)
     finally:
         # run closes tools; providers also own persistent HTTP transports.
         for provider in runtime.router.providers.values():
@@ -100,12 +126,18 @@ def main() -> None:
     parser.add_argument("--model-timeout-seconds", type=int, default=30)
     parser.add_argument("--output-directory")
     parser.add_argument("--renderer-executable", default="")
+    parser.add_argument("--deliverable-contract-file", type=Path)
+    parser.add_argument("--deliverable-contract-sha256")
     parser.add_argument("--capability-file", type=Path)
     parser.add_argument("--task-body-file")
     parser.add_argument("--task-body-sha256")
     args = parser.parse_args()
     if bool(args.task_body_file) != bool(args.task_body_sha256):
         parser.error("task body file and digest must be configured together")
+    if bool(args.deliverable_contract_file) != bool(args.deliverable_contract_sha256):
+        parser.error("public deliverable contract file and digest must be configured together")
+    contract = (load_public_contract(args.deliverable_contract_file, args.deliverable_contract_sha256)
+                if args.deliverable_contract_file is not None else None)
     instruction = args.instruction.read_text(encoding="utf-8")
     if args.task_body_file:
         instruction = load_task_input(args.workspace, instruction, args.task_body_file, args.task_body_sha256)
@@ -117,7 +149,7 @@ def main() -> None:
     result = run_native(args.workspace, instruction,
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps,
                         model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory,
-                        renderer_executable=args.renderer_executable)
+                        renderer_executable=args.renderer_executable, deliverable_contract=contract)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
