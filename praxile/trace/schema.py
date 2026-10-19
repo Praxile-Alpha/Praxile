@@ -27,6 +27,7 @@ KNOWN_EVENT_TYPES = frozenset(
         "CHECKPOINT",
         "SUBAGENT_START",
         "SUBAGENT_END",
+        "SUBTASK_EPISODE",
         "SKILL_REFERENCE",
         "FINAL_RESULT",
         "RUN_END",

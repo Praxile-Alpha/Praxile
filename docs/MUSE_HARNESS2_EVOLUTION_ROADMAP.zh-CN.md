@@ -196,6 +196,7 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 - [ ] 每项修改 verdict 支持 helped/hurt/no_observed_effect/confounded；区分行为改善与最终任务成功。
 - [ ] 不同轨迹按子任务/语义事件对齐，不能把不同执行的第 N 步当作同一状态。
   已接入保守操作身份对齐：唯一且参数完整的 read_file/search/run_command 按摘要建立事件引用，乱序不影响配对，重复/截断保留未对齐；不使用 step 序号。状态等价性仍 unknown，不做因果判断。4 项专门测试通过；完整子任务语义状态对齐未完成。
+  原生 SubtaskEpisode 现可通过 V1/AgentEvent 转换保留：追加回顾性 SUBTASK_EPISODE，不改写已有事件 ID；保存动作到事件映射与 unresolved refs，反向投影恢复引用。19 项 trace/兼容性测试通过。跨执行主体的子任务语义等价判定仍未完成。
 - [ ] 被拒候选仍保留可用的局部证据；新经验必须引用具体差异，允许 NO_ENTRY。
 - [ ] 不确定的机制归因触发单组件消融/重复试验，不能靠更高 LLM confidence 消除混杂。
 

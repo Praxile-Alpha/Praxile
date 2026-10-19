@@ -107,6 +107,7 @@ def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
             cost=_cost(call.get("cost")),
         )
 
+    action_events: dict[str, str] = {}
     for index, action in enumerate(trajectory.get("actions") or [], 1):
         if not isinstance(action, dict):
             continue
@@ -131,6 +132,10 @@ def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
             cost=_cost((action.get("cost") or {}).get("estimated_usd") if isinstance(action.get("cost"), dict) else None),
         )
         observation = action.get("observation") if isinstance(action.get("observation"), dict) else {}
+        if isinstance(action.get("action_id"), str):
+            if action["action_id"] in action_events:
+                raise ValueError("duplicate action_id in trajectory")
+            action_events[action["action_id"]] = call.event_id
         add(
             "TOOL_RESULT",
             "tool",
@@ -185,6 +190,19 @@ def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
         timestamp=end_time,
         evidence_refs=(final.event_id,),
     )
+    # Append retrospective evidence to preserve every pre-existing event identity.
+    for episode in trajectory.get("subtask_episodes") or []:
+        if not isinstance(episode, dict) or episode.get("task_id") != task_id:
+            raise ValueError("subtask episode must belong to the imported task")
+        refs = episode.get("action_refs", [])
+        if not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs):
+            raise ValueError("subtask action_refs must be a list of IDs")
+        mapped = {ref: action_events[ref] for ref in refs if ref in action_events}
+        add("SUBTASK_EPISODE", "control_plane", {
+            "episode": dict(episode), "action_event_map": mapped,
+            "unresolved_action_refs": [ref for ref in refs if ref not in mapped],
+            "retrospective": True, "independently_verified": False,
+        }, timestamp=end_time, evidence_refs=tuple(mapped.values()))
     return events
 
 
@@ -201,6 +219,18 @@ def events_to_v1_trajectory(events: Iterable[AgentEvent | dict[str, Any]]) -> di
     start = next((item for item in normalized if item.type == "RUN_START"), first)
     final = next((item for item in reversed(normalized) if item.type == "FINAL_RESULT"), None)
     actions: list[dict[str, Any]] = []
+    original_action_ids = {}
+    for event in normalized:
+        if event.type == "SUBTASK_EPISODE":
+            mapping = event.payload.get("action_event_map", {})
+            if not isinstance(mapping, dict):
+                raise ValueError("subtask action_event_map must be an object")
+            for action_id, event_id in mapping.items():
+                if not isinstance(action_id, str) or not isinstance(event_id, str):
+                    raise ValueError("subtask action_event_map must contain string IDs")
+                if event_id in original_action_ids and original_action_ids[event_id] != action_id:
+                    raise ValueError("conflicting original action IDs")
+                original_action_ids[event_id] = action_id
     calls: dict[str, AgentEvent] = {}
     for event in normalized:
         if event.type == "TOOL_CALL" and event.tool_call_id:
@@ -220,6 +250,8 @@ def events_to_v1_trajectory(events: Iterable[AgentEvent | dict[str, Any]]) -> di
                     "created_at": event.timestamp,
                 }
             )
+            if call and call.event_id in original_action_ids:
+                actions[-1]["action_id"] = original_action_ids[call.event_id]
     start_payload = start.payload
     final_payload = final.payload if final else {}
     context = next((item for item in normalized if item.type == "CONTEXT_INJECT"), None)
@@ -236,6 +268,8 @@ def events_to_v1_trajectory(events: Iterable[AgentEvent | dict[str, Any]]) -> di
         "task_analysis": start_payload.get("task_analysis") or {},
         "plan": start_payload.get("plan") or [],
         "actions": actions,
+        "subtask_episodes": [dict(item.payload["episode"]) for item in normalized
+                             if item.type == "SUBTASK_EPISODE" and isinstance(item.payload.get("episode"), dict)],
         "artifacts": [dict(item.payload) for item in normalized if item.type == "ARTIFACT_CHANGE"],
         "diff_summary": final_payload.get("diff_summary") or {},
         "reward_report": final_payload.get("reward_report") or {},

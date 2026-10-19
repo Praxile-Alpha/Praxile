@@ -65,6 +65,35 @@ def test_v1_projection_is_deterministic_and_covers_required_event_types() -> Non
     assert all(item.extensions["compatibility_source"] == "praxile_trajectory_v1" for item in first)
 
 
+def test_subtask_projection_preserves_old_ids_and_roundtrips_action_references():
+    trajectory = _trajectory()
+    trajectory["actions"][0]["action_id"] = "action-original"
+    before = v1_trajectory_to_events(trajectory)
+    episode = {"schema_version": "praxile.subtask_episode.v1", "episode_id": "episode-one",
+        "task_id": trajectory["task_id"], "goal": "verify", "status": "closed",
+        "state_before": {"branch": "main"}, "state_after": {"branch": "main"},
+        "claimed_outcome": "completed", "action_refs": ["action-original", "missing-action"]}
+    trajectory["subtask_episodes"] = [episode]
+    events = v1_trajectory_to_events(trajectory)
+    assert [item.to_dict() for item in events[:-1]] == [item.to_dict() for item in before]
+    projected = events[-1]
+    assert projected.type == "SUBTASK_EPISODE"
+    assert projected.payload["unresolved_action_refs"] == ["missing-action"]
+    assert projected.payload["retrospective"] is True
+    assert projected.evidence_refs == (next(item.event_id for item in events if item.type == "TOOL_CALL"),)
+    restored = events_to_v1_trajectory(events)
+    assert restored["subtask_episodes"] == [episode]
+    assert restored["actions"][0]["action_id"] == "action-original"
+    assert [item.event_id for item in v1_trajectory_to_events(trajectory)] == [item.event_id for item in events]
+
+
+def test_subtask_cross_task_reference_rejected():
+    trajectory = _trajectory()
+    trajectory["subtask_episodes"] = [{"task_id": "unrelated", "action_refs": []}]
+    with pytest.raises(ValueError, match="belong"):
+        v1_trajectory_to_events(trajectory)
+
+
 def test_normalized_events_project_back_to_v1_read_model() -> None:
     events = v1_trajectory_to_events(_trajectory())
 

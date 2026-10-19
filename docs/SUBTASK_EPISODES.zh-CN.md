@@ -84,4 +84,12 @@ R2 增量：`praxile.subtask_episode.v1` 记录本次运行内明确声明的子
 
 独立调用不等于跨模型独立验证，同一模型可承担执行和反思，证据引用有效也不能证明推理正确。这里实现的是建议生成，不是自动重规划或因果评审。12 项测试通过（含真实 action-loop 分发、假模型输出、证据拒绝、abstain、TTL 和成本）；尚无本轮付费模型效果验收。
 
+## AgentEvent 互通
+
+V1 trajectory 转 AgentEvent 时追加 `SUBTASK_EPISODE` 回顾性证据事件，时间标为本次运行结束时间，`retrospective=true`。它位于原 RUN_END 后，表示导入时补充的证据记录，不是 RUN_END 后又执行了动作。原有事件内容/ID 保持不变，不改写旧 manifest。
+
+事件保存原 Episode、action_id 到 TOOL_CALL event_id 的映射及 unresolved_action_refs，evidence_refs 指向已找到的调用。反向投影恢复 Episode 和原动作 ID，不把未找到引用补造为证据。跨任务 Episode、重复动作 ID 或冲突映射拒绝。这个转换尚不包含 task_notes/subtask_reflections 的完整往返，也不自动赋予两个 Episode 相同的语义身份。
+
+19 项 trace/兼容性测试通过，包括确定性 ID、旧事件稳定、子任务往返、缺失引用与跨任务拒绝。
+
 验证：日志复制/序列化恢复、失败观察与成功声明并存、未关闭状态、实际 action-loop 边界/工具分发/checkpoint 测试通过。完整 R2-A 总项尚未完成，不提前勾选。
