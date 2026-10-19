@@ -152,6 +152,13 @@ class OpenAICompatibleProvider:
             body["max_tokens"] = request["max_tokens"]
         from .model_options import validate_request_options
         body.update(validate_request_options(request.get("request_options", {})))
+        contract = request.get("response_contract")
+        if contract is not None:
+            from .structured_response import submission_request, validate_response_contract
+            contract = validate_response_contract(contract)
+            if not self.supports_tools(request["model"]):
+                raise ModelError("structured response requires declared model tool support")
+            body.update(submission_request(contract))
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -171,8 +178,18 @@ class OpenAICompatibleProvider:
         except HTTPTransportError as exc:
             raise ModelUnavailable(str(exc)) from exc
         try:
-            content = payload["choices"][0]["message"]["content"]
+            message = payload["choices"][0]["message"]
+            if contract is not None:
+                from .structured_response import submission_content
+                try:
+                    content = submission_content(message, contract)
+                except ValueError as error:
+                    raise ModelError(str(error)) from error
+            else:
+                content = message["content"]
         except (KeyError, IndexError, TypeError) as exc:
+            if contract is not None:
+                raise ModelError("invalid structured response envelope") from exc
             raise ModelError(f"Unexpected OpenAI-compatible response shape: {payload}") from exc
         return {
             "content": content,
@@ -481,6 +498,7 @@ class ModelRouter:
         max_tokens: int = 4096,
         timeout: int | None = None,
         cancel_requested: Callable[[], bool] | None = None,
+        response_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         primary_route = self.describe_route(purpose, private=private, high_risk=high_risk)
         timeout_seconds = _timeout_seconds(timeout, self._runtime_timeout_seconds())
@@ -494,6 +512,12 @@ class ModelRouter:
             started = time.monotonic()
             try:
                 provider, model = self._provider_for_target(candidate["target"], purpose=purpose)
+                if response_contract is not None:
+                    from .structured_response import validate_response_contract
+                    validate_response_contract(response_contract)
+                    if (not isinstance(provider, OpenAICompatibleProvider)
+                            or candidate["target"] != primary_route["target"]):
+                        raise ModelError("structured response cannot be ignored or transferred to a fallback")
                 from .model_options import validate_request_options
                 role_config = self.config.get("model_roles", self._role_name_for_purpose(purpose), default={})
                 options = validate_request_options(role_config.get("request_options", {}) if isinstance(role_config, dict) else {})
@@ -509,6 +533,7 @@ class ModelRouter:
                         "timeout": timeout_seconds,
                         "cancel_requested": cancel_requested,
                         **({"request_options": options} if options else {}),
+                        **({"response_contract": response_contract} if response_contract is not None else {}),
                     },
                     cancel_requested=cancel_requested,
                 )

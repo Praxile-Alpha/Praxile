@@ -180,6 +180,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+工具 profile v2 真实设计返回完整文本但 JSON 解析失败（未进入动作校验），无候选。
+新增可选函数提交传输，严格检查唯一同名函数与 JSON arguments，不执行工具，
+不静默降级。当前仅完成 provider/router 层及离线验证；候选 CLI 接入和真实
+MiniMax 工具提交验收仍待完成。详见 IMPROVEMENT_EPISODES 与
+`results/docx-repair-profile-v2-design-20261019.json`，不勾选完整生成/验证闭环。
+
 修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
 示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏
 校验诊断；另提供 opt-in 工具 profile v2 数值/SHA 约束，保留 v1 摘要兼容性。

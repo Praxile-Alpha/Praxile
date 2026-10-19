@@ -419,6 +419,28 @@ example_index，以及可确认的 action_type、错误数量、缺少的已知�
 候选设计轨迹保留该诊断，原校验仍拒绝且没有自动修复调用。历史失败不回填。
 边界测试核对 v2 公布的数值上下界与实际注册表一致，验证 v1 形态以及诊断脱敏。
 
+profile v2 真实验收（`8348000`）：一次 low 请求 25.554 秒返回 9770 字符，
+4212 input / 3885 output，1412 reasoning；finish_reason=stop，但 JSON 解析失败，
+未进入动作校验。无候选、无修复请求，不能据此判断 v2 范围说明是否有效。
+见 `results/docx-repair-profile-v2-design-20261019.json`。
+
+### 可选函数提交传输
+
+`ModelRouter.chat(..., response_contract={"name": "submit_result", "schema": {...}})`
+新增 opt-in 路径，仅面向已声明 supports_tools 的主 OpenAI-compatible 模型。
+契约必须为有界、无引用的 object schema；转换成单个 function 定义及同名
+tool_choice。返回必须只有一次同名函数调用，arguments 须为严格 JSON object，
+拒绝重复键/非有限值/错误函数/多次调用/仅文本响应；不执行任何函数。
+不把契约静默转交其他 fallback，未提供契约时沿用原文本模式。
+
+这一层只验证提交信封和严格 JSON，不声称 provider 强制完整 JSON Schema；
+调用方仍须运行候选、引用、动作及安全校验。错误不会触发自动修复请求。
+参数 shape、响应大小、未声明工具能力、fallback 拒绝已有离线替身验证。
+候选设计 CLI 尚未选择该模式，流式接口未接入，MiniMax 真实函数提交也尚未验收。
+[MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
+列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
+模式或未验证的 provider 行为作为结构化输出成功证据。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
