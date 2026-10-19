@@ -63,7 +63,11 @@ def _repo(path: Path) -> str:
 
 
 def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
     from praxile.eval.v2.development_cycle import DevelopmentContextCycle
+    from praxile.eval.v2.candidate_designer import design_development_candidates
+    from praxile.trajectory import TrajectoryLogger
     source = tmp_path / "source"
     commit = _repo(source)
     task = EvalTask(task_id="owner__repo-dev", instruction="Fix issue",
@@ -71,12 +75,15 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
                    evaluation=SWEbenchEvaluationSpec("fixture", "dev"))
     tasks = EvalTaskSet("dev", "fixture", "dev", (task,))
     config = Config.load(tmp_path / "control")
-    candidates = [ContextCandidate(candidate_id=name, version="1", title=name,
-        candidate_type="context_policy", context_item={"content": text}, confidence=0.5,
-        evidence_refs=("event:prior",), source_task_ids=(task.task_id,),
-        expected_effect={"hypothesis": "Reduce irrelevant reads"})
-        for name, text in (("first", "Read focused files"), ("second", "Check tests first"),
-                           ("composed", "Check tests then read focused files"))]
+    drafts = [{"content": text, "hypothesis": "Reduce irrelevant reads", "evidence_refs": ["event:prior"]}
+              for text in ("Read focused files", "Check tests first", "Check tests then read focused files")]
+    designed = design_development_candidates(
+        evidence=[{"task_id": task.task_id, "event_id": "prior", "observation": "Repeated search failed"}],
+        development_task_ids=[task.task_id], heldout_task_ids=["heldout"], design_id="fixture-design",
+        applies_to={"repositories": ["owner/repo"], "task_signals": ["issue"], "does_not_apply_when": ["unrelated"]},
+        logger=TrajectoryLogger("designer", {}), router=SimpleNamespace(chat=lambda *args, **kwargs: {
+            "content": json.dumps({"decision": "propose", "candidates": drafts[:2], "composition": drafts[2]})}))
+    candidates = [ContextCandidate.from_dict(item) for item in [*designed["candidates"], designed["composition"]]]
     adapter = FixtureAgentAdapter(artifacts=[FixtureArtifact("workspace_patch", "candidate.patch",
         "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest())])
     cycle = DevelopmentContextCycle(config.paths.state, EventStore(config.paths))
@@ -99,8 +106,6 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
     with pytest.raises(EvalSchemaError, match="development split"):
         cycle.run(tasks, **{**kwargs, "heldout_task_ids": [task.task_id]})
     # Exercise the real CLI dispatch and six-arm runner without network/model calls.
-    import json
-    from types import SimpleNamespace
     from praxile.cli_parser import build_parser
     from praxile.cli_commands import evals
     class CLIAdapter(FixtureAgentAdapter):

@@ -21,8 +21,24 @@ progress 和 report；三个实际实验仍存入现有 experiments/runs/trace �
 只有组合本身的逐任务结果存在客观提升、无回归和混杂、执行不变量通过时，
 返回 `TASK_LOCAL_TRIAL_RECOMMENDED`；其他情况返回 `KEEP_BASE`。单项结果再好
 也不会替组合授予资格。始终 `adopted=false`、`promotion_eligible=false`、
-`experience_entry=NO_ENTRY`，不改生产策略或长期资产。当前尚无自动 proposer/
-composer，真实模型质量、可迁移收益和完整 R2-C 验收均未完成。
+`experience_entry=NO_ENTRY`，不改生产策略或长期资产。真实模型质量、
+可迁移收益和完整 R2-C 验收均未完成。
+
+### 模型草案生成
+
+`candidate_designer.design_development_candidates(...)` 使用现有 router 的
+`proposal_composer` 角色，接收显式 public 开发观察（每条仅 task_id/event_id/
+observation）、开发/held-out ID 名单、控制面给定的 repositories/task_signals/
+does_not_apply_when 范围，以及 TrajectoryLogger。单次有界请求生成两个干预候选
+和一个组合草案，或正常返回 NO_ENTRY。输入摘要、状态和模型用量记入传入轨迹；
+输出可经 ContextCandidate.from_dict 直接送入 DevelopmentContextCycle。
+
+引用必须属于输入证据，模型不能新增权限、修改范围或宣称通过；截断/非法响应
+失败，消耗仍保留。confidence=0 表示未经验证，不使用模型自评授予实验资格。
+草案不自动执行，不自动存为长期经验；调用方负责保存轨迹与草案。
+当前依赖调用方提供的公开开发证据，不能识别 observation 字符串中被错误粘贴
+的隐藏 rubric，也没有独立证据来源认证；不得直接输入评分器报告。尚未自动从
+真实失败 trace 提取证据，也未实现先 probe 再按反馈 compose 的自适应闭环。
 
 CLI 沿用 `eval ab`，同时提供以下参数启用组合流程：
 
