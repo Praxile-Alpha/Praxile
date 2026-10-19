@@ -70,6 +70,7 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
             "prediction_verified": False, "promotion_eligible": False,
             "behavior_probe": behavior,
             "operation_alignment": deepcopy(row.get("operation_alignment")),
+            "subtask_alignment": deepcopy(row.get("subtask_alignment")),
             "next_action": "collect missing evidence" if confounders else "repeat and perform component ablation",
             "experience_entry": "NO_ENTRY",
         })

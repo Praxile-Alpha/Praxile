@@ -27,6 +27,24 @@
 
 同一命令不代表同一状态：工作目录、环境与文件内容可能不同，因此每一对均标 state_equivalence=unknown，causal_alignment=false。此步不是完整子任务语义对齐，也不验证行为预测或晋升。4 项专门测试覆盖乱序、重复命令、截断、跨 adapter 结构及不同参数，另有 A/B 回归验证接入。
 
+## 子任务引用对齐
+
+A/B task comparison 与 ImprovementEpisode 现包含 `subtask_alignment`，版本为
+`praxile.subtask_alignment.v1`。从两条 trace 的 SUBTASK_EPISODE 读取已关闭子任务，
+按只规范化空白的精确 goal 摘要配对；不按步骤号、不做模糊语义猜测、不复制目标
+正文。两侧都唯一才配对，重复目标/no counterpart 留在 unpaired。
+
+配对保存 episode/event IDs、确实存在于相应 trace 中的 action event IDs、前后
+快照摘要与 claimed_outcome。未关闭、非法或动作引用悬空的子任务列入 unsupported。
+前置快照缺失或不能规范序列化时 unknown，摘要相同只记 equal_recorded_fields，
+不同记 different_recorded_fields；`state_equivalence=unknown`、
+`semantic_equivalence_verified=false`、`causal_alignment=false` 保持不变。
+
+因此该记录可定位“两个执行中哪个子任务值得比较”，但不是子任务成功验证器，
+也不证明自然语言目标等价或外部应用状态一致。完整语义状态对齐仍未完成。
+6 项专门测试覆盖乱序、重复目标、状态差异、非法摘要和悬空引用；旧 A/B 比较
+回归保持通过，不触发模型调用或经验晋升。
+
 ## 冻结行为测量
 
 候选的 `expected_effect` 可在实验前增加以下精确测量定义；不能在分析时根据

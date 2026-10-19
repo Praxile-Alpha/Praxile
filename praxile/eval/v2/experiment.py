@@ -15,6 +15,7 @@ from .candidate import ContextCandidate
 from .capability import CapabilityProtocol
 from .heldout import HeldoutUseLedger
 from .improvement import improvement_episodes
+from .subtask_alignment import align_subtasks
 from .representation import ExperienceRepresentationRouter
 from .proxy import ProxyEvalRegistry
 from .diagnosis import FailureDiagnoser
@@ -372,6 +373,8 @@ def compare_ab_reports(
         category = str(
             baseline_diagnoses.get(task_id, {}).get("attribution", {}).get("category") or "UNKNOWN"
         )
+        left_events = event_store.list_events(trace_id=str(left["trace_id"])) if left.get("trace_id") else []
+        right_events = event_store.list_events(trace_id=str(right["trace_id"])) if right.get("trace_id") else []
         row = {
             "task_id": task_id,
             "failure_category": category,
@@ -388,9 +391,8 @@ def compare_ab_reports(
             ),
             "progress": _progress_comparison(left, right),
             "context_activation": right.get("context_activation"),
-            "operation_alignment": align_operations(
-                event_store.list_events(trace_id=str(left["trace_id"])) if left.get("trace_id") else [],
-                event_store.list_events(trace_id=str(right["trace_id"])) if right.get("trace_id") else []),
+            "operation_alignment": align_operations(left_events, right_events),
+            "subtask_alignment": align_subtasks(left_events, right_events),
             "diff_scope": {
                 "baseline": left.get("diff_scope"),
                 "candidate": right.get("diff_scope"),
