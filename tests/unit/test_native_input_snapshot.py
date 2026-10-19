@@ -53,3 +53,40 @@ def test_rejects_symlinks_and_wrong_wheel_digest(job, kind):
         (root / "linked").symlink_to(root / ("instruction.md" if kind == "file" else "tests"))
     with pytest.raises(ValueError):
         snapshot_inputs(job)
+
+
+@pytest.mark.parametrize("change", ["plugin", "contract", "new_helper"])
+def test_official_shared_verifier_inputs_are_included(job, change):
+    from pathlib import Path
+    root = Path(job["tasks"][0]["path"]).parent
+    (root / "dataset.toml").write_text('[dataset]\nid="fixture"\n')
+    shared = root / "shared/verifier"
+    shared.mkdir(parents=True)
+    (shared / "plugin.py").write_text("# private verifier implementation")
+    job["verifier"] = {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
+    before = snapshot_inputs(job)
+    assert before["schema_version"] == "praxile.native_local_inputs.v2"
+    assert "private verifier implementation" not in str(before)
+    if change == "plugin":
+        (shared / "plugin.py").write_text("# changed")
+    elif change == "contract":
+        (root / "dataset.toml").write_text('[dataset]\nid="different"\n')
+    else:
+        (shared / "helper.py").write_text("# added")
+    assert snapshot_inputs(job) != before
+
+
+def test_official_verifier_missing_contract_is_not_silently_unfrozen(job):
+    job["verifier"] = {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
+    with pytest.raises(ValueError, match="dataset.toml"):
+        snapshot_inputs(job)
+
+
+def test_shared_verifier_symlink_rejected(job):
+    from pathlib import Path
+    root = Path(job["tasks"][0]["path"]).parent
+    (root / "dataset.toml").write_text('[dataset]\nid="fixture"\n')
+    (root / "shared").symlink_to(root / "task", target_is_directory=True)
+    job["verifier"] = {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
+    with pytest.raises(ValueError, match="symlink"):
+        snapshot_inputs(job)

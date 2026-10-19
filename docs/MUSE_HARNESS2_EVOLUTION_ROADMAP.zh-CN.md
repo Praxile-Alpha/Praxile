@@ -362,6 +362,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   缺 Trial 保留为未完成，未绑定评分保留展示但不进入均值；污染执行拒绝比较，
   不导出 rubric 正文、不授予晋升。当前为双官方格式 fixture 验证，真实官方任务
   全链路、多次重复实验统一汇总和来源认证仍待完成，完整项不勾选。
+  共享评分依赖补漏：上游 CompositeVerifier 会从任务外加载 dataset.toml 和
+  shared/verifier。启用该官方评分器的本地快照现覆盖 dataset.toml + 完整 shared/，
+  缺失/符号链接拒绝；旧未覆盖计划必须重新准备。真实 Office 材料两次只读快照
+  一致（任务19项、共享13项），无模型调用。宿主插件依赖/外部引用仍未完全冻结。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

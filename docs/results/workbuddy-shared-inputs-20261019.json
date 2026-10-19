@@ -1,0 +1,22 @@
+{
+  "schema_version": "praxile.shared_input_snapshot_acceptance.v1",
+  "date": "2026-10-19",
+  "host_base_revision": "8fec0e1",
+  "upstream_workbuddy_revision": "625b2233093ae4f23e76be28c1f341d41cc70373",
+  "task_id": "api-usage-explain-cli-l3-001",
+  "dataset": "previously prepared office-prepared-praxile",
+  "local_inputs_schema": "praxile.native_local_inputs.v2",
+  "repeat_equal": true,
+  "task_entry_count": 19,
+  "shared_entry_count": 13,
+  "snapshot_sha256": "272cc1cd987864cbea08a18a8114b4fe056bd848b35db19c9bbd1d61acb778fc",
+  "contract_sha256": "3269ad49359ea93c1c2289bf1ed95f327ce0f7d721e91f0d4d86c2812a73a03b",
+  "model_calls": 0,
+  "official_evaluation": false,
+  "limitations": [
+    "Read-only snapshot verification, not CompositeVerifier task execution",
+    "Snapshot includes physical paths and modes; digest is local-environment-specific",
+    "Does not freeze installed Python packages, arbitrary external plugin dependencies or remote services",
+    "Boundary snapshots do not prevent transient changes restored before verification"
+  ]
+}

@@ -45,11 +45,11 @@ def snapshot_inputs(job):
             raise ValueError("local input must not contain symlink components")
         return path
 
-    tasks = []
     def walk_error(error):
         raise error
-    for task in job["tasks"]:
-        root = physical(task["path"])
+
+    def tree_record(value):
+        root = physical(value)
         if not root.is_dir():
             raise ValueError("task input must be a directory")
         records = {}
@@ -65,7 +65,24 @@ def snapshot_inputs(job):
             for name in sorted(files):
                 path = folder / name
                 records[str(path.relative_to(root))] = file_record(path)
-        tasks.append({"path": str(root), "entries": records})
+        return {"path": str(root), "entries": records}
+
+    tasks = [tree_record(task["path"]) for task in job["tasks"]]
+    shared = []
+    if (job.get("verifier") or {}).get("import_path") == "workbuddy_bench.judge:CompositeVerifier":
+        roots = set()
+        for task in tasks:
+            path = Path(task["path"])
+            # Match the official registry's nearest dataset.toml ancestor rule.
+            root = next((parent for parent in (path, *path.parents)
+                         if (parent / "dataset.toml").exists() or (parent / "dataset.toml").is_symlink()), None)
+            if root is None:
+                raise ValueError("CompositeVerifier task lacks dataset.toml")
+            roots.add(root)
+        for root in sorted(roots):
+            contract = physical(root / "dataset.toml")
+            shared.append({"dataset_root": str(root), "contract": file_record(contract),
+                           "shared": tree_record(root / "shared")})
     kwargs = job["agents"][0]["kwargs"]
     wheels = []
     for item in [{"path": kwargs["wheel_path"], "sha256": kwargs["wheel_sha256"]},
@@ -75,4 +92,7 @@ def snapshot_inputs(job):
         if record["sha256"] != item["sha256"]:
             raise ValueError("worker wheel differs from configured digest")
         wheels.append({"path": str(path), **record})
-    return {"schema_version": "praxile.native_local_inputs.v1", "tasks": tasks, "wheels": wheels}
+    result = {"schema_version": "praxile.native_local_inputs.v1", "tasks": tasks, "wheels": wheels}
+    if shared:
+        result.update(schema_version="praxile.native_local_inputs.v2", shared_verifier_inputs=shared)
+    return result

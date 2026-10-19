@@ -640,6 +640,14 @@ credential_file；清单只保存摘要和元数据，不保存任务/rubric 正
 这是运行前后检测，不是不可变挂载：执行期间修改后又恢复、镜像 tag、远程依赖、模型
 端点和 judge 服务的状态尚未冻结，`controlled_experiment_verified` 继续为 false。
 不带该参数的旧 v1 plan 仍兼容，执行记录明确 `local_inputs_frozen=false`。
+使用官方 WorkBuddy CompositeVerifier 时，快照还必须覆盖最近祖先目录的
+`dataset.toml` 与完整 `shared/`，因为上游会从任务树之外加载评分插件。
+此时 local_inputs schema 为 v2；缺少契约/共享目录或存在符号链接拒绝准备。
+旧计划若使用 CompositeVerifier 却未记录共享输入，需要重新准备，不自动补写
+历史清单。运行建议使用 `python -B` 或 `PYTHONDONTWRITEBYTECODE=1`，避免
+Python 自动新增共享插件的 `__pycache__` 被正确识别为输入变化；本实现不默默
+忽略缓存或额外文件。插件依赖的宿主包、任意外部文件和远端服务仍不在此快照内。
+真实已准备 Office 任务只读复核记录见 `results/workbuddy-shared-inputs-20261019.json`。
 正式执行前应在对应的隔离 Harbor 环境校验配置与材料；冻结镜像、模型端点、
 judge、外部文件和运行顺序仍需进一步验证，当前 manifest 不宣称受控实验通过。
 真实双臂执行验收、结果收集和恢复编排仍待完成。
