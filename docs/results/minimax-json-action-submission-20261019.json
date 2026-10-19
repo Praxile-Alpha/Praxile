@@ -1,0 +1,202 @@
+{
+  "schema_version": "praxile.public_experiment_receipt.v1",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "experiments": [
+    {
+      "kind": "object_probe",
+      "cost": {
+        "model_calls": 1,
+        "prompt_tokens": 1743,
+        "completion_tokens": 372
+      },
+      "cost_usd": null,
+      "report": {
+        "schema_version": "praxile.submission_probe.v1",
+        "status": "failed",
+        "scope": "one_synthetic_submission",
+        "contract_sha256": "c8c08778367906ff2f40d534d090e177651277b42d065853e502f74da5c391b0",
+        "contract_profile": "candidate",
+        "promotion_eligible": false,
+        "capabilities_updated": false,
+        "transport_evidence": {
+          "schema_version": "praxile.http_attempts.v1",
+          "transport": "urllib",
+          "max_retries": 0,
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "success",
+              "status_code": null,
+              "elapsed_ms": 1697
+            }
+          ],
+          "scope": "non_streaming_transport_call",
+          "failed_attempt_usage_unknown": false
+        },
+        "finish_reason": "tool_calls",
+        "response_sha256": "1b7ce0641a11d4c221765c3d3c2bc7246b6cba15f5e36360f3647fc530e3327d",
+        "response_chars": 728,
+        "checks": {
+          "top_level_fields": true,
+          "decision": true,
+          "exactly_two_candidates": true,
+          "not_truncated": true,
+          "exact_payload_and_types": false,
+          "draft_fields": true,
+          "exact_references": true,
+          "exact_actions_and_types": false,
+          "exact_text": true
+        }
+      }
+    },
+    {
+      "kind": "json_string_probe",
+      "cost": {
+        "model_calls": 1,
+        "prompt_tokens": 1261,
+        "completion_tokens": 336
+      },
+      "cost_usd": null,
+      "report": {
+        "schema_version": "praxile.submission_probe.v1",
+        "status": "passed",
+        "scope": "one_synthetic_submission",
+        "contract_sha256": "686ba8747e85f5f8a588420f470b86299628f3e9273f0e2faab5d3c6852ca05d",
+        "contract_profile": "candidate",
+        "action_encoding": "json_string",
+        "promotion_eligible": false,
+        "capabilities_updated": false,
+        "transport_evidence": {
+          "schema_version": "praxile.http_attempts.v1",
+          "transport": "urllib",
+          "max_retries": 0,
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "success",
+              "status_code": null,
+              "elapsed_ms": 1979
+            }
+          ],
+          "scope": "non_streaming_transport_call",
+          "failed_attempt_usage_unknown": false
+        },
+        "finish_reason": "tool_calls",
+        "response_sha256": "a89d3ae90cecdcd3378a6b41ee934628e12535bd7eed718d88475738ffd400be",
+        "response_chars": 737,
+        "checks": {
+          "top_level_fields": true,
+          "decision": true,
+          "exactly_two_candidates": true,
+          "not_truncated": true,
+          "exact_payload_and_types": true,
+          "draft_fields": true,
+          "exact_references": true,
+          "exact_actions_and_types": true,
+          "exact_text": true
+        }
+      }
+    },
+    {
+      "kind": "development_design",
+      "cost": {
+        "model_calls": 2,
+        "prompt_tokens": 14258,
+        "completion_tokens": 7373
+      },
+      "cost_usd": null,
+      "attempts": [
+        {
+          "status": "failed",
+          "submission_attempt": 0,
+          "input_sha256": "7bdb95a92fcbd5955c9fd4d775fda6c22ab2f956fae4abcb0f51d1cb4ee1efc9",
+          "response_protocol": {
+            "mode": "function_json_actions",
+            "contract_sha256": "f34200adb7fdf026025d480c8a213e3d4d17aba6810d6004b841a54953a49e06"
+          },
+          "transport_evidence": {
+            "schema_version": "praxile.http_attempts.v1",
+            "transport": "urllib",
+            "max_retries": 0,
+            "attempt_count": 1,
+            "attempts": [
+              {
+                "attempt": 1,
+                "status": "success",
+                "status_code": null,
+                "elapsed_ms": 16974
+              }
+            ],
+            "scope": "non_streaming_transport_call",
+            "failed_attempt_usage_unknown": false
+          },
+          "response_decode": {
+            "schema_version": "praxile.action_decode.v1",
+            "content_sha256": "71e8cb9512ae052f7590374729934fc3775347675653f7be67491f8c5566c3c5",
+            "content_chars": 9757,
+            "reasoning_blocks_removed": 0,
+            "final_chars": 9757,
+            "reason": "parsed"
+          },
+          "action_validation_diagnostic": {
+            "schema_version": "praxile.candidate_action_validation.v1",
+            "reason": "undeclared_action",
+            "example_index": 0
+          },
+          "failure_stage": "candidate_action_examples",
+          "candidate_position": "first"
+        },
+        {
+          "status": "failed",
+          "submission_attempt": 1,
+          "input_sha256": "74fb2e26dd856031cf1acb39147c6bfa0f2777c78d6a172e577831c0ee436c2c",
+          "response_protocol": {
+            "mode": "function_json_actions",
+            "contract_sha256": "f34200adb7fdf026025d480c8a213e3d4d17aba6810d6004b841a54953a49e06"
+          },
+          "transport_evidence": {
+            "schema_version": "praxile.http_attempts.v1",
+            "transport": "urllib",
+            "max_retries": 0,
+            "attempt_count": 1,
+            "attempts": [
+              {
+                "attempt": 1,
+                "status": "success",
+                "status_code": null,
+                "elapsed_ms": 16087
+              }
+            ],
+            "scope": "non_streaming_transport_call",
+            "failed_attempt_usage_unknown": false
+          },
+          "response_decode": {
+            "schema_version": "praxile.action_decode.v1",
+            "content_sha256": "8e0d50549a73b96e3ffee3a3fffcf5e31918731630f09ab15676fc8cc7b7b54f",
+            "content_chars": 12026,
+            "reasoning_blocks_removed": 0,
+            "final_chars": 12026,
+            "reason": "parsed"
+          },
+          "action_validation_diagnostic": {
+            "schema_version": "praxile.candidate_action_validation.v1",
+            "reason": "undeclared_action",
+            "example_index": 0
+          },
+          "failure_stage": "candidate_action_examples",
+          "candidate_position": "first"
+        }
+      ]
+    }
+  ],
+  "promotion_eligible": false,
+  "limitations": [
+    "Synthetic probes test copying only, not task quality.",
+    "Development design failed twice with undeclared_action; no candidate or task probe was published or run.",
+    "Full action schema descriptions were added to version 2 after these runs; no results are backfilled.",
+    "No provider-side cause is proven by the action mismatch."
+  ]
+}

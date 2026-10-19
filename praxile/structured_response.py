@@ -46,6 +46,14 @@ def submission_content(message, contract):
             or function.get("name") != contract["name"] or not isinstance(function.get("arguments"), str)):
         raise ValueError("structured result function mismatch")
     content = function["arguments"]
+    parse_submission_object(content)
+    return content
+
+
+def parse_submission_object(content):
+    """Decode strict result JSON without repair, coercion or tool execution."""
+    if not isinstance(content, str):
+        raise ValueError("structured result must be a JSON string")
     if len(content.encode()) > 1048576:
         raise ValueError("structured result exceeds 1 MiB")
     def unique(pairs):
@@ -63,4 +71,4 @@ def submission_content(message, contract):
         raise ValueError("structured result arguments must be strict JSON") from error
     if not isinstance(result, dict):
         raise ValueError("structured result arguments must be an object")
-    return content
+    return result

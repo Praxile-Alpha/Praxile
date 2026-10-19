@@ -173,6 +173,52 @@ def test_function_action_contract_declares_discriminator_and_parameters():
     assert action["additionalProperties"] is False
 
 
+def encoded_proposal(action):
+    value = proposal()
+    for draft in [*value["candidates"], value["composition"]]:
+        draft["action_examples"] = [action]
+    return value
+
+
+def test_version_two_decodes_actions_without_changing_runtime_contract():
+    action = {"type": "read_document", "path": "doc.docx", "start": 1, "limit": 5}
+    kwargs, calls = inputs({"content": json.dumps(encoded_proposal(json.dumps(action)))})
+    result = design_development_candidates(**kwargs, response_mode="function_json_actions",
+        executor_profile={"schema_version": "praxile.executor_action_profile.v2",
+            "executor": "praxile", "version": "1", "actions": ["read_document"]})
+    assert calls[0][1]["response_contract"]["name"] == "submit_development_candidates_v2"
+    contract = calls[0][1]["response_contract"]
+    description = contract["schema"]["oneOf"][0]["properties"]["composition"]["properties"]["action_examples"]["items"]["description"]
+    assert '"required": ["type", "path"]' in description
+    assert '"type": "integer"' in description
+    requirement = result["candidates"][0]["context_item"]["executor_requirements"]
+    assert requirement["action_examples"] == [action]
+    assert requirement["execution_verified"] is False
+    assert result["promotion_eligible"] is False
+
+
+@pytest.mark.parametrize("action", [
+    '{"type":"read_document","path":"doc.docx","start":"1"}',
+    '{"type":"read_document","path":"doc.docx","start":1,"start":2}',
+    '{"type":"read_document","path":"doc.docx","start":NaN}',
+    '```json\n{"type":"read_document","path":"doc.docx"}\n```',
+    {"type": "read_document", "path": "doc.docx"},
+])
+def test_encoded_action_never_repairs_coerces_or_bypasses_schema(action):
+    kwargs, _ = inputs({"content": json.dumps(encoded_proposal(action))})
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs, response_mode="function_json_actions",
+            executor_profile={"schema_version": "praxile.executor_action_profile.v2",
+                "executor": "praxile", "version": "1", "actions": ["read_document"]})
+
+
+def test_encoded_action_mode_requires_profile_before_request():
+    kwargs, calls = inputs({})
+    with pytest.raises(EvalSchemaError, match="executor profile"):
+        design_development_candidates(**kwargs, response_mode="function_json_actions")
+    assert calls == []
+
+
 @pytest.mark.parametrize("result", [
     {"decision": "PRIVATE", "candidates": [], "composition": {}},
     {"decision": "propose", "PRIVATE": "PRIVATE"},

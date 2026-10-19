@@ -62,8 +62,8 @@ def _validate_repairs(value):
 
 
 def _validate_mode(value):
-    if value is not None and value not in ("text", "function"):
-        raise EvalSchemaError("candidate response mode must be text or function")
+    if value is not None and value not in ("text", "function", "function_json_actions"):
+        raise EvalSchemaError("unsupported candidate response mode")
 
 
 def _validate_timeout(value):
@@ -74,6 +74,8 @@ def _validate_timeout(value):
 def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
                 applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds, response_mode,
                 repair_attempts):
+    if response_mode == "function_json_actions" and executor_profile is None:
+        raise EvalSchemaError("JSON action submission requires an executor profile")
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
@@ -92,10 +94,11 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                 "max_designer_calls": 1 + repair_attempts, "local_validation_failures_only": True}
         if response_mode is not None:
             plan["response_protocol"] = {"mode": response_mode}
-            if response_mode == "function":
+            if response_mode in ("function", "function_json_actions"):
                 from .candidate_response import candidate_response_contract
                 plan["response_protocol"]["contract"] = candidate_response_contract(
-                    ["event:" + item["event_id"] for item in bundle["evidence"]], plan.get("executor_capability"))
+                    ["event:" + item["event_id"] for item in bundle["evidence"]], plan.get("executor_capability"),
+                    json_actions=response_mode == "function_json_actions")
         with file_lock(root / "design"):
             existed = (root / "manifest.json").exists()
             if existed and not resume:

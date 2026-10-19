@@ -622,7 +622,7 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Explicit frozen designer output budget, 256..16384; omitted preserves legacy 4000")
         design_parser.add_argument("--request-timeout", type=int,
                           help="Frozen per-request timeout in seconds, 1..300; default 60, not a total deadline")
-        design_parser.add_argument("--response-mode", choices=("text", "function"),
+        design_parser.add_argument("--response-mode", choices=("text", "function", "function_json_actions"),
                           help="Frozen result protocol; function requires a tool-capable OpenAI-compatible model")
         design_parser.add_argument("--repair-attempts", type=int, choices=(0, 1),
                           help="Opt-in local validation repair budget; default 0, each call uses the full request budget")

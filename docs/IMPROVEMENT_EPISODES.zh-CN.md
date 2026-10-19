@@ -530,6 +530,33 @@ trajectory。请求前保存 unknown 状态，重复 ID 拒绝；响应仅记录
 exact_text 分项，仍只记录布尔结论，不保存模型正文；旧记录不可回填。新增分项
 已通过离线测试，尚未追加真实调用。两种模式都只检查合成复制，不替代任务能力
 或独立候选执行验收，不自动改动 supports_tools 声明。
+
+### 版本化动作编码
+
+分项实测：原 object 编码复制样例的文本/引用一致，动作不一致；JSON-string
+动作编码样例全部一致。两次均为单个合成样例，不证明 provider 内部原因或可靠率。
+开发设计复验首次及一次修订都因 undeclared_action 被拒绝，仍无合法候选。
+记录见 `results/minimax-json-action-submission-20261019.json`。
+
+新增显式 `--response-mode function_json_actions`，使用
+`submit_development_candidates_v2`，要求 executor profile。每条 action_examples
+是包含完整动作对象的严格 JSON 字符串；本地拒绝重复键、NaN、代码围栏、
+超长字符串及非法对象，再调用原动作校验器。数字字符串不会转换为数字，
+权限/引用/晋升规则不变。落盘候选恢复为原来的对象形式，运行时不需要新解码器。
+默认文本模式及旧 function 合同保持不变；manifest 冻结合同，不能更换后 resume。
+
+初版字符串描述缺少显式 type 判别字段规范。开发复验失败后，将完整声明动作
+schema 加入字符串说明，并在提示词强调 type 与参数同级，不嵌套 arguments。
+此补充仅离线验证，不将此前合成通过当成最终合同的真实验收。
+
+合成检查可使用：
+
+```bash
+python -m praxile.eval.submission_probe --project /absolute/project \
+  --probe-id protocol-json-actions-001 --candidate-contract --json-actions
+```
+
+这只是协议复制检查，不创建候选、执行动作或授予实验资格。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

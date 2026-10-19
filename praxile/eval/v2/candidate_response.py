@@ -1,4 +1,6 @@
 """Versioned submission contract; local candidate validators remain authoritative."""
+import json
+
 from ...action_schema import ActionSchemaRegistry
 
 ABSTENTION_REASONS = ("insufficient_evidence", "capability_mismatch", "contradictory_evidence", "no_bounded_intervention")
@@ -6,7 +8,9 @@ MISSING_EVIDENCE = ("before_after_observations", "action_parameters", "public_co
                     "capability_health", "counterexamples")
 
 
-def candidate_response_contract(refs, capability=None):
+def candidate_response_contract(refs, capability=None, *, json_actions=False):
+    if json_actions and capability is None:
+        raise ValueError("JSON action submission requires an executor profile")
     draft_properties = {
         "content": {"type": "string", "minLength": 1, "maxLength": 6000},
         "hypothesis": {"type": "string", "minLength": 1, "maxLength": 2000},
@@ -29,6 +33,12 @@ def candidate_response_contract(refs, capability=None):
                             "required": ["type", *schema["required"]], "additionalProperties": False})
         draft_properties["action_examples"] = {"type": "array", "minItems": 1, "maxItems": 8,
                                                 "items": {"oneOf": actions}}
+        if json_actions:
+            draft_properties["action_examples"]["items"] = {"type": "string", "minLength": 2,
+                "maxLength": 65536, "description": "Encode one complete strict JSON action object. "
+                "The top-level type discriminator and all parameters must match one of the following schemas. "
+                "Do not nest parameters inside arguments. Keep integer fields as JSON numbers. "
+                "This submission never executes a tool. Action schemas: " + json.dumps(actions, sort_keys=True)}
     draft = {"type": "object", "properties": draft_properties,
              "required": list(draft_properties), "additionalProperties": False}
     propose = {"type": "object", "properties": {
@@ -41,4 +51,5 @@ def candidate_response_contract(refs, capability=None):
         "missing_evidence": {"type": "array", "maxItems": len(MISSING_EVIDENCE),
                              "items": {"type": "string", "enum": list(MISSING_EVIDENCE)}}},
         "required": ["decision", "reason", "missing_evidence"], "additionalProperties": False}
-    return {"name": "submit_development_candidates_v1", "schema": {"type": "object", "oneOf": [propose, abstain]}}
+    return {"name": "submit_development_candidates_v2" if json_actions else "submit_development_candidates_v1",
+            "schema": {"type": "object", "oneOf": [propose, abstain]}}

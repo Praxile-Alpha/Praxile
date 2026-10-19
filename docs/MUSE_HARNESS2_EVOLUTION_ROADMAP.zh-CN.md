@@ -204,6 +204,11 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 具体差异类别未知；不据此宣称复杂 schema 不受支持。新增分项检查仅离线验证，
 详见 `results/minimax-submission-probes-20261019.json`。有效候选闭环仍未完成。
 
+后续分项实测定位到动作差异，新增 opt-in function_json_actions 版本化编码，
+严格解码后仍按原动作 schema 验证，禁止数值强制转换。初版合成复制通过，
+开发设计仍失败；补充 type 判别字段与完整动作 schema 说明仅离线验证。
+旧协议不改，详见 `results/minimax-json-action-submission-20261019.json`。
+
 修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
 示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏
 校验诊断；另提供 opt-in 工具 profile v2 数值/SHA 约束，保留 v1 摘要兼容性。

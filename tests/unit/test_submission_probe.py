@@ -101,3 +101,16 @@ def test_probe_persists_and_refuses_duplicate_id(tmp_path, monkeypatch):
         module.run_probe(config, probe_id="p1")
     assert calls == [1]
     assert len(closed) == 2
+
+
+def test_json_action_probe_uses_version_two_contract():
+    def chat(messages, **options):
+        assert options["response_contract"]["name"] == "submit_development_candidates_v2"
+        item = json.loads(messages[1]["content"])["candidates"][0]["action_examples"][0]
+        assert isinstance(item, str)
+        assert type(json.loads(item)["start"]) is int
+        return {"content": messages[1]["content"]}
+    report = probe_submission(SimpleNamespace(chat=chat), TrajectoryLogger("probe", {}),
+                              candidate_contract=True, json_actions=True)
+    assert report["status"] == "passed"
+    assert report["action_encoding"] == "json_string"

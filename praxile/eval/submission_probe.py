@@ -11,7 +11,9 @@ from .v2.configured_composer import configured_design_router
 from .v2.schema import canonical_json
 
 
-def probe_submission(router, logger, *, private=False, candidate_contract=False):
+def probe_submission(router, logger, *, private=False, candidate_contract=False, json_actions=False):
+    if json_actions and not candidate_contract:
+        raise ValueError("JSON action probe requires candidate contract")
     sample = {"decision": "propose", "candidates": [
         {"evidence_ref": "event:probe:first", "start": 1, "limit": 5},
         {"evidence_ref": "event:probe:second", "start": 2, "limit": 3}]}
@@ -31,15 +33,19 @@ def probe_submission(router, logger, *, private=False, candidate_contract=False)
             "executor": "praxile", "version": "synthetic-protocol-v1",
             "actions": ["read_document", "revise_docx", "check_document_layout"]})
         refs = ["event:probe:first", "event:probe:second"]
-        contract = candidate_response_contract(refs, capability)
+        contract = candidate_response_contract(refs, capability, json_actions=json_actions)
         def draft(text, ref):
             return {"content": text, "hypothesis": "Synthetic copy check only.", "evidence_refs": [ref],
                 "action_examples": [{"type": "read_document", "path": "synthetic.docx", "start": 1, "limit": 5}]}
         sample = {"decision": "propose", "candidates": [draft("First synthetic draft", refs[0]),
             draft("Second synthetic draft", refs[1])], "composition": draft("Synthetic composition", refs[0])}
+        if json_actions:
+            for item in [*sample["candidates"], sample["composition"]]:
+                item["action_examples"] = [canonical_json(action) for action in item["action_examples"]]
     record = {"schema_version": "praxile.submission_probe.v1", "status": "unknown",
         "scope": "one_synthetic_submission", "contract_sha256": hashlib.sha256(canonical_json(contract).encode()).hexdigest(),
         "contract_profile": "candidate" if candidate_contract else "basic",
+        "action_encoding": "json_string" if json_actions else "object",
         "promotion_eligible": False, "capabilities_updated": False}
     try:
         response = router.chat([
@@ -81,7 +87,9 @@ def probe_submission(router, logger, *, private=False, candidate_contract=False)
     return record
 
 
-def run_probe(config, *, probe_id, private=False, candidate_contract=False):
+def run_probe(config, *, probe_id, private=False, candidate_contract=False, json_actions=False):
+    if json_actions and not candidate_contract:
+        raise ValueError("JSON action probe requires candidate contract")
     scope = {"repositories": ["synthetic/protocol"], "task_signals": ["synthetic submission"],
              "does_not_apply_when": ["real task evaluation"]}
     with configured_design_router(config, cycle_id=probe_id, applies_to=scope, private=private) as (router, identity):
@@ -90,13 +98,15 @@ def run_probe(config, *, probe_id, private=False, candidate_contract=False):
         write_json(root / "manifest.json", {"schema_version": "praxile.submission_probe_run.v1",
             "probe_id": probe_id, "model": identity, "max_designer_calls": 1,
             "contract_profile": "candidate" if candidate_contract else "basic",
+            "action_encoding": "json_string" if json_actions else "object",
             "max_output_tokens": 1024, "request_timeout_seconds": 60,
             "limitations": ["Configured transport retries remain in effect.",
                             "A pass does not attest complex schemas, task quality or future reliability."]})
         write_json(root / "report.json", {"status": "unknown", "automatic_replay_allowed": False})
         logger = TrajectoryLogger("Synthetic submission protocol check", {})
         try:
-            report = probe_submission(router, logger, private=private, candidate_contract=candidate_contract)
+            report = probe_submission(router, logger, private=private, candidate_contract=candidate_contract,
+                                      json_actions=json_actions)
             write_json(root / "report.json", report)
         finally:
             write_json(root / "trajectory.json", logger.data)
@@ -110,9 +120,10 @@ def main():
     parser.add_argument("--private", action="store_true")
     parser.add_argument("--candidate-contract", action="store_true",
                         help="Use the actual candidate function schema with fixed synthetic drafts")
+    parser.add_argument("--json-actions", action="store_true", help="Use version 2 JSON-string actions with --candidate-contract")
     args = parser.parse_args()
     report = run_probe(Config.load(args.project), probe_id=args.probe_id, private=args.private,
-                       candidate_contract=args.candidate_contract)
+                       candidate_contract=args.candidate_contract, json_actions=args.json_actions)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["status"] == "passed" else 1
 
