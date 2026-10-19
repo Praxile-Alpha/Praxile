@@ -149,3 +149,42 @@ python -m praxile.eval.workbuddy \
 - 原始 Office 清单 SHA-256：`6ff1386c35a9fef611b426096e2c26f2c9912965f82f85e6d0109c2cba9bf20a`。
 - 真实 Office 50 条任务副本准备成功，清单 SHA-256：`769487c35f09022ff682d7be0789cbb35dc42da512d5808e14ca92c83bbbaf0f`。
 - 解包/清单/官方准备测试 19 项通过；未运行真实 WorkBuddy 任务或付费 judge，不报告完成率。
+
+### WorkBuddy Job 生成
+
+在隔离的 Harbor 0.18.0 环境中，准备不含密钥的 agent JSON，包含以下字段：
+
+```json
+{
+  "import_path": "praxile.adapters.harbor_native:WorkBuddyPraxileAgent",
+  "model_name": "MiniMax-M3",
+  "kwargs": {
+    "wheel_path": "/absolute/praxile-0.1.0-py3-none-any.whl",
+    "wheel_sha256": "YOUR_WHEEL_SHA256",
+    "workspace": "/workspace",
+    "base_url": "YOUR_VERIFIED_OPENAI_COMPATIBLE_ENDPOINT",
+    "max_steps": 50,
+    "timeout_seconds": 900
+  }
+}
+```
+
+模型和 endpoint 可替换；此配置不设置 judge 模型，也不自动传递宿主机凭据。真实运行前仍需完成凭据路由和评分配置检查。
+
+```sh
+python -m praxile.eval.workbuddy \
+  --dataset /absolute/office-prepared \
+  --revision DATASET_COMMIT \
+  --inventory-sha256 PREPARED_INVENTORY_SHA256 \
+  --task-id EXACT_TASK_ID \
+  --agent-config /absolute/agent.json \
+  --job-name praxile-workbuddy-office-001 \
+  --jobs-dir /absolute/jobs \
+  --write-job /absolute/workbuddy-job.json
+```
+
+命令只生成新文件（权限 0600），不启动任务；必须明确选择 task ID。重新验证数据摘要和准备状态，单次尝试、单并发、无自动重试，容器结束后清理。Security 子集在受限网络策略验证前明确拒绝。
+
+兼容性注意：Harbor 0.18.0 不从任务 TOML 读取自定义 verifier import_path。生成器在 **job 的 verifier.import_path** 显式设置官方 `workbuddy_bench.judge:CompositeVerifier`，避免落入默认脚本评分器。`dev` 用户仍由 task.toml 控制。官方各任务评分材料和参数不改写；LLM/VLM 评分是否实际启用必须另行验证并报告。
+
+增补验证：31 项解包/清单/job/CLI/上游准备测试通过；真实 Office 50 条通过 Harbor Task/JobConfig 解析，VerifierFactory 实例化类型确认为 CompositeVerifier。尚未完成完整 Harbor job 的真实模型执行与结果归档，不能据此宣称正式评测通过。

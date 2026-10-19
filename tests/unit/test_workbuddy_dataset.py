@@ -16,6 +16,7 @@ def package(tmp_path):
         "tasks/example/instruction.md": "Create the requested document.",
         "tasks/example/environment/workspace.tar.gz": "opaque nested archive",
         "tasks/example/tests/rubric.json": '{"private":"hidden answer"}',
+        "tasks/example/tests/test.sh": "#!/bin/sh\nexit 1\n",
     }
     for name, content in files.items():
         path = tmp_path / name
@@ -105,3 +106,114 @@ def test_preparation_failure_does_not_publish_or_modify_source(package, tmp_path
     assert not (parent / "dataset").exists()
     assert not list(parent.glob(".workbuddy-prepare-*"))
     assert load(package).digest == original.digest
+
+
+@pytest.fixture
+def prepared_package(package):
+    config = package / "tasks/example/task.toml"
+    config.write_text(config.read_text().replace('[agent]', '[agent]\nuser="dev"').replace(
+        '[verifier]', '[verifier]\nuser="dev"\nimport_path="workbuddy_bench.judge:CompositeVerifier"'))
+    return package
+
+
+def native_agent():
+    return {"import_path": "praxile.adapters.harbor_native:WorkBuddyPraxileAgent",
+            "model_name": "configurable-model", "kwargs": {"workspace": "/workspace"}}
+
+
+def test_job_preserves_official_contract_and_bounded_lifecycle(prepared_package, tmp_path):
+    dataset = load(prepared_package)
+    agent = native_agent()
+    job = dataset.job_config(agent=agent, jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+    assert job["n_concurrent_trials"] == job["n_attempts"] == 1
+    assert job["retry"]["max_retries"] == 0
+    assert job["environment"]["delete"] is True
+    assert job["environment"]["import_path"].startswith("workbuddy_bench.")
+    assert job["tasks"] == [{"path": str(prepared_package / "tasks/example")}]
+    assert job["verifier"] == {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
+    agent["kwargs"]["workspace"] = "/elsewhere"
+    assert job["agents"][0]["kwargs"]["workspace"] == "/workspace"
+
+
+def test_job_refuses_unprepared_tasks(package, tmp_path):
+    with pytest.raises(EvalSchemaError, match="preparation"):
+        load(package).job_config(agent=native_agent(), jobs_dir=tmp_path / "jobs",
+                                 job_name="smoke", task_ids=("example",))
+
+
+def test_job_revalidates_source_and_refuses_security(prepared_package, tmp_path):
+    dataset = load(prepared_package)
+    config = prepared_package / "dataset.toml"
+    config.write_text(config.read_text().replace("office", "sec"))
+    options = dict(agent=native_agent(), jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+    with pytest.raises(EvalSchemaError, match="digest"):
+        dataset.job_config(**options)
+    with pytest.raises(EvalSchemaError, match="Security"):
+        load(prepared_package).job_config(**options)
+
+
+@pytest.mark.parametrize("override,match", [
+    ({"task_ids": ()}, "explicit task IDs"),
+    ({"job_name": "../escape"}, "unsafe"),
+    ({"agent": {}}, "import_path"),
+    ({"agent": {**native_agent(), "name": "oracle"}}, "conflicting"),
+    ({"agent": {**native_agent(), "model_name": None}}, "model_name"),
+    ({"agent": {**native_agent(), "kwargs": None}}, "workspace"),
+])
+def test_job_rejects_invalid_execution_config(prepared_package, tmp_path, override, match):
+    options = dict(agent=native_agent(), jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+    options.update(override)
+    with pytest.raises(EvalSchemaError, match=match):
+        load(prepared_package).job_config(**options)
+
+
+def test_job_schema_and_existing_run(prepared_package, tmp_path):
+    pytest.importorskip("harbor")
+    from harbor.models.job.config import JobConfig
+    dataset = load(prepared_package)
+    options = dict(agent=native_agent(), jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",))
+    job = JobConfig.model_validate(dataset.job_config(**options))
+    assert job.retry.max_retries == 0
+    assert job.environment.delete is True
+    assert job.verifier.import_path == "workbuddy_bench.judge:CompositeVerifier"
+    (tmp_path / "jobs/smoke").mkdir(parents=True)
+    with pytest.raises(EvalSchemaError, match="already exists"):
+        dataset.job_config(**options)
+
+
+def test_harbor_factory_selects_official_verifier(prepared_package, tmp_path):
+    pytest.importorskip("harbor")
+    pytest.importorskip("workbuddy_bench.judge")
+    from harbor.models.job.config import JobConfig
+    from harbor.models.task.task import Task
+    from harbor.models.trial.paths import TrialPaths
+    from harbor.verifier.factory import VerifierFactory
+    from workbuddy_bench.judge import CompositeVerifier
+    job = JobConfig.model_validate(load(prepared_package).job_config(
+        agent=native_agent(), jobs_dir=tmp_path / "jobs", job_name="smoke", task_ids=("example",)))
+    task = Task(job.tasks[0].path)
+    verifier = VerifierFactory.create_verifier_from_config(
+        job.verifier, task=task, trial_paths=TrialPaths(tmp_path / "trial"), environment=None)
+    assert type(verifier) is CompositeVerifier
+    assert task.config.agent.user == task.config.verifier.user == "dev"
+
+
+def test_cli_writes_exclusive_private_job(prepared_package, tmp_path, monkeypatch, capsys):
+    pytest.importorskip("harbor")
+    from importlib.metadata import version
+    if version("harbor") != "0.18.0":
+        pytest.skip("WorkBuddy requires pinned Harbor 0.18.0")
+    from praxile.eval.workbuddy import main
+    agent_path = tmp_path.parent / (tmp_path.name + "-agent.json")
+    agent_path.write_text(json.dumps(native_agent()))
+    output = tmp_path.parent / (tmp_path.name + "-job.json")
+    monkeypatch.setattr("sys.argv", ["workbuddy", "--dataset", str(prepared_package),
+        "--revision", "a" * 40, "--inventory-sha256", load(prepared_package).digest,
+        "--task-id", "example", "--agent-config", str(agent_path), "--job-name", "smoke",
+        "--jobs-dir", str(tmp_path.parent / "jobs"), "--write-job", str(output)])
+    main()
+    assert json.loads(capsys.readouterr().out)["selected_tasks"] == 1
+    assert output.stat().st_mode & 0o777 == 0o600
+    assert json.loads(output.read_text())["verifier"]["import_path"].endswith(":CompositeVerifier")
+    with pytest.raises(FileExistsError):
+        main()

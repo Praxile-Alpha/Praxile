@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
+import os
 import re
 import shutil
 import tempfile
 import tomllib
 from pathlib import Path
+from importlib.metadata import version
 
 from ..utils import file_lock
 from .contracts import BenchmarkTask, EnvironmentSpec, EvaluatorReference
@@ -86,6 +89,42 @@ class WorkBuddyDataset:
             raise EvalSchemaError("unknown or duplicate requested task")
         return tuple(task for key, task in self.tasks.items() if not task_ids or key in task_ids)
 
+    def job_config(self, *, agent: dict, jobs_dir: Path, job_name: str,
+                   task_ids: tuple[str, ...]) -> dict:
+        """Generate an explicitly selected, single-trial-at-a-time integration job."""
+        if self.subset == "sec":
+            raise EvalSchemaError("Security requires a separately verified restricted network policy")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,191}", job_name):
+            raise EvalSchemaError("unsafe job name")
+        if (jobs_dir / job_name).exists() or (jobs_dir / job_name).is_symlink():
+            raise EvalSchemaError("job already exists; use upstream explicit resume")
+        if not task_ids:
+            raise EvalSchemaError("explicit task IDs are required for integration runs")
+        current = WorkBuddyDataset(self.root, revision=self.revision, expected_digest=self.digest)
+        selected = current.select(task_ids)
+        if set(task_ids) & set(current.preparation_required):
+            raise EvalSchemaError("selected tasks require official preparation before execution")
+        if not isinstance(agent, dict) or agent.get("import_path") != "praxile.adapters.harbor_native:WorkBuddyPraxileAgent":
+            raise EvalSchemaError("WorkBuddy native executor import_path is required")
+        if agent.get("name") not in (None, "praxile-workbuddy"):
+            raise EvalSchemaError("conflicting agent name")
+        if not isinstance(agent.get("kwargs"), dict) or agent["kwargs"].get("workspace") != "/workspace":
+            raise EvalSchemaError("WorkBuddy workspace must be /workspace")
+        if not agent.get("model_name"):
+            raise EvalSchemaError("explicit executor model_name is required")
+        return {
+            "job_name": job_name, "jobs_dir": str(jobs_dir.resolve()),
+            "n_attempts": 1, "n_concurrent_trials": 1, "timeout_multiplier": 2.5,
+            "retry": {"max_retries": 0},
+            "environment": {"type": "docker", "import_path":
+                "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment",
+                "force_build": True, "delete": True},
+            # Harbor 0.18 reads plugin selection from trial/job config, not task TOML.
+            "verifier": {"import_path": "workbuddy_bench.judge:CompositeVerifier"},
+            "agents": [copy.deepcopy(agent)], "datasets": [],
+            "tasks": [{"path": str(self.root / "tasks" / task.task_id)} for task in selected],
+        }
+
 
 def prepare_copy(source: Path, destination: Path, *, revision: str,
                  expected_digest: str) -> WorkBuddyDataset:
@@ -128,6 +167,10 @@ def main() -> None:
     parser.add_argument("--inventory-sha256")
     parser.add_argument("--task-id", action="append", default=[])
     parser.add_argument("--prepare-copy", type=Path)
+    parser.add_argument("--agent-config", type=Path)
+    parser.add_argument("--job-name")
+    parser.add_argument("--jobs-dir", type=Path)
+    parser.add_argument("--write-job", type=Path)
     args = parser.parse_args()
     dataset = WorkBuddyDataset(args.dataset, revision=args.revision, expected_digest=args.inventory_sha256)
     if args.prepare_copy:
@@ -136,6 +179,19 @@ def main() -> None:
         dataset = prepare_copy(args.dataset, args.prepare_copy, revision=args.revision,
                                expected_digest=args.inventory_sha256)
     selected = dataset.select(tuple(args.task_id))
+    if any((args.agent_config, args.job_name, args.jobs_dir, args.write_job)):
+        if not all((args.agent_config, args.job_name, args.jobs_dir, args.write_job)):
+            parser.error("job generation requires --agent-config, --job-name, --jobs-dir and --write-job")
+        if not args.inventory_sha256:
+            parser.error("job generation requires --inventory-sha256")
+        if version("harbor") != "0.18.0":
+            parser.error("WorkBuddy job generation requires isolated Harbor 0.18.0")
+        from harbor.models.job.config import JobConfig
+        config = dataset.job_config(agent=json.loads(args.agent_config.read_text(encoding="utf-8")),
+            jobs_dir=args.jobs_dir, job_name=args.job_name, task_ids=tuple(args.task_id))
+        JobConfig.model_validate(config)
+        with os.fdopen(os.open(args.write_job, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as handle:
+            json.dump(config, handle, indent=2)
     print(json.dumps({"subset": dataset.subset, "dataset_revision": dataset.revision,
         "inventory_sha256": dataset.digest, "total_tasks": len(dataset.tasks),
         "selected_tasks": len(selected), "requires_official_preparation": dataset.preparation_required,
