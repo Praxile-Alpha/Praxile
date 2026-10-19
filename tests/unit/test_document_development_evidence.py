@@ -179,9 +179,13 @@ def test_collector_projects_layout_under_development_membership(tmp_path, monkey
     store.list_events = lambda **kwargs: [revision_call, revision_result, call, result]
     linked = module.collect_development_evidence(tmp_path, store, **args)
     assert linked["eligible_count"] == 2
-    facts = json.loads(linked["evidence"][0]["observation"])
+    assert [item["event_id"] for item in linked["evidence"]] == ["revision-result", "tool_result"]
+    facts = json.loads(linked["evidence"][1]["observation"])
     assert facts["revision_event_id"] == "revision-result"
     assert "PRIVATE BODY" not in json.dumps(linked)
+    bounded = module.collect_development_evidence(tmp_path, store, limit=1, **args)
+    assert [item["event_id"] for item in bounded["evidence"]] == ["revision-result"]
+    assert bounded["omitted_count"] == 1
     plan["track"] = "clean"
     with pytest.raises(module.EvalSchemaError, match="explicit development"):
         module.collect_development_evidence(tmp_path, store, **args)

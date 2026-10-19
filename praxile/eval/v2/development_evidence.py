@@ -1,6 +1,7 @@
 """Minimal trace projection with development membership and manifest checks."""
 from collections import Counter
 import hashlib
+import json
 import re
 
 from ...utils import read_json
@@ -8,6 +9,42 @@ from .alignment import _identity
 from .document_evidence import project_layout, project_revision, revision_layout_links
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
+
+
+def select_evidence(evidence, priorities, limit):
+    """Keep earlier same-task evidence dependencies inside the selection budget."""
+    indexes = {item["event_id"]: index for index, item in enumerate(evidence)}
+    selected, order = set(), []
+    for index in sorted(range(len(evidence)), key=lambda i: (priorities[i], i)):
+        pending, group = [index], set()
+        valid = True
+        while pending:
+            current = pending.pop()
+            if current in group or current in selected:
+                continue
+            group.add(current)
+            if len(selected | group) > limit:
+                valid = False
+                break
+            item = evidence[current]
+            facts = json.loads(item["observation"])
+            for field in ("revision_event_id", "before_layout_event_id"):
+                reference = facts.get(field)
+                if reference is None:
+                    continue
+                dependency = indexes.get(reference)
+                if (dependency is None or dependency >= current
+                        or evidence[dependency]["task_id"] != item["task_id"]):
+                    valid = False
+                    break
+                pending.append(dependency)
+            if not valid:
+                break
+        if valid:
+            # Within a selected group, show source observations before their conclusion.
+            order.extend(sorted(group))
+            selected.update(group)
+    return order
 
 
 def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
@@ -93,12 +130,12 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             priorities.append(1 if status == "success" else 0)
             sources.append({"event_id": event.event_id, "trace_id": trace_id,
                 "event_sha256": hashlib.sha256(event.to_json().encode()).hexdigest()})
-    # Prioritize failures; preserve deterministic order within each group.
-    order = sorted(range(len(evidence)), key=lambda i: (priorities[i], i))[:limit]
+    order = select_evidence(evidence, priorities, limit)
     return {"schema_version": "praxile.development_evidence.v1", "experiment_id": experiment_id,
             "arm": arm, "manifest_digest": manifest.reproducibility_digest,
             "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
-            "eligible_count": len(evidence), "omitted_count": max(0, len(evidence) - limit),
+            "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
+            "selection": "failure_priority_with_same_task_dependency_closure",
             "projection": "structured_tool_outcomes_no_raw_text",
             "limitations": ["Local manifest membership is not an external provenance attestation.",
                             "No raw outputs, evaluator scores or task correctness claims are projected."]}
