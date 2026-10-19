@@ -143,6 +143,16 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+最新真实复验（0ba84dd）：同一 easy technical-writers 任务完成两份可解析
+DOCX，14 次模型调用，1 次 length 截断被拒绝后恢复。独立原版官方 verifier
+得到 73/82、reward=0.8902（9 项通过 8 项）；摘要和冻结权重校验一致。
+用户另行授权仅 judge 向 MiniMax 发送评审材料，执行器不接触 rubric。
+本地渲染发现 checklist 实际 5 页而非要求的 1 页；原始产物未修改，不将
+模型 completed 或结构检查通过当成全部要求通过。完整证据摘要见
+`results/jobbench-inventory-smoke-20261019.json`。这是单任务 standalone verifier
+链路，不是完整 Harbor Trial、held-out 提升或全量验收。judge token/费用账本、
+正式 Trial 导入、恢复与其他任务覆盖仍缺，R0 总项保持未完成。
+
 协议版本真实复验仍未完成交付：两份 .docx 实为 0/4 字节文本，官方离线
 extract-only 虽返回 complete，但正文为两个格式读取错误；未调用付费评分。
 据此禁止 edit_file 写入/覆盖二进制文档，明确工具边界；表格 schema 错误
@@ -154,8 +164,9 @@ extract-only 虽返回 complete，但正文为两个格式读取错误；未调�
 该协议修复尚无真实交付验收；不能用本次较少 tokens 声称性能提升。
 
 独立官方 judge 镜像已按原始 Dockerfile 构建，无网络检查确认固定计算环境
-标识和评分入口；未改 rubric、依赖或 generation。当前仍没有非空交付物的
-官方评分，镜像不可提供给执行器，正式任务验收总项保持未完成。
+标识和评分入口；未改 rubric、依赖或 generation。该记录当时尚无非空交付物的
+官方评分；后续单任务评分见本节最新复验。镜像不可提供给执行器，正式
+任务验收总项保持未完成。
 
 正式文档工具真实复验：6050fbe 已能在冻结任务镜像中多次调用 read_document，
 但最后模型请求超时，输出仍为空，未调用官方 judge。记录到的成功响应输入
