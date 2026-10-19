@@ -78,6 +78,24 @@ def test_invalid_abstention_diagnostics_rejected(update):
     kwargs, _ = inputs({"content": json.dumps(payload)})
     with pytest.raises(EvalSchemaError, match="abstention"):
         design_development_candidates(**kwargs)
+    assert kwargs["logger"].data["development_candidate_designs"][0]["failure_stage"] == "abstention_schema"
+
+
+@pytest.mark.parametrize("mutation,stage,position", [
+    (lambda p: p["candidates"][0].update(extra="SECRET"), "candidate_fields", "first"),
+    (lambda p: p["candidates"][1].update(content=""), "candidate_text_bounds", "second"),
+    (lambda p: p["composition"].update(evidence_refs=["event:SECRET"]), "candidate_evidence_refs", "composition"),
+    (lambda p: p["candidates"][1].update(content=p["candidates"][0]["content"]), "candidate_distinctness", None),
+])
+def test_validation_stage_logged_without_response_content(mutation, stage, position):
+    value = proposal()
+    mutation(value)
+    kwargs, _ = inputs({"content": json.dumps(value)})
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs)
+    record = kwargs["logger"].data["development_candidate_designs"][0]
+    assert record["failure_stage"] == stage and record["candidate_position"] == position
+    assert "SECRET" not in json.dumps(record)
 
 
 def test_reasoning_json_is_not_mistaken_for_final_candidate():

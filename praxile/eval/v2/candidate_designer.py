@@ -54,6 +54,8 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
               "input_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
               "source_task_ids": sorted(set(refs.values())), "promotion_eligible": False}
     logger.data.setdefault("development_candidate_designs", []).append(record)
+    stage = "model_request"
+    candidate_position = None
     try:
         response = router.chat([
             {"role": "system", "content": (
@@ -78,13 +80,16 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             max_tokens=4000, timeout=60, temperature=0, cancel_requested=cancel_requested)
         logger.add_model_cost(response.get("usage", {}), route={**response.get("route", {}),
             "purpose": "proposal_composer", "latency_ms": response.get("latency_ms")})
+        stage = "response_decode"
         result, decoding = decode_action(response.get("content", ""))
         record["response_decode"] = decoding
         record["finish_reason"] = response.get("finish_reason")
+        stage = "response_completion"
         if response.get("finish_reason") in {"length", "max_tokens"}:
             raise EvalSchemaError("truncated candidate design response")
         if result is None:
             raise EvalSchemaError("candidate design response is not a complete JSON object")
+        stage = "abstention_schema"
         if result.get("decision") == "abstain":
             diagnostic = {"reason": "unspecified", "missing_evidence": [],
                           "source": "model_self_report", "verified": False}
@@ -101,30 +106,39 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             record["abstention"] = diagnostic
             return {"decision": "NO_ENTRY", "candidates": [], "composition": None,
                     "promotion_eligible": False, "abstention": diagnostic}
+        stage = "proposal_schema"
         if (set(result) != {"decision", "candidates", "composition"} or result["decision"] != "propose"
                 or not isinstance(result["candidates"], list) or len(result["candidates"]) != 2):
             raise EvalSchemaError("design must propose exactly two candidates and one composition")
         candidates = []
         for name, draft in zip(("first", "second", "composition"), [*result["candidates"], result["composition"]]):
+            candidate_position = name
+            stage = "candidate_fields"
             fields = {"content", "hypothesis", "evidence_refs"} | ({"action_examples"} if capability is not None else set())
             if not isinstance(draft, dict) or set(draft) != fields:
                 raise EvalSchemaError("invalid candidate design fields")
+            stage = "candidate_text_bounds"
             if any(not isinstance(draft[key], str) or not draft[key].strip()
                    or len(draft[key]) > limit for key, limit in (("content", 6000), ("hypothesis", 2000))):
                 raise EvalSchemaError("candidate content and hypothesis must be bounded nonempty strings")
+            stage = "candidate_evidence_refs"
             cited = draft["evidence_refs"]
             if (not isinstance(cited, list) or not 1 <= len(cited) <= len(refs)
                     or any(not isinstance(ref, str) or ref not in refs for ref in cited)):
                 raise EvalSchemaError("candidate must cite only supplied evidence")
             context = {"content": draft["content"]}
             if capability is not None:
+                stage = "candidate_action_examples"
                 context["executor_requirements"] = validate_action_examples(draft["action_examples"], capability)
+            stage = "candidate_construction"
             candidates.append(ContextCandidate(candidate_id=f"{design_id}.{name}", version="1",
                 title=f"Development {name}", candidate_type="context_policy",
                 context_item=context, confidence=0.0,
                 evidence_refs=tuple(dict.fromkeys(cited)), source_task_ids=tuple(sorted({refs[ref] for ref in cited})),
                 expected_effect={"hypothesis": draft["hypothesis"]},
                 applies_to=json.loads(canonical_json(applies_to))))
+        candidate_position = None
+        stage = "candidate_distinctness"
         if candidates[0].context_item["content"].strip() == candidates[1].context_item["content"].strip():
             raise EvalSchemaError("individual candidate interventions must differ")
         record.update(status="drafted", candidate_digests=[item.digest for item in candidates])
@@ -133,5 +147,6 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 "limitations": ["Caller supplies public development evidence; provenance is not independently attested.",
                                 "Draft quality and composition compatibility require independent execution."]}
     except Exception as error:
-        record.update(status="failed", error_type=type(error).__name__)
+        record.update(status="failed", error_type=type(error).__name__, failure_stage=stage,
+                      candidate_position=candidate_position)
         raise

@@ -109,7 +109,13 @@ implementation 已升级，旧设计不能混用新提示词继续生成；应�
 2026-10-19 关联证据复验（v2 诊断实现前）：8 条修订/布局证据仍返回 NO_ENTRY，
 2359 input / 297 output、5.031 秒，0 候选。不能推断具体弃权原因，也不能把
 增加证据量视为质量改善。公开记录见 `results/jobbench-candidate-linked-20261019.json`。
-新诊断仅完成 fixture 验证，未追加真实调用。
+后续 v2 单次真实复验正常结束且 JSON 可解析，但后续 schema 校验失败：2443 input /
+1565 output、19.236 秒，未接受候选。原版本仅记录异常类型，原始响应未保留，
+无法反推具体失败分支，不能称为诊断验收成功。见
+`results/jobbench-candidate-diagnostic-20261019.json`。
+为解决该排障缺口，后续失败记录增加固定 failure_stage 和 candidate_position，
+不记录异常正文或原始模型响应；fixture 验证字段、长度、引用、重复候选和弃权
+分支可区分。这个改动不放宽校验，也不触发自动重试。
 
 开发实验采集器现支持 `check_document_layout` 的结构化结果：只投影页数、
 调用参数中的上限、是否满足上限和调用引用；参数使用摘要，不暴露路径、正文或
