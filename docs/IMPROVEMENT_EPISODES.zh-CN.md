@@ -156,8 +156,23 @@ M3.1 Flash 真实设计验收（2026-10-19）：仅发送上述 7 条公开证�
 `design_development_candidates(..., max_output_tokens=4000)` 现允许调用方显式传入
 256..16384 的整数预算，默认不变，并记录请求预算、reasoning token 数、正文长度
 和截断诊断。它不会自动增加预算、切模型或重试；调整预算应成为新实验计划的一部分。
-该参数当前为 Python API，既有 CLI 的冻结设计仍使用默认 4000；不要认为修改它
-已经改变所有 CLI、worker 或执行器角色。模型请求选项也必须按 provider 实际支持配置。
+CLI `eval design-context` 现支持 `--max-output-tokens 8000`。显式预算产生
+`praxile.candidate_design_run.v2` manifest，冻结输出上限与 60 秒超时；相同预算
+resume 可重建已生成文件而不重复请求，变更预算（包括改回隐式默认）拒绝恢复，
+必须使用新 design ID。未指定参数时保留 v1 manifest 形态与隐式 4000，兼容旧计划，
+不迁移或覆写历史 manifest。这不改变 worker 或执行器角色的预算。模型请求选项
+必须按 provider 实际支持配置，M3.1 Flash 不应使用已被实测拒绝的 thinking=disabled。
+
+超时口径：这里的 60 秒是每次 HTTP 请求超时，不是整个设计流程的墙钟硬截止。
+默认 model.max_retries=1 可能在网络故障后重试一次；设计器自身不循环生成，
+并不等于传输层零重试。需要单请求实验时，在实验配置明确设置
+`model.max_retries=0`（并检查 provider 覆盖）。不能仅凭一次 router 调用宣称
+API 只被调用一次或最终供应商只计费一次。
+
+后续独立 8000 输出 token 验证仍使用默认 adaptive thinking，最终读取超时，
+无完整响应、无候选，输入/输出 token 与费用均未知。该次继承了一次传输重试，
+不能宣称 60 秒总截止或严格单请求。未继续扩大预算；后续须明确冻结传输策略并
+记录尝试次数，再评估 provider 支持的推理控制，而非将超时当作模型弃权。
 
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。

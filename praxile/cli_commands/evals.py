@@ -254,7 +254,7 @@ def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int
     report = run_candidate_design(config, EventStore(config.paths), design_id=args.design_id,
         experiment_id=args.experiment_id, arm=args.arm, development_task_ids=args.development_task_id,
         heldout_task_ids=args.heldout_task_id, applies_to=scope, private=args.private, resume=args.resume,
-        executor_profile=profile)
+        executor_profile=profile, max_output_tokens=getattr(args, "max_output_tokens", None))
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:

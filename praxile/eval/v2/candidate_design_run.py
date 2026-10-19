@@ -11,7 +11,9 @@ from .schema import EvalSchemaError
 
 def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                          development_task_ids, heldout_task_ids, applies_to, private=False, resume=False,
-                         executor_profile=None):
+                         executor_profile=None, max_output_tokens=None):
+    if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
+        raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
     # Verify source membership before constructing the model request.
     bundle = collect_development_evidence(config.paths.state, event_store, experiment_id=experiment_id,
         arm=arm, development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids)
@@ -21,6 +23,9 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                 "source_evidence": bundle, "designer": {**identity, "implementation": "praxile.candidate_designer.v2"},
                 "development_task_ids": sorted(set(development_task_ids)),
                 "heldout_task_ids": sorted(set(heldout_task_ids)), "applies_to": applies_to}
+        if max_output_tokens is not None:
+            plan.update(schema_version="praxile.candidate_design_run.v2",
+                        generation_budget={"max_output_tokens": max_output_tokens, "timeout_seconds": 60})
         if executor_profile is not None:
             from .executor_profile import profile_context
             plan["executor_capability"] = profile_context(executor_profile)
@@ -39,7 +44,8 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                 result = design_development_candidates(evidence=bundle["evidence"],
                     development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
                     applies_to=applies_to, design_id=design_id, router=router, logger=logger,
-                    private=private, executor_profile=executor_profile) if bundle["evidence"] else {
+                    private=private, executor_profile=executor_profile,
+                    max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {
                         "decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}
             finally:
                 write_json(trajectory_path, logger.data)

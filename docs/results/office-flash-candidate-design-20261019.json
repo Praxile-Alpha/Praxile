@@ -29,13 +29,25 @@
       "input_tokens": null,
       "output_tokens": null,
       "cost_usd": null
+    },
+    {
+      "configuration": "provider_default_thinking_explicit_8000",
+      "max_output_tokens": 8000,
+      "timeout_seconds_per_request": 60,
+      "transport_max_retries": 1,
+      "status": "transport_read_timeout",
+      "final_response_received": false,
+      "input_tokens": null,
+      "output_tokens": null,
+      "cost_usd": null
     }
   ],
   "candidate_count": 0,
   "experiments_started": false,
   "promotion_eligible": false,
   "limitations": [
-    "Two separately recorded configurations, not automatic retry or A/B task evaluation",
+    "Designer did not loop, but inherited model.max_retries=1 permits a transport retry; per-HTTP attempt accounting was not captured",
+    "Three separately recorded configurations, not A/B task evaluation; third ended in transport timeout",
     "No private evaluator material was sent to the designer",
     "No valid design response; evidence sufficiency and candidate quality remain unassessed",
     "No reasoning text or credential is included in this public record"
