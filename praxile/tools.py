@@ -126,10 +126,17 @@ class ToolRegistry:
                     decision = self.safety.check_path(item["path"], write=False)
                     if not decision.allowed:
                         return {"status": "blocked", "output": decision.reason, "data": {}, "risk_level": decision.risk_level}
-                report = verify_deliverables(self.config.paths.root, contract)
+                observed_state = None
+                if contract["schema_version"] == "praxile.deliverable_contract.v2":
+                    # Never accept an action's claimed observation as evidence.
+                    try:
+                        observed_state = {"browser": self.browser.observe_state()}
+                    except Exception:
+                        observed_state = {}
+                report = verify_deliverables(self.config.paths.root, contract, observed_state=observed_state)
             except ValueError:
                 return {"status": "failure", "output": "Invalid public deliverable contract", "data": {}, "risk_level": "low"}
-            return {"status": "success" if report["passed"] else "failure", "output": "Local structural checks completed",
+            return {"status": "success" if report["passed"] else "failure", "output": "Local deliverable checks completed",
                     "data": report, "risk_level": "low"}
         return {"status": "failure", "output": f"unknown action type: {action_type}", "data": {}, "risk_level": "low"}
 

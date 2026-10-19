@@ -5,6 +5,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 import stat
 import subprocess
 import sys
@@ -14,6 +15,7 @@ from pathlib import Path
 from .eval.contracts import OutputContract
 from .eval.v2.schema import EvalSchemaError
 from .artifact_openers import MEDIA
+from .experience_conditions import check_conditions
 
 
 STRUCTURE_FIELDS = {
@@ -40,13 +42,29 @@ def _structure_checks(requirement: dict, observed: dict) -> list[dict]:
 
 
 def validate_contract(value: object) -> list[dict]:
-    if not isinstance(value, dict) or set(value) != {"schema_version", "source", "outputs"}:
+    if not isinstance(value, dict):
         raise EvalSchemaError("invalid deliverable contract fields")
-    if value["schema_version"] != "praxile.deliverable_contract.v1" or value["source"] != "user_request":
+    version = value.get("schema_version")
+    fields = {"schema_version", "source", "outputs"}
+    if version == "praxile.deliverable_contract.v2":
+        fields.add("state_equals")
+    if set(value) != fields:
+        raise EvalSchemaError("invalid deliverable contract fields")
+    if version not in {"praxile.deliverable_contract.v1", "praxile.deliverable_contract.v2"} or value["source"] != "user_request":
         raise EvalSchemaError("deliverables require a versioned public user_request contract")
+    states = value.get("state_equals", {})
+    if version == "praxile.deliverable_contract.v2":
+        if not isinstance(states, dict) or not 1 <= len(states) <= 20:
+            raise EvalSchemaError("v2 requires 1 to 20 state constraints")
+        for key, expected in states.items():
+            if (not isinstance(key, str) or len(key) > 120
+                    or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,4}", key)
+                    or type(expected) not in (str, bool, int)
+                    or isinstance(expected, str) and len(expected) > 2000):
+                raise EvalSchemaError("invalid bounded state constraint")
     outputs = value["outputs"]
-    if not isinstance(outputs, list) or not 1 <= len(outputs) <= 100:
-        raise EvalSchemaError("deliverable contract requires 1 to 100 outputs")
+    if not isinstance(outputs, list) or not (0 if states else 1) <= len(outputs) <= 100:
+        raise EvalSchemaError("deliverable contract requires outputs or v2 state constraints")
     seen = set()
     for item in outputs:
         if not isinstance(item, dict) or set(item) - {"path", "media_type", "required", "required_fields", "structure"}:
@@ -75,7 +93,8 @@ def validate_contract(value: object) -> list[dict]:
     return outputs
 
 
-def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_000) -> dict:
+def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_000,
+                        observed_state: dict | None = None) -> dict:
     """No code execution, network access, globbing, or symlink traversal.
 
     Checks represent structural evidence only. source labels are not proof of
@@ -182,6 +201,12 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
         except (ValueError, UnicodeError, csv.Error, RecursionError):
             result["reason"] = "invalid_structure_or_encoding"
     passed = all(item["status"] in {"passed", "optional_missing"} for item in results)
-    return {"schema_version": "praxile.deliverable_check.v1", "passed": passed, "outputs": results,
+    report = {"schema_version": "praxile.deliverable_check.v1", "passed": passed, "outputs": results,
             "official_evaluation": False, "semantic_quality_verified": False,
             "contract_sha256": hashlib.sha256(json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
+    if contract["schema_version"] == "praxile.deliverable_contract.v2":
+        state_check = check_conditions({"state_equals": contract["state_equals"]}, {"state": observed_state})
+        report.update(schema_version="praxile.deliverable_check.v2", state_check=state_check,
+                      passed=passed and state_check["status"] == "matched",
+                      state_transitions_verified=False, contract_provenance_verified=False)
+    return report

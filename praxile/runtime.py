@@ -1387,6 +1387,7 @@ class AgentRuntime:
             '{"type":"subtask_reflect","source_episode_id":"closed episode id",'
             '"ttl_steps":2,"requirements":{"state_equals":{"git.is_repo":true}}}\n'
             '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/report.json","media_type":"application/json","required_fields":["summary"]}]}}\n'
+            '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v2","source":"user_request","outputs":[],"state_equals":{"browser.session_active":true}}}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
             '{"type":"run_command","command":"safe configured test/lint/build command"}\n'
             '{"type":"finish","status":"completed|needs_human|failed","summary":"short result"}\n\n'

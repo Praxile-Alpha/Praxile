@@ -4,6 +4,41 @@
 
 ## Contract 与 Runtime Action
 
+### V2 终态约束
+
+V1 文件契约与报告保持原样。V2 增加必填 `state_equals`（1 到 20 条精确终态要求），
+允许 `outputs: []` 表达纯状态交付。正常 ToolRegistry 从既有浏览器会话读取状态，
+不启动浏览器，不使用 action 中模型声称的 observed_state；观察缺失时 unknown，
+值不符或类型不符时 mismatched。只有所有状态匹配且文件要求通过才 passed。
+
+```json
+{
+  "type": "check_deliverables",
+  "contract": {
+    "schema_version": "praxile.deliverable_contract.v2",
+    "source": "user_request",
+    "outputs": [],
+    "state_equals": {
+      "browser.session_active": true,
+      "browser.origin": "https://example.com:443"
+    }
+  }
+}
+```
+
+当前观测项为 browser.session_active、去敏且含端口的 browser.origin 和
+browser.chromium_version。其他点路径可被契约表达，但未观测到就不会通过。
+独立调用 `verify_deliverables` 时，可信调用方通过 observed_state 提供观测；
+不能将模型文本当作可信观测。报告复用条件检查，记录每项匹配/不符/未知。
+
+V2 报告明确 `state_transitions_verified=false` 和
+`contract_provenance_verified=false`：这是本次检查时的终态，不证明执行途中
+没有越界变化；source 标签也不是用户确实确认该契约的证据。
+前后状态差异、允许变化范围、可信用户确认及持久化观测来源仍待接入。
+33 项交付单元测试通过，完整快速单元测试 455 passed / 6 skipped / 10 deselected。
+
+### V1 文件要求
+
 ```json
 {
   "type": "check_deliverables",

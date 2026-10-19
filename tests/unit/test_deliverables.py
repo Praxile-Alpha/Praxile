@@ -93,3 +93,61 @@ def test_csv_minimum_rows(tmp_path):
 def test_invalid_or_wrong_format_constraints_are_not_ignored(tmp_path, structure):
     with pytest.raises(EvalSchemaError):
         verify_deliverables(tmp_path, contract("table.csv", "text/csv", structure=structure))
+
+
+def state_contract(**states):
+    return {"schema_version": "praxile.deliverable_contract.v2", "source": "user_request",
+            "outputs": [], "state_equals": states}
+
+
+@pytest.mark.parametrize("observed,status", [
+    (None, "unknown"), ({}, "unknown"), ({"browser": {"session_active": False}}, "mismatched"),
+    ({"browser": {"session_active": 1}}, "mismatched"),
+    ({"browser": {"session_active": True}}, "matched")])
+def test_state_contract_requires_observed_exact_state(tmp_path, observed, status):
+    request = state_contract(**{"browser.session_active": True})
+    result = verify_deliverables(tmp_path, request, observed_state=observed)
+    assert result["passed"] is (status == "matched")
+    assert result["state_check"]["checks"][0]["status"] == status
+    assert not result["state_transitions_verified"]
+    assert not result["contract_provenance_verified"]
+
+
+@pytest.mark.parametrize("states", [{}, [], {"bad..path": True}, {"browser.origin": None},
+                                      {"browser.origin": "x" * 2001}, {"count": 1.5}])
+def test_state_contract_invalid_constraints_rejected(tmp_path, states):
+    request = state_contract()
+    request["state_equals"] = states
+    with pytest.raises(EvalSchemaError):
+        verify_deliverables(tmp_path, request)
+
+
+def test_state_success_cannot_hide_failed_file_requirement(tmp_path):
+    request = state_contract(**{"browser.session_active": False})
+    request["outputs"] = contract()["outputs"]
+    result = verify_deliverables(tmp_path, request, observed_state={"browser": {"session_active": False}})
+    assert result["state_check"]["status"] == "matched"
+    assert not result["passed"]
+
+
+def test_tool_uses_live_observer_not_model_claims(tmp_path):
+    class Browser:
+        def observe_state(self):
+            return {"session_active": False}
+    tools = ToolRegistry(Config(default_config(tmp_path), ProjectPaths(tmp_path)), browser=Browser())
+    result = tools.execute({"type": "check_deliverables",
+        "contract": state_contract(**{"browser.session_active": True}),
+        "observed_state": {"browser": {"session_active": True}}}, task_id="t", step=1)
+    assert result["status"] == "failure"
+    assert result["data"]["state_check"]["checks"][0]["status"] == "mismatched"
+
+
+def test_tool_observation_failure_is_unknown(tmp_path):
+    class Browser:
+        def observe_state(self):
+            raise RuntimeError("unavailable")
+    tools = ToolRegistry(Config(default_config(tmp_path), ProjectPaths(tmp_path)), browser=Browser())
+    result = tools.execute({"type": "check_deliverables",
+        "contract": state_contract(**{"browser.session_active": False})}, task_id="t", step=1)
+    assert result["status"] == "failure"
+    assert result["data"]["state_check"]["checks"][0]["status"] == "unknown"
