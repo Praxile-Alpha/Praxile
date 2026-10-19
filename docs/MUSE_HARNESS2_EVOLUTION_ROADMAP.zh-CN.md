@@ -173,6 +173,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 Web 契约通路增补：同步 run、异步 jobs、同步/异步聊天均接受受限内联契约并共用 RunService 校验；入队前拒绝非法契约，不读取服务器路径。聊天重试保留原契约且拒绝替换/删除，run 详情暴露冻结摘要和复验结果。16 项 Gateway 契约/Console 回归通过。前端契约编辑器、job 队列跨进程恢复和完整状态转换证据仍缺，总项不勾选。
 
+React 契约界面增补：独立 React Console 支持可选 JSON 契约输入、错误提示、提交防重复、job 完成刷新及冻结要求/文件与状态检查展示。Vite 生产构建和桌面/手机 Playwright 两项测试通过，已检查截图与页面溢出；API 为 fixture，不代表真实模型 UI 验收。内置 Python Console、完整状态转换、任务接管与跨进程恢复仍缺，完整 R1 界面项保持未完成。
+
 回归审计：新增浏览器修改动作后发现 dry-run 原先仅阻止 edit_file/run_command，已将 click/fill 纳入共用修改动作集合。8 项实际 action-loop 单元测试覆盖正常与 dry-run 分发差异；不启用模型、浏览器或 SQLite。导航仍是允许的网络读取，dry-run 不等于完全无副作用沙箱。
 
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。

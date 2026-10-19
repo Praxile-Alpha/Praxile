@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { GitPullRequest, Network, RefreshCw, Send, Sparkles } from "lucide-react";
 import { api } from "./api.js";
+import { initialContract, parseContract } from "./deliverables.js";
 
 const panels = ["chat", "runs", "proposals", "graph", "ci"];
 
@@ -11,6 +12,9 @@ export function App() {
   const [proposals, setProposals] = useState([]);
   const [detail, setDetail] = useState(null);
   const [task, setTask] = useState("");
+  const [bindRequirements, setBindRequirements] = useState(false);
+  const [requirements, setRequirements] = useState(initialContract);
+  const [sending, setSending] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [graph, setGraph] = useState(null);
   const [ciReports, setCiReports] = useState([]);
@@ -38,16 +42,39 @@ export function App() {
   }, []);
 
   async function runTask() {
-    if (!task.trim()) return;
+    if (!task.trim() || sending) return;
+    setError("");
+    const contract = bindRequirements ? parseContract(requirements) : undefined;
+    setSending(true);
+    try {
     const session = await api("/api/chat/sessions", { method: "POST", body: JSON.stringify({ title: "React console" }) });
     const result = await api(`/api/chat/sessions/${session.session_id}/message-async`, {
       method: "POST",
-      body: JSON.stringify({ task, dry_run: false, max_steps: 10 })
+      body: JSON.stringify({ task, dry_run: false, max_steps: 10, deliverable_contract: contract })
     });
     setDetail(result.job);
     setPanel("runs");
     setTask("");
+    } finally { setSending(false); }
   }
+
+  const activeJobId = detail?.job_id;
+  useEffect(() => {
+    if (!activeJobId) return;
+    let cancelled = false;
+    let timer;
+    async function poll() {
+      try {
+        const job = await api(`/api/runs/jobs/${encodeURIComponent(activeJobId)}`);
+        if (cancelled) return;
+        setDetail(job.result || job);
+        if (["queued", "running", "cancelling"].includes(job.status)) timer = setTimeout(poll, 1000);
+        else if (job.error) setError(job.error);
+      } catch (err) { if (!cancelled) setError(err.message); }
+    }
+    poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [activeJobId]);
 
   async function openRun(runId) {
     const run = await api(`/api/runs/${encodeURIComponent(runId)}`);
@@ -121,8 +148,14 @@ export function App() {
           <section>
             <h1>Chat Workspace</h1>
             <div className="composer">
-              <textarea value={task} onChange={(event) => setTask(event.target.value)} placeholder="Ask Praxile to fix a bug or inspect a project risk" />
-              <button onClick={() => runTask().catch((err) => setError(err.message))}><Send size={15} /> Run</button>
+              <textarea aria-label="Task" value={task} onChange={(event) => setTask(event.target.value)} placeholder="Ask Praxile to fix a bug or inspect a project risk" />
+              <label className="check-label"><input type="checkbox" checked={bindRequirements} disabled={sending}
+                onChange={(event) => setBindRequirements(event.target.checked)} />Bind deliverable requirements</label>
+              {bindRequirements && <label>Deliverable contract (JSON)
+                <textarea className="code contract-input" value={requirements} disabled={sending}
+                  onChange={(event) => { setRequirements(event.target.value); setError(""); }} spellCheck={false} />
+              </label>}
+              <button disabled={sending || !task.trim()} onClick={() => runTask().catch((err) => setError(err.message))}><Send size={15} />{sending ? "Submitting" : "Run"}</button>
             </div>
           </section>
         )}
@@ -132,6 +165,7 @@ export function App() {
             <div className="grid">
               {runs.map((run) => <Card key={run.task_id} title={run.task_id} meta={`${run.status} · reward ${run.reward ?? "n/a"}`} onClick={() => openRun(run.task_id)} />)}
             </div>
+            <DeliverableReview run={detail?.result || detail} />
             <JsonDetail value={detail} />
           </section>
         )}
@@ -167,6 +201,27 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function DeliverableReview({ run }) {
+  if (!run?.deliverable_contract && !run?.deliverable_verification) return null;
+  const verification = run.deliverable_verification;
+  const data = verification?.data || {};
+  return <section className="deliverable-review" aria-label="Deliverable verification">
+    <h2>Deliverable verification</h2>
+    <dl>
+      <dt>Run status</dt><dd>{run.status || "unknown"}</dd>
+      <dt>Local checks</dt><dd>{verification ? (data.passed === true ? "Passed" : verification.status === "blocked" ? "Blocked" : "Not verified") : "Not run"}</dd>
+      <dt>Contract SHA-256</dt><dd className="code">{run.deliverable_contract_sha256 || "Unavailable"}</dd>
+      <dt>Official evaluation</dt><dd>Not established by local checks</dd>
+    </dl>
+    {verification?.output && <p>{verification.output}</p>}
+    <ul className="check-results">
+      {(data.outputs || []).map((item) => <li key={item.path}><code>{item.path}</code><strong>{item.status}</strong>{item.reason && <span>{item.reason}</span>}</li>)}
+      {(data.state_check?.checks || []).map((item) => <li key={item.name}><code>{item.name}</code><strong>{item.status}</strong></li>)}
+    </ul>
+    {run.deliverable_contract && <details><summary>Frozen requirements</summary><pre>{JSON.stringify(run.deliverable_contract, null, 2)}</pre></details>}
+  </section>;
 }
 
 function Card({ title, meta, onClick, icon = null }) {
