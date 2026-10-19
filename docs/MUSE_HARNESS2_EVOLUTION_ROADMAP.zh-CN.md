@@ -209,6 +209,11 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 开发设计仍失败；补充 type 判别字段与完整动作 schema 说明仅离线验证。
 旧协议不改，详见 `results/minimax-json-action-submission-20261019.json`。
 
+typed-actions-001 的最终 v2 说明真实验收通过：首次生成两候选及组合，无修订，
+完整校验与离线作用域激活通过。公开脱敏证据/候选包支持无 API 重放，位于
+`results/docx-typed-actions-20261019/`。候选固定条目数及占位示例有内容保持风险；
+尚未执行或晋升，完整 R2 闭环仍不勾选。
+
 修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
 示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏
 校验诊断；另提供 opt-in 工具 profile v2 数值/SHA 约束，保留 v1 摘要兼容性。

@@ -1,0 +1,152 @@
+{
+  "applies_to": {
+    "does_not_apply_when": [
+      "multi-page document",
+      "no explicit page limit"
+    ],
+    "repositories": [
+      "jobbench/easy-technical-writers"
+    ],
+    "task_signals": [
+      "one-page checklist",
+      "DOCX page limit"
+    ]
+  },
+  "candidate_id": "docx-repair-typed-actions-001.first",
+  "candidate_type": "context_policy",
+  "confidence": 0,
+  "context_item": {
+    "content": "Compact table-led rebuild: replace the draft's 15-row x 6-column table (90 cells) plus 4 paragraphs and 1 heading with a single heading, one short instruction line, and one 9-row x 4-column table (Step | Owner | Due | Done) holding 8 checklist items, followed by no trailing prose. Cells use short phrases carried over verbatim from the source blocks read via read_document (recipients, timing, compliance checks) rather than newly invented text. Compact layout is requested via the document's \"layout\":\"compact\" key; no title, metadata, header, footer, or page settings are introduced. Verification: re-run check_document_layout with max_pages=1 on the revised file and treat a page count above 1 as failure.",
+    "executor_requirements": {
+      "action_examples": [
+        {
+          "limit": 20,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 1,
+          "type": "read_document"
+        },
+        {
+          "limit": 5,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 21,
+          "type": "read_document"
+        },
+        {
+          "document": {
+            "blocks": [
+              {
+                "level": 1,
+                "text": "FY25 AEG Social Justice Award Packet Checklist",
+                "type": "heading"
+              },
+              {
+                "text": "Internal working checklist. Work the steps in packet order and mark each item as done before submission.",
+                "type": "paragraph"
+              },
+              {
+                "rows": [
+                  [
+                    "Step",
+                    "Owner",
+                    "Due",
+                    "Done"
+                  ],
+                  [
+                    "[step 1 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 2 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 3 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 4 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 5 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 6 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 7 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 8 from source]",
+                    "[recipient/owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ]
+                ],
+                "type": "table"
+              }
+            ],
+            "layout": "compact"
+          },
+          "expected_sha256": "e4524fea71e8b55102e430207ac1f9254bfa29a27cd32f8989343e4c59a28052",
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "revise_docx"
+        },
+        {
+          "max_pages": 1,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "check_document_layout"
+        }
+      ],
+      "execution_verified": false,
+      "executor": "praxile",
+      "permission_granted": false,
+      "profile": {
+        "actions": [
+          "read_document",
+          "revise_docx",
+          "check_document_layout"
+        ],
+        "executor": "praxile",
+        "schema_version": "praxile.executor_action_profile.v2",
+        "version": "docx-public-evidence-v2-20261019"
+      },
+      "profile_digest": "sha256:a4eb511c44b42a21c51878561a49d240aa12cdda13e00c20946991282817c603",
+      "schema_validated": true
+    }
+  },
+  "evidence_refs": [
+    "event:event_0c446f135f4de31352bc",
+    "event:event_c1e54b25ec1abbaa3644",
+    "event:event_b4bf1a3b8d7dac957edd",
+    "event:event_bb6b489c375bc7e30177",
+    "event:event_771b120e1c9a49503130"
+  ],
+  "expected_effect": {
+    "hypothesis": "Across four revise_docx attempts, shrinking prose (text_characters 4783 -> 3954 -> 3232 -> 2494) left the rendered page count fixed at 2, indicating the 15x6 table, not paragraph volume, dominates the page overflow. A structurally narrower table (4 columns, 8 data rows) with short source-derived cells should reduce both row wrapping and cell count enough to reach one page."
+  },
+  "schema_version": "praxile.context_candidate.v1",
+  "source_diagnosis_ids": [],
+  "source_task_ids": [
+    "task_13f6cabf80f9"
+  ],
+  "title": "Development first",
+  "version": "1"
+}

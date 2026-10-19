@@ -557,6 +557,20 @@ python -m praxile.eval.submission_probe --project /absolute/project \
 ```
 
 这只是协议复制检查，不创建候选、执行动作或授予实验资格。
+
+### 首次通过完整草案校验的版本化提交
+
+typed-actions-001 使用补充动作 schema 的 v2 编码，MiniMax M3.1 Flash / low
+首次请求生成两条候选及组合，结构、引用和动作校验均通过，未使用修订额度。
+输入 6192、输出 3531 tokens，传输 18.831 秒；费用未知，无工具执行。
+公开包位于 `results/docx-typed-actions-20261019/`：包含脱敏的原输入证据投影、
+三条候选及摘要/限制记录，可离线验证摘要、证据引用和作用域激活。
+
+三条候选在声明的修订任务上激活，但没有运行。内容审查指出固定 8/10 条清单
+可能遗漏重要信息，示例含占位文本和历史 hash，表格几何导致分页的说法仍是假设。
+仅通过页数检查不能证明收件人、时限、合规和清单顺序保留；独立执行和内容验收
+未完成，composition 必须独立验证，不继承父候选成绩。公开包不安装为经验资产，
+confidence=0、permission_granted=false、promotion_eligible=false。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

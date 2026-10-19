@@ -1,0 +1,90 @@
+{
+  "schema_version": "praxile.public_candidate_bundle.v1",
+  "design_id": "docx-repair-typed-actions-001",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "scope": "seeded_artifact_development_design_not_original_benchmark",
+  "design": {
+    "design_id": "docx-repair-typed-actions-001",
+    "status": "drafted",
+    "submission_attempt": 0,
+    "input_inventory": {
+      "schema_version": "praxile.design_input_inventory.v1",
+      "evidence_count": 10,
+      "public_task_context_supplied": true,
+      "executor_profile_supplied": true,
+      "evidence_sufficiency_verified": false
+    },
+    "max_output_tokens": 8000,
+    "timeout_seconds": 120,
+    "input_sha256": "7bdb95a92fcbd5955c9fd4d775fda6c22ab2f956fae4abcb0f51d1cb4ee1efc9",
+    "source_task_ids": [
+      "task_13f6cabf80f9"
+    ],
+    "promotion_eligible": false,
+    "response_protocol": {
+      "mode": "function_json_actions",
+      "contract_sha256": "53f11929f465c95063be01c83f402246805c22703f975cecfccb286d6143e970"
+    },
+    "transport_evidence": {
+      "schema_version": "praxile.http_attempts.v1",
+      "transport": "urllib",
+      "max_retries": 0,
+      "attempt_count": 1,
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "success",
+          "status_code": null,
+          "elapsed_ms": 18831
+        }
+      ],
+      "scope": "non_streaming_transport_call",
+      "failed_attempt_usage_unknown": false
+    },
+    "response_decode": {
+      "schema_version": "praxile.action_decode.v1",
+      "content_sha256": "587a81bc303e30814e2f5548fd6dccfc766acb615d22faa09d1812d355747cb1",
+      "content_chars": 9473,
+      "reasoning_blocks_removed": 0,
+      "final_chars": 9473,
+      "reason": "parsed"
+    },
+    "finish_reason": "tool_calls",
+    "reasoning_tokens": 749,
+    "final_content_chars": 9473,
+    "candidate_digests": [
+      "sha256:288617721ba5600a3dbb31bc54f1e98dc23fa0301de4c62596706e110af5c9ff",
+      "sha256:61f6dff8f1f9c2258435122f0a70c30c06e0b4270f9525bed4c54b5b8cb792da",
+      "sha256:5df81ae95a8063220f12671b07c8746bf5c2c3d147adb85b1b9bb56d5dd09cd5"
+    ]
+  },
+  "cost": {
+    "model_calls": 1,
+    "prompt_tokens": 6192,
+    "completion_tokens": 3531,
+    "cost_usd": null
+  },
+  "candidate_files": [
+    "first.json",
+    "second.json",
+    "composition.json"
+  ],
+  "candidate_execution_started": false,
+  "promotion_eligible": false,
+  "quality_review": {
+    "content_preservation_verified": false,
+    "causal_attribution_verified": false,
+    "risks": [
+      "Fixed 8/10-item compression is not grounded in a complete content inventory.",
+      "Action examples contain illustrative placeholders and stale hashes; they must not be executed verbatim.",
+      "A one-page result alone cannot establish retention of packet order, recipients, timing or compliance.",
+      "Claims about table geometry causing overflow remain hypotheses, not causal findings."
+    ]
+  },
+  "limitations": [
+    "Public projections do not include full original source artifacts or independently attest their provenance.",
+    "Passing schema/reference checks and activation does not establish task improvement.",
+    "Three candidates require independent execution; composition does not inherit success."
+  ]
+}

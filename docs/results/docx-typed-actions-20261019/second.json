@@ -1,0 +1,132 @@
+{
+  "applies_to": {
+    "does_not_apply_when": [
+      "multi-page document",
+      "no explicit page limit"
+    ],
+    "repositories": [
+      "jobbench/easy-technical-writers"
+    ],
+    "task_signals": [
+      "one-page checklist",
+      "DOCX page limit"
+    ]
+  },
+  "candidate_id": "docx-repair-typed-actions-001.second",
+  "candidate_type": "context_policy",
+  "confidence": 0,
+  "context_item": {
+    "content": "Table-free bullet checklist: replace the document contents with one level-1 heading, one line of framing text, and 10 short bullet items (one per checklist step, each <= ~60 characters) that carry the source's recipients, timing, and compliance checks in source order. No table block and no long paragraphs, so the page is driven only by short bullet lines. Cells/facts are copied from the source blocks read via read_document; bracketed placeholders below are filled with source-derived text before the revision is issued. The separate memo file output/FY25_AEG_Social_Justice_Award_Notification_Memo_DRAFT.docx is never read, revised, or checked. Verification: re-run check_document_layout with max_pages=1 on the revised file.",
+    "executor_requirements": {
+      "action_examples": [
+        {
+          "limit": 20,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 1,
+          "type": "read_document"
+        },
+        {
+          "limit": 5,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 21,
+          "type": "read_document"
+        },
+        {
+          "document": {
+            "blocks": [
+              {
+                "level": 1,
+                "text": "FY25 AEG Social Justice Award Packet Checklist",
+                "type": "heading"
+              },
+              {
+                "text": "Internal working checklist; tick each line in order and sign off before submission.",
+                "type": "paragraph"
+              },
+              {
+                "text": "[checklist item 1 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 2 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 3 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 4 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 5 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 6 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 7 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 8 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 9 - source wording, short]",
+                "type": "bullet"
+              },
+              {
+                "text": "[checklist item 10 - source wording, short]",
+                "type": "bullet"
+              }
+            ],
+            "layout": "compact"
+          },
+          "expected_sha256": "e4524fea71e8b55102e430207ac1f9254bfa29a27cd32f8989343e4c59a28052",
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "revise_docx"
+        },
+        {
+          "max_pages": 1,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "check_document_layout"
+        }
+      ],
+      "execution_verified": false,
+      "executor": "praxile",
+      "permission_granted": false,
+      "profile": {
+        "actions": [
+          "read_document",
+          "revise_docx",
+          "check_document_layout"
+        ],
+        "executor": "praxile",
+        "schema_version": "praxile.executor_action_profile.v2",
+        "version": "docx-public-evidence-v2-20261019"
+      },
+      "profile_digest": "sha256:a4eb511c44b42a21c51878561a49d240aa12cdda13e00c20946991282817c603",
+      "schema_validated": true
+    }
+  },
+  "evidence_refs": [
+    "event:event_e73fd82ba532ea3cad7b",
+    "event:event_df0fcd5b43923b4cfdc2",
+    "event:event_37233316d4671427191b",
+    "event:event_254147f2ff6c417367fa"
+  ],
+  "expected_effect": {
+    "hypothesis": "Because every prior revision still rendered 2 pages despite large prose cuts, a document with no table and only ~12 short blocks should fit one page under the compact layout, isolating the failure cause to table geometry rather than text volume. Testing this alternative discriminates between 'table is the overflow source' and 'the compact renderer cannot fit this content' hypotheses."
+  },
+  "schema_version": "praxile.context_candidate.v1",
+  "source_diagnosis_ids": [],
+  "source_task_ids": [
+    "task_13f6cabf80f9"
+  ],
+  "title": "Development second",
+  "version": "1"
+}

@@ -1,0 +1,161 @@
+{
+  "applies_to": {
+    "does_not_apply_when": [
+      "multi-page document",
+      "no explicit page limit"
+    ],
+    "repositories": [
+      "jobbench/easy-technical-writers"
+    ],
+    "task_signals": [
+      "one-page checklist",
+      "DOCX page limit"
+    ]
+  },
+  "candidate_id": "docx-repair-typed-actions-001.composition",
+  "candidate_type": "context_policy",
+  "confidence": 0,
+  "context_item": {
+    "content": "Combined repair: adopt the table-led compact rebuild (1 heading, 1 instruction line, one 9-row x 4-column table of 8 source-derived checklist steps) and, if the post-revision layout check still reports 2 pages, immediately fall back to the table-free variant by dropping the table and re-expressing the same eight steps as short bullets plus the compliance-check items. Both variants use only supported blocks (heading, paragraph, bullet, table) with \"layout\":\"compact\", are issued as complete replacement documents against a freshly refreshed expected_sha256, and are verified only by check_document_layout with max_pages=1 on the checklist file. The memo file is never touched.",
+    "executor_requirements": {
+      "action_examples": [
+        {
+          "limit": 20,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 1,
+          "type": "read_document"
+        },
+        {
+          "limit": 5,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 21,
+          "type": "read_document"
+        },
+        {
+          "document": {
+            "blocks": [
+              {
+                "level": 1,
+                "text": "FY25 AEG Social Justice Award Packet Checklist",
+                "type": "heading"
+              },
+              {
+                "text": "Internal working checklist; work the steps in packet order and tick each item before submission.",
+                "type": "paragraph"
+              },
+              {
+                "rows": [
+                  [
+                    "Step",
+                    "Owner",
+                    "Due",
+                    "Done"
+                  ],
+                  [
+                    "[step 1 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 2 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 3 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 4 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 5 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 6 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 7 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ],
+                  [
+                    "[step 8 from source]",
+                    "[owner from source]",
+                    "[timing from source]",
+                    "[ ]"
+                  ]
+                ],
+                "type": "table"
+              }
+            ],
+            "layout": "compact"
+          },
+          "expected_sha256": "e4524fea71e8b55102e430207ac1f9254bfa29a27cd32f8989343e4c59a28052",
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "revise_docx"
+        },
+        {
+          "max_pages": 1,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "type": "check_document_layout"
+        },
+        {
+          "limit": 20,
+          "path": "output/FY25_AEG_Social_Justice_Award_Packet_Checklist_DRAFT.docx",
+          "start": 1,
+          "type": "read_document"
+        }
+      ],
+      "execution_verified": false,
+      "executor": "praxile",
+      "permission_granted": false,
+      "profile": {
+        "actions": [
+          "read_document",
+          "revise_docx",
+          "check_document_layout"
+        ],
+        "executor": "praxile",
+        "schema_version": "praxile.executor_action_profile.v2",
+        "version": "docx-public-evidence-v2-20261019"
+      },
+      "profile_digest": "sha256:a4eb511c44b42a21c51878561a49d240aa12cdda13e00c20946991282817c603",
+      "schema_validated": true
+    }
+  },
+  "evidence_refs": [
+    "event:event_e73fd82ba532ea3cad7b",
+    "event:event_4a92c62a4d073b82f76d",
+    "event:event_0c446f135f4de31352bc",
+    "event:event_c1e54b25ec1abbaa3644",
+    "event:event_b4bf1a3b8d7dac957edd",
+    "event:event_bb6b489c375bc7e30177",
+    "event:event_37233316d4671427191b",
+    "event:event_df0fcd5b43923b4cfdc2"
+  ],
+  "expected_effect": {
+    "hypothesis": "The two interventions probe the same suspected cause (table geometry, not prose length) from complementary directions, so the composition gives a two-step path: the table-led rebuild should reach one page if column count and row count are the binding constraint; if the layout check still reports 2 pages, the table-free bullet fallback removes the suspected cause entirely and should reach one page. Observing which step first satisfies max_pages=1 isolates the causal factor, and every step remains bounded to a single file with a page-count check as the acceptance signal."
+  },
+  "schema_version": "praxile.context_candidate.v1",
+  "source_diagnosis_ids": [],
+  "source_task_ids": [
+    "task_13f6cabf80f9"
+  ],
+  "title": "Development composition",
+  "version": "1"
+}
