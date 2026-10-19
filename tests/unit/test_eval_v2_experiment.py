@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from types import SimpleNamespace
+import pytest
 
 from praxile.eval.v2 import compare_ab_reports
 from praxile.trace import EventStore
@@ -48,8 +50,8 @@ def test_comparison_reports_category_gain_and_regression_first_decision(tmp_path
     assert result["by_failure_category"]["UNKNOWN"]["regressions"] == 1
     assert result["by_failure_category"]["CONTEXT"]["progress"]["candidate_patches_created"] == 1
     assert result["by_failure_category"]["UNKNOWN"]["progress"]["candidate_patches_created"] == 0
-    assert result["by_failure_category"]["CONTEXT"]["progress"]["environment_probe_delta"] == 2
-    assert result["by_failure_category"]["UNKNOWN"]["progress"]["environment_probe_delta"] == 5
+    assert result["by_failure_category"]["CONTEXT"]["progress"]["environment_probe_delta"] is None
+    assert result["by_failure_category"]["UNKNOWN"]["progress"]["environment_probe_delta"] is None
 
 
 def test_comparison_accepts_strict_efficiency_improvement_without_success_change(tmp_path) -> None:
@@ -79,3 +81,52 @@ def test_comparison_does_not_report_cost_delta_when_an_arm_is_unpriced(tmp_path)
     assert not result["cost_comparable"]
     assert result["totals"]["cost_delta"] is None
     assert result["task_results"][0]["cost_delta"] is None
+
+
+def compare(left, right):
+    return compare_ab_reports({'tasks': left}, {'tasks': right}, diagnoses={},
+                              event_store=SimpleNamespace(list_events=lambda **kwargs: []), cost_comparable=True)
+
+
+@pytest.mark.parametrize('bad', [None, True, -1, '0', float('nan')])
+def test_missing_or_invalid_usage_cannot_look_like_efficiency_gain(bad):
+    left = _task('a', True, tokens=100, tools=10)
+    right = deepcopy(left)
+    right['metrics']['tokens']['input'] = bad
+    right['metrics']['tool_calls'] = 1
+    result = compare([left], [right])
+    assert result['decision'] == 'inconclusive'
+    assert result['totals']['token_delta'] is None
+    assert result['totals']['metric_coverage']['token_delta'] == {'paired_tasks': 0, 'total_tasks': 1}
+
+
+def test_partial_task_coverage_does_not_publish_partial_sum_as_total():
+    left = [_task('a', True, tokens=100, tools=10), _task('b', True, tokens=100, tools=10)]
+    right = deepcopy(left)
+    right[0]['metrics']['tokens']['input'] = 50
+    right[1]['metrics']['tokens'].pop('cache')
+    result = compare(left, right)
+    assert result['task_results'][0]['token_delta'] == -50
+    assert result['totals']['token_delta'] is None
+    assert result['totals']['metric_coverage']['token_delta']['paired_tasks'] == 1
+    assert result['by_failure_category']['UNKNOWN']['token_delta'] is None
+
+
+def test_false_cost_complete_flag_does_not_make_missing_amount_zero():
+    left = _task('a', True, tokens=100, tools=10)
+    right = deepcopy(left)
+    del right['metrics']['cost']
+    result = compare([left], [right])
+    assert not result['cost_comparable']
+    assert result['totals']['cost_delta'] is None
+
+
+def test_fractional_latency_is_preserved_and_missing_metrics_are_unknown():
+    left = _task('a', True, tokens=100, tools=10)
+    right = deepcopy(left)
+    right['metrics']['latency_ms'] = 9.5
+    assert compare([left], [right])['totals']['latency_ms_delta'] == -0.5
+    right['metrics'] = None
+    result = compare([left], [right])
+    assert result['decision'] == 'inconclusive'
+    assert result['totals']['latency_ms_delta'] is None

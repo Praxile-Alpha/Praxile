@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
@@ -359,7 +360,7 @@ def compare_ab_reports(
     if set(baseline_tasks) != set(candidate_tasks):
         raise EvalSchemaError("baseline and candidate task IDs differ")
     cost_comparable = cost_comparable and bool(baseline_tasks) and all(
-        task.get("metrics", {}).get("cost_complete") is True
+        _metrics(task).get("cost_complete") is True and _metric_float(task, "cost") is not None
         for task in (*baseline_tasks.values(), *candidate_tasks.values()))
     baseline_diagnoses = {item["task_id"]: item for item in diagnoses.get("baseline", [])}
     categories: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -381,9 +382,9 @@ def compare_ab_reports(
             "baseline_resolved": left_resolved,
             "candidate_resolved": right_resolved,
             "transition": transition,
-            "token_delta": _tokens(right) - _tokens(left),
-            "tool_call_delta": _metric(right, "tool_calls") - _metric(left, "tool_calls"),
-            "latency_ms_delta": _metric(right, "latency_ms") - _metric(left, "latency_ms"),
+            "token_delta": _difference(_tokens(left), _tokens(right)),
+            "tool_call_delta": _difference(_metric(left, "tool_calls"), _metric(right, "tool_calls")),
+            "latency_ms_delta": _difference(_metric_float(left, "latency_ms"), _metric_float(right, "latency_ms")),
             "cost_delta": (
                 round(_metric_float(right, "cost") - _metric_float(left, "cost"), 8)
                 if cost_comparable
@@ -410,8 +411,9 @@ def compare_ab_reports(
             "regressions": sum(item["transition"] == "regressed" for item in rows),
             "unchanged": sum(item["transition"] == "unchanged" for item in rows),
             "unknown": sum(item["transition"] == "unknown" for item in rows),
-            "token_delta": sum(item["token_delta"] for item in rows),
-            "tool_call_delta": sum(item["tool_call_delta"] for item in rows),
+            "token_delta": _complete_sum(item["token_delta"] for item in rows),
+            "tool_call_delta": _complete_sum(item["tool_call_delta"] for item in rows),
+            "metric_coverage": _metric_coverage(rows),
             "cost_delta": (
                 round(sum(float(item["cost_delta"] or 0.0) for item in rows), 8)
                 if cost_comparable
@@ -424,11 +426,11 @@ def compare_ab_reports(
                 "candidate_patches_created": sum(
                     bool(item["progress"]["candidate"].get("patch_created")) for item in rows
                 ),
-                "environment_probe_delta": sum(
-                    int(item["progress"]["environment_probe_delta"]) for item in rows
+                "environment_probe_delta": _complete_sum(
+                    item["progress"]["environment_probe_delta"] for item in rows
                 ),
-                "repeated_command_delta": sum(
-                    int(item["progress"]["repeated_command_delta"]) for item in rows
+                "repeated_command_delta": _complete_sum(
+                    item["progress"]["repeated_command_delta"] for item in rows
                 ),
             },
         }
@@ -442,9 +444,10 @@ def compare_ab_reports(
         "totals": {
             "gains": sum(item["transition"] == "improved" for item in task_rows),
             "regressions": sum(item["transition"] == "regressed" for item in task_rows),
-            "token_delta": sum(item["token_delta"] for item in task_rows),
-            "tool_call_delta": sum(item["tool_call_delta"] for item in task_rows),
-            "latency_ms_delta": sum(item["latency_ms_delta"] for item in task_rows),
+            "token_delta": _complete_sum(item["token_delta"] for item in task_rows),
+            "tool_call_delta": _complete_sum(item["tool_call_delta"] for item in task_rows),
+            "latency_ms_delta": _complete_sum(item["latency_ms_delta"] for item in task_rows),
+            "metric_coverage": _metric_coverage(task_rows),
             "cost_delta": (
                 round(sum(float(item["cost_delta"] or 0.0) for item in task_rows), 8)
                 if cost_comparable
@@ -514,6 +517,8 @@ def _decision(rows: list[dict[str, Any]]) -> tuple[str, str]:
         return "improve", "At least one task improved and no resolved task regressed."
     if any(item["transition"] == "unknown" for item in rows):
         return "inconclusive", "At least one arm lacks an objective evaluator result."
+    if any(item["token_delta"] is None or item["tool_call_delta"] is None for item in rows):
+        return "inconclusive", "Resolution was unchanged but efficiency evidence is incomplete."
     if rows and all(item["token_delta"] <= 0 and item["tool_call_delta"] <= 0 for item in rows) and any(
         item["token_delta"] < 0 or item["tool_call_delta"] < 0 for item in rows
     ):
@@ -545,31 +550,55 @@ def _activation_status(result: Mapping[str, Any]) -> str:
     return str(activation.get("status") or "not_gated")
 
 
-def _tokens(result: Mapping[str, Any]) -> int:
-    values = result.get("metrics", {}).get("tokens", {})
-    return sum(int(values.get(key, 0)) for key in ("input", "output", "cache"))
+def _metrics(result):
+    values = result.get("metrics")
+    return values if isinstance(values, Mapping) else {}
 
 
-def _metric(result: Mapping[str, Any], name: str) -> int:
-    return int(result.get("metrics", {}).get(name, 0))
+def _tokens(result: Mapping[str, Any]) -> int | None:
+    values = _metrics(result).get("tokens", {})
+    if not isinstance(values, Mapping):
+        return None
+    numbers = [values.get(key) for key in ("input", "output", "cache")]
+    return sum(numbers) if all(type(value) is int and value >= 0 for value in numbers) else None
 
 
-def _metric_float(result: Mapping[str, Any], name: str) -> float:
-    return float(result.get("metrics", {}).get(name, 0.0))
+def _metric(result: Mapping[str, Any], name: str) -> int | None:
+    value = _metrics(result).get(name)
+    return value if type(value) is int and value >= 0 else None
+
+
+def _metric_float(result: Mapping[str, Any], name: str) -> float | None:
+    value = _metrics(result).get(name)
+    return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+
+
+def _difference(left, right):
+    return None if left is None or right is None else right - left
+
+
+def _complete_sum(values):
+    values = list(values)
+    return sum(values) if values and all(value is not None for value in values) else None
+
+
+def _metric_coverage(rows):
+    return {name: {"paired_tasks": sum(row[name] is not None for row in rows), "total_tasks": len(rows)}
+            for name in ("token_delta", "tool_call_delta", "latency_ms_delta", "cost_delta")}
 
 
 def _progress_comparison(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[str, Any]:
-    left_progress = left.get("metrics", {}).get("progress", {})
-    right_progress = right.get("metrics", {}).get("progress", {})
+    left_progress = _metrics(left).get("progress", {})
+    right_progress = _metrics(right).get("progress", {})
     left_progress = dict(left_progress) if isinstance(left_progress, Mapping) else {}
     right_progress = dict(right_progress) if isinstance(right_progress, Mapping) else {}
     return {
         "baseline": left_progress,
         "candidate": right_progress,
-        "environment_probe_delta": int(right_progress.get("environment_probe_count", 0))
-        - int(left_progress.get("environment_probe_count", 0)),
-        "repeated_command_delta": int(right_progress.get("repeated_command_count", 0))
-        - int(left_progress.get("repeated_command_count", 0)),
+        "environment_probe_delta": _difference(_metric({"metrics": left_progress}, "environment_probe_count"),
+                                               _metric({"metrics": right_progress}, "environment_probe_count")),
+        "repeated_command_delta": _difference(_metric({"metrics": left_progress}, "repeated_command_count"),
+                                              _metric({"metrics": right_progress}, "repeated_command_count")),
     }
 
 

@@ -17,6 +17,19 @@
 
 本轮也修正 A/B 分类统计中的 progress 汇总：现在使用该失败类别内任务，而不是对每个类别重复汇总整个任务集。
 
+## 不完整用量
+
+A/B task、类别与全量汇总不再把缺失 token/工具次数/延迟/费用补零。token 的
+input/output/cache 必须明确为非负整数，缺一个分项即总 token 未知；工具次数
+同样严格，延迟允许非负有限小数。无效布尔、负值、NaN、数值字符串都不算有效
+证据。`cost_complete=true` 还需实际有效金额，不能仅凭该标记构造费用差值。
+
+差值缺任何一侧时为 null；汇总缺任何任务时也为 null，不把部分任务小计伪装成
+总量。`metric_coverage` 为每项差值记录 paired_tasks/total_tasks；逐任务有效
+差值仍保留。任务结果未变且效率证据不完整时 decision=inconclusive，不宣称
+节省；客观 resolved 改善/退步仍按原优先级单独报告。进展计数的差值也要求双方
+有明确观察，缺失不等于未发生。此修复不补造旧实验缺失的用量。
+
 当前未实现：可执行 component diff、行为预测的独立 verifier、子任务/语义事件对齐、独立 probe 生命周期，以及 JobBench/WorkBuddy 中性评分对象的同类接入。测试用 fixture A/B 证明记录生成和持久化，不是模型性能证据。
 
 ## 操作身份对齐增补

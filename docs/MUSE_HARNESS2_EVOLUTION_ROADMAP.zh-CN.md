@@ -378,6 +378,10 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
+  A/B 汇总修复：缺失/非法 token、工具次数、延迟、费用及进展计数不再补零；
+  缺一侧则差值 unknown，缺一任务则总量 unknown，并报告完整配对覆盖率。
+  效率证据不足时不宣称节省，客观任务结果单独保留。完整全角色成本及中性
+  benchmark 汇总仍未完成，本项不勾选。
   费用完整性增补：trace/aggregate 区分已报告小计和完整总费用，缺价格保留 null；Lab 与普通 A/B 拒绝比较未完整定价的 arm，ignore_errors 不能当零成本。未进入执行 trace 的官方 judge/离线演化调用仍需统一账本接入，本项不勾选。
 - [ ] 以 task 为统计单位做 paired comparison；重复运行嵌套于 task，不能把同一任务的 repetitions 伪装成独立任务扩大显著性。
   Harness Lab 已修复 repetition 展平问题：先任务内均值再任务级配对，独立样本数为完整任务数，缺失配对整任务标不完整；使用保守 Hoeffding 区间并声明独立任务假设。旧统计报告不能通过质量晋升门禁。9 项测试通过。中性 benchmark 连续评分、任务级成本区间和相关任务簇设计尚未完成，完整项未勾选，详见 `TASK_CLUSTER_STATISTICS.zh-CN.md`。
