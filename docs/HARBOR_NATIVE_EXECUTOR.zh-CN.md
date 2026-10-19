@@ -4,6 +4,30 @@
 
 ## 边界
 
+### 导入统一 EventStore
+
+```sh
+praxile --project /absolute/control-project eval import-native \
+  --result /absolute/trial/agent/praxile-result.json \
+  --events /absolute/trial/agent/praxile-events.json
+```
+
+CLI 与库共用 `NativeTraceImportService`。先检查源结果摘要，再重新规范化结果并
+逐项核对事件；不信任输入事件文件中的身份或内容。拒绝重复 JSON 字段、非有限
+数字、超过 64 MiB 的文件和符号链接路径；macOS `/tmp` 文件请使用物理路径
+`/private/tmp`。稳定 task_id/start_time 必需，避免导入时生成随机时间身份。
+
+全部检查通过才向 EventStore 追加事件，并保存 `.praxile/trace/imports/<sha256>.json`
+收据。既有 EventStore 的事件 ID 去重与冲突检查继续生效；收据写入失败后重试不会
+重复追加，SQLite 索引可从日志重建。该导入只验证本地内容一致性，不认证来源、
+不导入官方评分、不下载产物实体、不自动生成经验或晋升候选。
+
+本轮 7 项隔离测试覆盖 baseline/激活/弃权、篡改拒绝、重复导入、索引重建和收据
+失败恢复。对冻结 JobBench compact repair 结果离线导入：首次 41 个事件、重复 0 个、
+重建后 41 个；源 SHA-256 为
+`2a3049dc84e2eb9582867211816e1674a88031a4050367412ad772c6df0ccece`。
+0 模型调用，不是新的任务执行或性能结果。
+
 ### 原生开发候选通道
 
 `python -m praxile.eval.native_worker` 现可额外接收以下参数（其余 workspace、

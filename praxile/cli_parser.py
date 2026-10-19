@@ -551,6 +551,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_eval = sub.add_parser("eval", help="Run Praxile JSON eval suites")
     eval_sub = p_eval.add_subparsers(dest="eval_command", required=True)
+    p_import_native = eval_sub.add_parser("import-native", help="Verify and index a native worker result and its event projection")
+    p_import_native.add_argument("--result", required=True)
+    p_import_native.add_argument("--events", required=True)
+    p_import_native.set_defaults(func=cmd_eval_import_native)
     p_eval_run = eval_sub.add_parser("run", help="Run an eval suite")
     p_eval_run.add_argument("suite", help="Path to eval suite JSON")
     p_eval_run.add_argument("--output", default=None, help="Write JSON report to this path")

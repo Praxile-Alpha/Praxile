@@ -37,6 +37,14 @@ from ..trace import EventStore
 from ..judge_governance import JudgeGovernance
 
 
+def cmd_eval_import_native(args: argparse.Namespace, project_root: Path) -> int:
+    from ..services.native_trace_import import NativeTraceImportService
+    config = Config.load(project_root)
+    result = NativeTraceImportService(config.paths).import_files(args.result, args.events)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_workspace_list(args: argparse.Namespace, project_root: Path) -> int:
     config, store = load(project_root)
     store.initialize(config)

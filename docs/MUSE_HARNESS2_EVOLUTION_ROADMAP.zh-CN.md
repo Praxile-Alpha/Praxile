@@ -325,6 +325,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   分离 CONTEXT_ACTIVATION / CONTEXT_INJECT，并验证实际注入标记及内容摘要；
   不改变旧 baseline 的转换。当前为回收时投影，非实时流，EventStore 导入与
   双 arm 编排未完成，完整项保持未勾选。
+  EventStore 导入增补：eval import-native 经服务校验源文件摘要和重算事件一致性，
+  再写入统一日志/SQLite，支持幂等导入、冲突拒绝和收据失败恢复。7 项隔离测试
+  通过；真实冻结 compact repair 离线导入 41/重复0/重建41，0 模型调用。
+  不认证来源、不导入官方评分或产物实体；完整双 arm 仍未完成。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
