@@ -40,7 +40,8 @@ def test_note_unknown_state_invalidates_permanently():
 
 
 @pytest.mark.parametrize("use_reflector", [False, True])
-def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch, use_reflector):
+@pytest.mark.parametrize("denied", [False, True])
+def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch, use_reflector, denied):
     logger, note_action = source()
     runtime = AgentRuntime.__new__(AgentRuntime)
     runtime.config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
@@ -48,7 +49,8 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     runtime.action_schemas = ActionSchemaRegistry()
     runtime.project = SimpleNamespace(snapshot=lambda **kwargs: {"git": {"is_repo": True}})
     runtime.tools = SimpleNamespace(
-        safety=SimpleNamespace(check_tool_call=lambda *args, **kwargs: SimpleNamespace(allowed=True)),
+        safety=SimpleNamespace(check_tool_call=lambda *args, **kwargs:
+            SimpleNamespace(allowed=not denied, reason="policy denied", risk_level="medium")),
         execute=Mock(return_value={"status": "success", "output": "observed", "data": {}}))
     if use_reflector:
         note_action = {key: value for key, value in note_action.items() if key != "note_text"}
@@ -72,6 +74,13 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     status, _ = runtime._run_action_loop("task", logger, [], max_steps=3, private=False, high_risk=False,
                                         messages=history)
     assert status == "completed"
+    if denied:
+        assert not logger.data.get("task_notes")
+        assert not logger.data.get("subtask_reflections")
+        assert logger.data["cost"]["model_calls"] == 3
+        assert logger.data["actions"][1]["status"] == "blocked"
+        assert all("UNIQUE_HYPOTHESIS" not in prompt for prompt in prompts)
+        return
     assert ["UNIQUE_HYPOTHESIS" in prompt for prompt in prompts] == [False, True, False]
     assert "UNIQUE_HYPOTHESIS" not in json.dumps(history)
     assert logger.data["task_notes"][0]["status"] == "expired"
