@@ -8,7 +8,7 @@
 原 A/B 的 adapter/evaluator/baseline_policy/model/source_overrides 参数。
 三条候选均须有 `expected_effect.hypothesis`；组合候选必须使用独立 ID。
 
-所有候选在开始执行前冻结，不根据 held-out 反馈组合。工作流执行三组独立 A/B，
+预先组合模式下所有候选在开始执行前冻结，不根据 held-out 反馈组合。工作流执行三组独立 A/B，
 也就是六个 arm，而不是复用上一组 baseline；调用方必须按该成本配置每个 arm 的
 预算。产物位于 `eval/v2/development_cycles/<cycle_id>/`，包含不可变 manifest、
 progress 和 report；三个实际实验仍存入现有 experiments/runs/trace 目录。
@@ -38,7 +38,27 @@ does_not_apply_when 范围，以及 TrajectoryLogger。单次有界请求生成�
 草案不自动执行，不自动存为长期经验；调用方负责保存轨迹与草案。
 直接调用设计 API 时依赖调用方提供的公开开发证据，不能识别 observation 字符串
 中被错误粘贴的隐藏 rubric，也没有独立证据来源认证；不得直接输入评分器报告。
-尚未实现先 probe 再按反馈 compose 的自适应闭环。
+可选的 probe 后组合流程见下；当前仍不支持自动反复搜索或长期晋升。
+
+### Probe 后组合
+
+Python API 可省略 composed_candidate，改传 `composer(parents, reports)` 回调和
+非空 `composer_identity`。两条父候选、模型、预算与组合器身份先冻结；前两组
+开发 A/B 完成后才调用组合器。输出独立 ContextCandidate 或 None（弃权），
+落盘为不可变 composition.json；恢复时复用该文件，不再次调用组合器。
+组合必须独立执行第三组 A/B，不能继承父候选成绩。弃权只执行前四个 arm，
+返回 KEEP_BASE。若进程在生成响应后、冻结文件前崩溃，恢复可能重新请求模型，
+不承诺外部 API 恰好一次调用。
+
+内置 `probe_composer.compose_after_development_probes` 可作为该回调：使用现有
+proposal_composer 角色，核对父候选 digest、development 轨道及不变量，只投影
+task_id/verdict/has_confounders，禁止把整份报告、评分细则或自由文本混杂描述
+发送给模型。组合文本和假设受长度限制、引用受父证据集合限制，截断拒绝，
+模型用量留在传入 TrajectoryLogger。调用方负责持久化该日志并冻结正确的
+composer_identity；身份声明不是模型配置的独立认证。
+
+此模式已通过 fixture 的实际两阶段执行、重跑及弃权恢复测试；CLI 当前仍是
+预先组合模式。真实模型有效性、机制因果归因和完整 R2-C 验收仍未完成。
 
 ### 结构化轨迹证据入口
 

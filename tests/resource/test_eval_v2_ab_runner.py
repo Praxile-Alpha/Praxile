@@ -105,6 +105,33 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
         assert read_json(root / "manifest.json", {})["track"] == "development"
         assert read_json(root / "report.json", {})["improvement_episodes"]
     assert cycle.run(tasks, resume=True, **kwargs) == report
+    from praxile.eval.v2.probe_composer import compose_after_development_probes
+    composition_calls = []
+    def model_compose(parents, reports):
+        assert len(reports) == 2
+        composition_calls.append(reports)
+        return compose_after_development_probes(parents, reports, candidate_id="adaptive-composition",
+            applies_to=parents[0].applies_to, logger=TrajectoryLogger("composer", {}),
+            router=SimpleNamespace(chat=lambda *args, **kwargs: {"content": json.dumps({
+                "decision": "compose", "content": "Run tests then narrow search",
+                "hypothesis": "Tests constrain search scope", "evidence_refs": ["event:prior"]})}))
+    adaptive_args = {**kwargs, "cycle_id": "adaptive-cycle", "composed_candidate": None,
+                     "composer": model_compose, "composer_identity": {"name": "fixture", "version": "1"}}
+    adaptive = cycle.run(tasks, **adaptive_args)
+    assert adaptive["composition_status"] == "executed"
+    assert len(adaptive["experiments"]) == 3
+    assert cycle.run(tasks, resume=True, **adaptive_args) == adaptive
+    assert len(composition_calls) == 1
+    abstentions = []
+    def decline(parents, reports):
+        abstentions.append(True)
+        return None
+    declined_args = {**adaptive_args, "cycle_id": "declined-cycle", "composer": decline}
+    declined = cycle.run(tasks, **declined_args)
+    assert declined["decision"] == "KEEP_BASE" and declined["composition_status"] == "abstained"
+    assert len(declined["experiments"]) == 2
+    assert cycle.run(tasks, resume=True, **declined_args) == declined
+    assert len(abstentions) == 1
     from praxile.eval.v2.development_evidence import collect_development_evidence, design_from_development_experiment
     evidence_args = dict(experiment_id="dev-cycle.first", arm="baseline",
                          development_task_ids=[task.task_id], heldout_task_ids=["heldout"])

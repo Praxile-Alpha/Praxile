@@ -2,7 +2,8 @@
 from copy import deepcopy
 import re
 
-from ...utils import file_lock, write_json
+from ...utils import file_lock, read_json, write_json
+from .candidate import ContextCandidate
 from .experiment import ControlledABExperiment, _write_once
 from .schema import EvalSchemaError
 
@@ -12,15 +13,21 @@ class DevelopmentContextCycle:
         self.state_root = state_root.resolve()
         self.experiments = ControlledABExperiment(self.state_root, event_store)
 
-    def run(self, task_set, *, candidates, composed_candidate, development_task_ids,
+    def run(self, task_set, *, candidates, composed_candidate=None, development_task_ids,
             heldout_task_ids, cycle_id, adapter, evaluator, baseline_policy, model,
-            resume=False, source_overrides=None, keep_workspaces=False):
+            resume=False, source_overrides=None, keep_workspaces=False,
+            composer=None, composer_identity=None):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", cycle_id):
             raise EvalSchemaError("unsafe development cycle ID")
         if len(candidates) != 2:
             raise EvalSchemaError("development cycle requires exactly two candidates")
-        versions = [*candidates, composed_candidate]
-        if len({item.candidate_id for item in versions}) != 3:
+        adaptive = composer is not None
+        if adaptive and (composed_candidate is not None or not isinstance(composer_identity, dict) or not composer_identity):
+            raise EvalSchemaError("probe-driven composition requires a frozen composer identity and no preset composition")
+        if not adaptive and (composed_candidate is None or composer_identity is not None):
+            raise EvalSchemaError("provide either a preset composition or a composer")
+        versions = [*candidates] if adaptive else [*candidates, composed_candidate]
+        if len({item.candidate_id for item in versions}) != len(versions):
             raise EvalSchemaError("composition must have a distinct candidate ID")
         task_ids = {task.task_id for task in task_set.tasks}
         if (not task_ids or task_ids != set(development_task_ids)
@@ -48,12 +55,37 @@ class DevelopmentContextCycle:
             "experiment_ids": [f"{cycle_id}.{role}" for role in ("first", "second", "composition")],
             "selection_rule": "composition_objective_gain_without_regression_and_verified_exposure",
         }
+        if adaptive:
+            plan["composition_mode"] = "after_development_probes"
+            plan["composer_identity"] = deepcopy(composer_identity)
         with file_lock(root / "cycle"):
             if (root / "manifest.json").exists() and not resume:
                 raise EvalSchemaError("development cycle already exists; resume explicitly")
             _write_once(root / "manifest.json", plan)
             reports = []
-            for candidate, experiment_id in zip(versions, plan["experiment_ids"]):
+            for index, experiment_id in enumerate(plan["experiment_ids"]):
+                if adaptive and index == 2:
+                    frozen_path = root / "composition.json"
+                    frozen = read_json(frozen_path, None)
+                    if frozen is None:
+                        composed_candidate = composer(tuple(candidates), deepcopy(reports))
+                        frozen = {"candidate": composed_candidate.to_dict() if composed_candidate is not None else None,
+                                  "parents": plan["composition_parents"],
+                                  "composer_identity": composer_identity}
+                        _write_once(frozen_path, frozen)
+                    if (frozen.get("parents") != plan["composition_parents"]
+                            or frozen.get("composer_identity") != composer_identity):
+                        raise EvalSchemaError("frozen composition lineage mismatch")
+                    if frozen["candidate"] is None:
+                        break
+                    composed_candidate = ContextCandidate.from_dict(frozen["candidate"])
+                    if (composed_candidate.candidate_id in {item.candidate_id for item in candidates}
+                            or set(composed_candidate.source_task_ids) & set(heldout_task_ids)
+                            or not isinstance(composed_candidate.expected_effect.get("hypothesis"), str)
+                            or not composed_candidate.expected_effect["hypothesis"].strip()):
+                        raise EvalSchemaError("invalid probe-driven composition")
+                    versions.append(composed_candidate)
+                candidate = versions[index]
                 # Completed children are resumed, never replaced or treated as inherited results.
                 child = self.state_root / "eval" / "v2" / "experiments" / experiment_id / "manifest.json"
                 reports.append(self.experiments.run(
@@ -63,7 +95,7 @@ class DevelopmentContextCycle:
                     keep_workspaces=keep_workspaces, source_overrides=source_overrides))
                 write_json(root / "progress.json", {"completed_experiments": [
                     item["experiment_id"] for item in reports], "promotion_eligible": False})
-            composition = reports[-1]
+            composition = reports[-1] if len(reports) == 3 else {}
             episodes = composition.get("improvement_episodes", [])
             verified = (composition.get("invariant_check", {}).get("valid") is True
                         and len(episodes) == len(task_ids)
@@ -80,9 +112,10 @@ class DevelopmentContextCycle:
                 } for item in reports],
                 "decision": "TASK_LOCAL_TRIAL_RECOMMENDED" if verified else "KEEP_BASE",
                 "selected_candidate_digest": composed_candidate.digest if verified else None,
+                "composition_status": "executed" if len(reports) == 3 else "abstained",
                 "adopted": False, "promotion_eligible": False, "experience_entry": "NO_ENTRY",
                 "limitations": ["Split membership is explicitly declared, not independently attested.",
-                    "Composition is supplied before execution, not generated from held-out feedback.",
+                    "Composition uses preset content or development feedback only, never held-out feedback.",
                     "Single development pairs do not establish transfer or statistical significance.",
                     "No production policy or long-term asset is modified."],
             }
