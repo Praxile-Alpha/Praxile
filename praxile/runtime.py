@@ -11,6 +11,7 @@ from .config import Config
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
 from .experience_context import RuntimeExperienceContext
+from .experience_conditions import observe_tool_versions
 from .interop import interop_policy
 from .judge_governance import JudgeGovernance
 from .json_utils import RobustJSONError, parse_json_object
@@ -107,8 +108,10 @@ class AgentRuntime:
             analysis_rules = [item for item in retrieved if item.get("kind") == "rule"]
             analysis = self.analyzer.analyze(task, analysis_rules)
             logger.set_task_analysis(analysis)
+            activation_observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+            logger.data["activation_observations"] = activation_observations
             prompt_context, representation_decisions = RuntimeExperienceContext(self.config, self.store).plan(
-                task, logger.task_id, analysis, retrieved
+                task, logger.task_id, analysis, retrieved, observations=activation_observations
             )
             logger.data["experience_representation"] = {
                 "schema_version": "praxile.runtime_experience_representation.v1",

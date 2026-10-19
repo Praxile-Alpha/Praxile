@@ -45,6 +45,29 @@ def test_layers_use_existing_assets_without_bypassing_semantic_gate(tmp_path):
     assert not selected
 
 
+def test_observed_conditions_gate_assets_even_when_routing_disabled(tmp_path):
+    config = Config.load(tmp_path)
+    store = ExperienceStore(config.paths)
+    store.initialize(config)
+    path = _asset(store, tmp_path, "memory/conditional.md", "# Parser\nRun parser tests.\n")
+    target = tmp_path / path
+    target.with_name(target.name + ".meta.json").write_text(json.dumps({
+        "applies_to": {"task_signals": ["parser"]},
+        "activation_requirements": {"tool_versions": {"python": "3.12.0"},
+                                    "state_equals": {"git.is_repo": False}},
+    }))
+    retrieved = [{"path": path, "type": "memory", "snippet": "Run parser tests."}]
+    planner = RuntimeExperienceContext(config, store)
+    observed = {"tool_versions": {"python": "3.12.0"}, "state": {"git": {"is_repo": False}}}
+    assert not planner.plan("Fix parser", "task", {}, retrieved)[0]
+    assert planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
+    assert not planner.plan("Adjust calendar", "task", {}, retrieved, observations=observed)[0]
+    observed["tool_versions"]["python"] = "3.11.0"
+    assert not planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
+    config.data["context"]["experience_representation_enabled"] = False
+    assert not planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
+
+
 def test_normal_run_routes_approved_assets_and_records_actual_injection(tmp_path, monkeypatch) -> None:
     config = Config.load(tmp_path)
     store = ExperienceStore(config.paths)

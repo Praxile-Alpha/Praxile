@@ -25,6 +25,25 @@ R2 增量：`praxile.subtask_episode.v1` 记录本次运行内明确声明的子
 
 预算用尽或元数据非法会记录 abstain；被选择的资产在实际提示词和 trajectory 中保留层标签。冻结边界、architecture gate 和强制 harness rule 继续原控制规则路径，不受可选经验分层预算削弱。关闭表示路由仍使用原 legacy 行为。
 
-此阶段没有新增 SQL 表或另一套 memory，复用资产索引及侧车元数据；尚不支持按层的 SQL 预过滤、自动分层提案、工具版本条件或状态前置条件。7 项表示路由资源测试通过，包含分层预算与语义门控组合；带 TTL 的任务内临时经验和反思重规划仍待完成。
+此阶段没有新增 SQL 表或另一套 memory，复用资产索引及侧车元数据；尚不支持按层的 SQL 预过滤、自动分层提案。带 TTL 的任务内临时经验和反思重规划仍待完成。
+
+## 初次激活的观测条件
+
+可选经验侧车元数据可增加以下约束，和 `applies_to` 语义条件共同限制激活：
+
+```json
+{
+  "activation_requirements": {
+    "tool_versions": {"python": "3.12.0"},
+    "state_equals": {"git.is_repo": true}
+  }
+}
+```
+
+版本为精确字符串匹配，不支持范围。runtime 从本机 Python 和已安装的 playwright/openpyxl/python-docx/python-pptx/pypdf 包元数据观察版本；包名键使用 `python_package:playwright` 等形式。状态来自初始项目 snapshot，点路径最多五层，仅允许字符串、布尔值或整数精确匹配，不读取任意环境变量，也不执行模型提供的探测命令。
+
+未声明条件的历史资产保持兼容；显式条件非法、实际值缺失或不匹配均 abstain，关闭表示路由也不能跳过这些条件。强制控制规则不因可选经验条件而被屏蔽。观测值存于 trajectory.activation_observations，选择记录的 condition_check 保存逐项 matched/mismatched/unknown，不复制原始值。
+
+这是初次注入门控，不是持续授权检查：恢复运行仍复用已冻结上下文，中途状态变化不会撤回已经注入的信息；外部应用版本、浏览器状态和跨进程版本观测尚未覆盖。因此完整状态约束能力仍不勾选。21 项条件与表示路由测试通过，涵盖未知值、类型差异、元数据异常、语义相关性和禁用路由后的约束保留。
 
 验证：日志复制/序列化恢复、失败观察与成功声明并存、未关闭状态、实际 action-loop 边界/工具分发/checkpoint 测试通过。完整 R2-A 总项尚未完成，不提前勾选。

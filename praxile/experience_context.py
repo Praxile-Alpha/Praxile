@@ -11,6 +11,7 @@ from .eval.v2.activation import ContextActivationGate
 from .eval.v2.representation import ExperienceRepresentationRouter
 from .store import ExperienceStore
 from .utils import shorten
+from .experience_conditions import check_conditions
 
 
 _MANDATORY_TYPES = {"frozen_boundary", "architecture_gate", "harness_rule", "rule"}
@@ -50,7 +51,8 @@ class RuntimeExperienceContext:
         self.router = ExperienceRepresentationRouter()
 
     def plan(
-        self, task: str, task_id: str, analysis: Mapping[str, Any], retrieved: list[dict[str, Any]]
+        self, task: str, task_id: str, analysis: Mapping[str, Any], retrieved: list[dict[str, Any]],
+        *, observations: Mapping[str, Any] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         enabled = bool(self.config.get("context", "experience_representation_enabled", default=True))
         remaining = int(self.config.get("context", "experience_representation_budget_units", default=600))
@@ -80,9 +82,17 @@ class RuntimeExperienceContext:
                 decisions.append({"path": path, "activation": "abstained", "representation": "none",
                                   "reason": "asset is not active"})
                 continue
+            conditions = {"status": "not_required", "checks": []}
+            if asset_type not in _MANDATORY_TYPES:
+                conditions = check_conditions(asset.get("activation_requirements"), observations)
+                if conditions["status"] == "abstained":
+                    decisions.append({"path": path, "activation": "abstained", "representation": "none",
+                                      "reason": conditions["reason"], "condition_check": conditions})
+                    continue
             if asset_type in _MANDATORY_TYPES or not enabled:
                 selected.append(dict(item))
                 decisions.append({"path": path, "activation": "activated", "representation": "legacy",
+                                  "condition_check": conditions,
                                   "reason": "mandatory control rule" if asset_type in _MANDATORY_TYPES else "representation routing disabled"})
                 continue
             layer = asset.get("experience_layer")
@@ -147,6 +157,7 @@ class RuntimeExperienceContext:
                 "eligible": representation["eligible"],
                 "experience_layer": layer,
                 "layer_budget_before": layer_remaining.get(layer) if layer else None,
+                "condition_check": conditions,
             })
             if kind == "none":
                 continue
