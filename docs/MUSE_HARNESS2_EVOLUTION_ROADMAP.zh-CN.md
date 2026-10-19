@@ -405,6 +405,13 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
+  Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
+  tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
+  缺调用用量的 trace 当完整零成本证据。旧适配器已填零字段和未记录请求仍
+  无法还原，独立 judge 与全 cycle 成本账本仍未收口，总项继续不勾选。
+  cycle 局部账本增补：报告现在集中列出执行 arms 与组合器已知用量、小计及
+  覆盖情况，缺价格不补零；全实验总额继续 unknown，上游设计和独立 judge
+  仍未合并。fixture 验证预先组合六个 arm、弃权四个 arm 加组合器的记录范围。
   轨迹用量完整性增补：`cost.usage_evidence` 区分已知 token 小计与完整总量，
   按 purpose 记录覆盖率；字段缺失、类型非法、别名冲突和旧轨迹缺失调用均不补零。
   旧 `prompt_tokens/completion_tokens` 字段仅保留已知小计兼容语义。该证据仅覆盖

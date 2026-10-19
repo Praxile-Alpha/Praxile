@@ -559,6 +559,8 @@ def _metrics(result):
 
 
 def _tokens(result: Mapping[str, Any]) -> int | None:
+    if "tokens_complete" in _metrics(result) and _metrics(result)["tokens_complete"] is not True:
+        return None
     values = _metrics(result).get("tokens", {})
     if not isinstance(values, Mapping):
         return None

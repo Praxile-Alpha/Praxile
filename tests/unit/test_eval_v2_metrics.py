@@ -3,6 +3,7 @@ from __future__ import annotations
 from praxile.eval.v2 import trace_metrics
 from praxile.trace import AgentEvent, TokenUsage
 from praxile.eval.v2.metrics import aggregate_metrics
+from praxile.eval.v2.experiment import _tokens
 
 
 def _event(event_id: str, event_type: str, payload: dict, **kwargs):
@@ -61,3 +62,32 @@ def test_trace_metrics_cover_frozen_p0_dimensions() -> None:
     assert metrics["retries"] == 1
     assert metrics["recoveries"] == 1
     assert metrics["interventions"] == 1
+
+
+def test_missing_token_events_remain_unknown_through_aggregation_and_ab():
+    metrics = trace_metrics([_event("known", "MODEL_CALL", {}, token_usage=TokenUsage(10, 2)),
+                             _event("unknown", "MODEL_CALL", {})], wall_latency_ms=1, resolved=True)
+    assert metrics["tokens"] == {"input": 10, "output": 2, "cache": 0}
+    assert metrics["tokens_total"] is None
+    assert metrics["unreported_token_calls"] == 1
+    assert _tokens({"metrics": metrics}) is None
+    combined = aggregate_metrics([{"metrics": metrics}])
+    assert combined["tokens_total"] is None
+    assert combined["token_complete_task_count"] == 0
+    assert _tokens({"metrics": combined}) is None
+
+
+def test_explicit_zero_usage_is_not_empty_trace():
+    zero = trace_metrics([_event("zero", "MODEL_CALL", {}, token_usage=TokenUsage())], wall_latency_ms=1, resolved=True)
+    assert zero["tokens_complete"] is True
+    assert _tokens({"metrics": zero}) == 0
+    assert aggregate_metrics([{"metrics": zero}])["tokens_total"] == zero["tokens"]
+    empty = trace_metrics([], wall_latency_ms=1, resolved=None)
+    assert empty["tokens_total"] is None
+    assert aggregate_metrics([])["tokens_complete"] is False
+
+
+def test_old_and_malformed_subtotals_do_not_claim_aggregate_completeness():
+    result = aggregate_metrics([{"metrics": {"tokens": {"input": 1, "output": None, "cache": 0}}}])
+    assert result["tokens_total"] is None
+    assert result["tokens"]["input"] == 1

@@ -162,6 +162,20 @@ praxile eval ab first.json development-tasks.jsonl \
 
 ## 不完整用量
 
+开发 cycle 的 usage 字段列出各执行 arm 和可选组合器，报告已知 token/费用小计
+及覆盖计数。组合器从 composer-trajectory.json 重算用量，不信任缓存摘要；
+无日志的自定义回调保持 unknown。recorded_scope_cost_total 仅在所有组件完整
+定价时出现，whole_experiment_cost_total 仍为 null：上游候选生成、独立 judge、
+未记录请求还未统一纳入。组合器 cache 用量与价格没有记录时不补零。单项已知
+费用保留，但不得当作整场实验费用或收益证据。
+
+Eval trace/aggregate 增加 tokens_complete、tokens_total 和覆盖计数；原 tokens
+仅为已知小计。存在没有 TokenUsage 的 MODEL_CALL 或完全没有模型调用事件时，
+完整总量保持 null；明确的零用量对象才计为零。A/B 传播不完整标记，不把小计
+作为效率改善证据。汇总旧报告若没有完整性标记，不宣称完整覆盖。
+此检查范围是规范化模型事件；旧适配器已填零的字段、未进入 trace 的请求和
+独立 judge 仍不可还原，不能据此宣称全实验账本已完整。
+
 A/B task、类别与全量汇总不再把缺失 token/工具次数/延迟/费用补零。token 的
 input/output/cache 必须明确为非负整数，缺一个分项即总 token 未知；工具次数
 同样严格，延迟允许非负有限小数。无效布尔、负值、NaN、数值字符串都不算有效

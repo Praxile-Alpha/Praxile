@@ -98,6 +98,8 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
         model={"model_name_or_path": "fixture"}, source_overrides={"owner/repo": source})
     report = cycle.run(tasks, **kwargs)
     assert len(report["experiments"]) == 3
+    assert report["usage"]["component_count"] == 6
+    assert report["usage"]["whole_experiment_complete"] is False
     assert report["decision"] == "KEEP_BASE"
     assert not report["adopted"] and not report["promotion_eligible"]
     for role in ("first", "second", "composition"):
@@ -230,6 +232,7 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
     assert evals.cmd_eval_ab(args, tmp_path) == 0
     root = config.paths.state / "eval/v2/development_cycles/cli-adaptive"
     assert read_json(root / "report.json", {})["composition_status"] == "abstained"
+    assert read_json(root / "report.json", {})["usage"]["component_count"] == 5
     usage = read_json(root / "composer-trajectory.json", {})["cost"]["usage_evidence"]
     assert usage["known_tokens"]["prompt_tokens"] == 13
     assert usage["complete_tokens"]["completion_tokens"] is None

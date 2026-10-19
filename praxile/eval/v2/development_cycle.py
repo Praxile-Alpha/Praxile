@@ -4,6 +4,7 @@ import re
 
 from ...utils import file_lock, read_json, write_json
 from .candidate import ContextCandidate
+from .cycle_usage import cycle_usage
 from .experiment import ControlledABExperiment, _write_once
 from .schema import EvalSchemaError
 
@@ -113,6 +114,8 @@ class DevelopmentContextCycle:
                 "decision": "TASK_LOCAL_TRIAL_RECOMMENDED" if verified else "KEEP_BASE",
                 "selected_candidate_digest": composed_candidate.digest if verified else None,
                 "composition_status": "executed" if len(reports) == 3 else "abstained",
+                "usage": cycle_usage(reports, composer_requested=adaptive,
+                    composer_trajectory=read_json(root / "composer-trajectory.json", None) if adaptive else None),
                 "adopted": False, "promotion_eligible": False, "experience_entry": "NO_ENTRY",
                 "limitations": ["Split membership is explicitly declared, not independently attested.",
                     "Composition uses preset content or development feedback only, never held-out feedback.",

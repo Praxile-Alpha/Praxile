@@ -15,6 +15,12 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
     failed_interval = False
     reported_cost = round(sum(float(event.cost or 0.0) for event in model_calls), 8)
     cost_complete = bool(model_calls) and all(event.cost is not None for event in model_calls)
+    token_fields = ("input", "output", "cache")
+    token_calls = [event for event in model_calls if event.token_usage is not None and all(
+        type(getattr(event.token_usage, key)) is int and getattr(event.token_usage, key) >= 0
+        for key in token_fields)]
+    token_subtotal = {key: sum(getattr(event.token_usage, key) for event in token_calls) for key in token_fields}
+    tokens_complete = bool(model_calls) and len(token_calls) == len(model_calls)
     for state in verification_states:
         if state == "failed":
             failed_interval = True
@@ -23,11 +29,10 @@ def trace_metrics(events: Iterable[AgentEvent], *, wall_latency_ms: int, resolve
             failed_interval = False
     return {
         "task_success": resolved,
-        "tokens": {
-            "input": sum(event.token_usage.input for event in model_calls if event.token_usage),
-            "output": sum(event.token_usage.output for event in model_calls if event.token_usage),
-            "cache": sum(event.token_usage.cache for event in model_calls if event.token_usage),
-        },
+        "tokens": token_subtotal,
+        "tokens_total": token_subtotal if tokens_complete else None,
+        "tokens_complete": tokens_complete,
+        "unreported_token_calls": len(model_calls) - len(token_calls),
         "cost": reported_cost,
         "reported_cost_subtotal": reported_cost,
         "cost_total": reported_cost if cost_complete else None,
@@ -65,16 +70,24 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
     known = [item for item in task_results if item.get("evaluator", {}).get("resolved") is not None]
     cost_complete = bool(metrics) and all(item.get("cost_complete") is True for item in metrics)
     reported_cost = round(sum(float(item.get("cost", 0.0) or 0.0) for item in metrics), 8)
+    token_fields = ("input", "output", "cache")
+    def token_value(item, key):
+        value = item.get("tokens", {}).get(key) if isinstance(item.get("tokens"), dict) else None
+        return value if type(value) is int and value >= 0 else None
+    tokens_complete = bool(metrics) and all(item.get("tokens_complete") is True
+        and all(token_value(item, key) is not None for key in token_fields) for item in metrics)
+    token_subtotal = {key: sum(token_value(item, key) or 0 for item in metrics) for key in token_fields}
     return {
         "task_count": len(task_results),
         "completed_count": sum(1 for item in task_results if item.get("status") == "completed"),
         "resolved_count": len(resolved),
         "resolution_rate": round(len(resolved) / len(known), 4) if known else None,
         "unknown_evaluation_count": len(task_results) - len(known),
-        "tokens": {
-            key: sum(int(item.get("tokens", {}).get(key, 0)) for item in metrics)
-            for key in ("input", "output", "cache")
-        },
+        "tokens": token_subtotal,
+        "tokens_total": token_subtotal if tokens_complete else None,
+        "tokens_complete": tokens_complete,
+        "token_complete_task_count": sum(item.get("tokens_complete") is True
+            and all(token_value(item, key) is not None for key in token_fields) for item in metrics),
         "cost": reported_cost,
         "reported_cost_subtotal": reported_cost,
         "cost_total": reported_cost if cost_complete else None,
