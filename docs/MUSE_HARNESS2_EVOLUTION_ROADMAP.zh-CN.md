@@ -121,6 +121,8 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 阶段实现记录（2026-10-19）：`praxile.eval.jobbench` 已支持读取、完整校验上游不可变 generation，按 main/easy 与精确 task ID 选择，并生成通过 Harbor 0.22.0 schema 的原生执行 job。公开输入与 tests 引用分开投影；摘要不匹配、额外文件、符号链接、共享 verifier 和完整 rubric 复制到环境会被拒绝。7 项单元测试及上游真实 renderer 协议测试通过；这是 fixture 材料的接入验收，尚未下载/执行真实任务或调用官方 judge，因此下列正式能力总项不勾选。
 
+后续进展：已下载并通过官方 renderer 准备 main/easy 各一条真实 technical-writers 材料，冻结数据 revision 与 manifest 摘要见执行器文档。`jobbench_results` 可校验并导入官方逐项分数，验证冻结 task checksum 和 rubric 权重，区分有效零分与评分错误，保留私有原始证据。45 项相关单元测试、2 项上游集成测试通过；真实 main rubric 的官方无产物分支得到 `0/66`，未调用模型。非空产物 LLM 评审、真实 Agent 执行、受限参考材料搜索、恢复与全量覆盖尚未完成。
+
 官方 [JobBench runner](https://github.com/Job-Bench/job-bench-eval) 提供普通 CLI 与 Harbor 路径。选择 Harbor 作为首条共同基础设施，评分逻辑仍调用其官方实现。数据版本与 split 以 [数据集 manifest](https://huggingface.co/datasets/JobBench/job-bench) 实际内容为准。
 
 - [ ] 支持 main/easy、任务筛选和正式 split manifest；easy 是独立难度数据集，不能默认当作 main 的训练集。

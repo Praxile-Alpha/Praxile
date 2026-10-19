@@ -89,4 +89,31 @@ python -m praxile.eval.jobbench \
 
 job 生成前重新校验材料，使用 Harbor 官方 schema 验证；配置文件仅允许新建，权限 `0600`。命令不会执行任务。人工核对模型、费用、judge、网络与材料隔离后，才能在同一 0.22.0 环境使用 `harbor run --config /absolute/job.json`。
 
-验收证据：7 项本地清单/隔离测试；1 项上游真实 renderer + Harbor JobConfig + CLI 生成测试（含 main/easy）。数据内容为测试 fixture，没有执行官方真实任务、没有调用官方 judge，也没有产生 benchmark 分数。官方结果导入、恢复与真实任务覆盖仍未完成。
+验收证据：7 项本地清单/隔离测试；上游真实 renderer + Harbor JobConfig + CLI 生成测试（含 main/easy）。生成协议测试使用 fixture，不代表真实任务执行。结果导入进展见下节，恢复与真实任务覆盖仍未完成。
+
+## 官方结果导入
+
+在同一隔离环境中运行：
+
+```sh
+python -m praxile.eval.jobbench_results \
+  --generation /absolute/jobbench/harbor/current \
+  --manifest-sha256 YOUR_RECORDED_MANIFEST_SHA256 \
+  --task-id easy--OCCUPATION--task1 \
+  --trial /absolute/jobs/JOB/TRIAL \
+  --output /absolute/private-results/trial.json
+```
+
+导入时重新验证 generation，并从冻结任务计算 Harbor checksum、读取官方 rubric 权重；不从待导入报告自身取“预期值”。验证 `result.json`、`verification.json`、`reward.json`、`judge-details.json` 的身份与分数一致性，保留原始总分/分母、官方四位小数归一化分数、逐项判断、judge 身份及文件摘要。
+
+有效零分是 completed evaluation，不是基础设施失败；评分错误不补零分。执行状态与评分状态分开，缺失 usage 保持 unknown。文件不一致直接拒绝，输出文件仅新建且权限为 `0600`。**报告内可能含隐藏 rubric，必须保存在控制面私有目录，不能作为演化主体的上下文或直接公开发布。** 摘要与一致性校验不是官方结果的数字签名；仍需可信 verifier 与隔离存储。
+
+2026-10-19 验证：13 项结果导入测试，与已有契约/清单测试合计 45 项通过；上游 renderer、CLI 与官方 verifier 无产物路径测试共 2 项通过。尚未验证非空交付物的付费 LLM judge 路径。
+
+## 真实材料准备记录
+
+- 数据 revision：`d43a66575635da0d3f6cb9a20976dc1a60f3ffc9`，公开清单 main 65、easy 63，共 128 条任务。
+- 下载 main/easy 的 `technical_writers/task1` 两条集成任务，共 15 个文件、2,694,463 字节；不是全量覆盖。
+- 上游 renderer 生成的两任务 manifest SHA-256：`246cdeca67266141ddb35172279e5d1c9be5ceb8d5bca1f68102d276ea6a0b18`。main 任务含一个待搜索参考文件，受限检索接口仍待实现，不能声称材料访问能力已完整。
+- 使用真实 main rubric 对空输出运行官方 verifier，获得 10 个评审项、`0/66`、reward `0.0`。此分支不调用模型；报告的默认 judge 名称不代表实际发起了模型请求。
+- 以上均不构成 Praxile 真实任务完成率或演化收益证据。执行模型、独立 judge 与费用上限确认后再进行正式任务运行。
