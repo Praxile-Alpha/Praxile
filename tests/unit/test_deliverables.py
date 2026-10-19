@@ -49,7 +49,7 @@ def test_unsupported_missing_optional_and_size_limit(tmp_path):
     assert verify_deliverables(tmp_path, contract(required=False))["passed"]
     (tmp_path / "report.json").write_bytes(b"{}")
     assert not verify_deliverables(tmp_path, contract(), max_bytes=1)["passed"]
-    report = verify_deliverables(tmp_path, contract(media="application/pdf"))
+    report = verify_deliverables(tmp_path, contract(media="application/x-unknown"))
     assert report["outputs"][0]["status"] == "unsupported"
 
 

@@ -151,6 +151,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 交付检查增补：新增独立版本化 public deliverable contract 和 `check_deliverables` runtime action，支持 JSON 字段、CSV 结构、UTF-8 文本、文件缺失/大小/路径检查及摘要；不改变 BenchmarkTask V1。12 项测试通过。结果明确不是官方评分或语义质量判断，二进制 Office/PDF opener、状态变化契约和可信来源确认尚缺，总项不勾选；详见 `DELIVERABLE_CHECKS.zh-CN.md`。
 
+格式检查后续：Office/PDF opener 已以可选 documents extra 接入限时子进程，包含 ZIP/XML 预检和结构统计；9 项资源测试覆盖四种真实格式、损坏/超时/宏/实体声明。公式重算、渲染、二进制格式的用户结构要求、可信确认及状态变化契约仍缺，R1 总项继续未完成。
+
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。

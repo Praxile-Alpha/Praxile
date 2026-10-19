@@ -36,12 +36,22 @@
 - UTF-8 纯文本/Markdown：可解码且非空；尚不支持段落/标题结构要求。
 - 必需文件缺失、过大、非普通文件、符号链接明确失败；optional 缺失单独记录。
 - 每个文件最多读取 10 MB，最多 100 个输出要求；无 glob，不执行产物，不联网。runtime 额外执行敏感路径读取策略。
-- PDF、DOCX、XLSX、PPTX 等尚未接入可靠 opener，返回 unsupported，不能仅凭后缀或文件存在判通过。
+- PDF、DOCX、XLSX、PPTX 使用 `praxile[documents]` 的可选解析库在子进程中重新打开；缺依赖时返回 unsupported，不凭文件后缀判通过。
 
 结果包含契约摘要、文件摘要、字节数、结构检查结果，以及 `official_evaluation=false`、`semantic_quality_verified=false`。不返回文件正文，不据此证明内容正确、公式已重算、排版合格或任务成功。仅作本地修复反馈与审计证据，不自动增加 promotion 资格。
 
 ## 待完善
 
-完整交付契约仍需允许状态变化、独立证据位置、可信用户确认；格式 opener、公式重算、文档渲染与人工质量验收仍需后续实现。本检查不是对同机恶意进程并发修改文件的沙箱，应在隔离工作区收集产物后运行。
+完整交付契约仍需允许状态变化、独立证据位置、可信用户确认；公式重算、文档渲染与人工质量验收仍需后续实现。本检查不是对同机恶意进程并发修改文件的沙箱，应在隔离工作区收集产物后运行。
 
 12 项单元测试覆盖结构、缺失/超限/unsupported、路径与符号链接、敏感文件、来源声明和 runtime 分发。此阶段不勾选 R1 的完整 Deliverable Contract/本地自检总项。
+
+## Office/PDF 打开检查
+
+安装 `python -m pip install 'praxile[documents]'`，即可通过相同 action 检查标准 PDF/DOCX/XLSX/PPTX MIME 类型。文件先复制到私有临时目录，子进程使用 Python `-I` 隔离启动，15 秒超时；Linux 增加 1 GB 地址空间上限。它不是 OS 沙箱，macOS/Windows 没有同等内存上限，不可信文档仍应放在受限容器中。
+
+Office ZIP 最多 2000 成员、声明解压后最多 50 MB；拒绝重复成员、加密包和 VBA 内容。XML 在库解析前经 defusedxml 检查，禁止 DTD/实体声明，包括 UTF-16 编码。XLSX 以只读模式遍历最多一百万个单元格并关闭工作簿；PDF 限制页数且拒绝加密文件。
+
+输出记录 opened 和页/幻灯片/工作表等结构信息，明确 `rendered=false`，XLSX 明确 `formulas_recalculated=false`。二进制格式的 required_fields 暂不支持，返回 unsupported，而不是忽略要求。解析成功不代表正文正确、图像可读、公式有最新缓存或页面布局正常。
+
+9 项资源测试覆盖四种真实格式生成后重新打开、损坏文件、超时、宏、ZIP 成员限制以及两种编码的 XML 实体攻击。使用 `tests/resource/test_document_deliverables.py --forked` 运行；未安装可选依赖时明确跳过。

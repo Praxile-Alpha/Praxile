@@ -6,10 +6,14 @@ import hashlib
 import io
 import json
 import stat
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 from .eval.contracts import OutputContract
 from .eval.v2.schema import EvalSchemaError
+from .artifact_openers import MEDIA
 
 
 def validate_contract(value: object) -> list[dict]:
@@ -103,6 +107,31 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
                     result.update(status="unsupported", reason="text_structure_checks_not_supported")
                     continue
                 missing = []
+            elif media in MEDIA:
+                if fields:
+                    result.update(status="unsupported", reason="document_field_requirements_not_supported")
+                    continue
+                # Parse an immutable private copy, not an agent-mutated original.
+                with tempfile.TemporaryDirectory(prefix="praxile-document-check-") as directory:
+                    source = Path(directory) / ("artifact." + MEDIA[media])
+                    source.write_bytes(content)
+                    try:
+                        child = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("artifact_openers.py")),
+                                                str(source), MEDIA[media]], capture_output=True, timeout=15)
+                    except subprocess.TimeoutExpired:
+                        result.update(status="failed", reason="document_parser_timeout")
+                        continue
+                    except OSError:
+                        result.update(status="failed", reason="document_parser_unavailable")
+                        continue
+                if child.returncode != 0:
+                    result.update(status="failed", reason="document_parser_process_failed")
+                    continue
+                parsed = json.loads(child.stdout)
+                if not isinstance(parsed, dict) or parsed.get("status") not in {"passed", "failed", "unsupported"}:
+                    raise ValueError("invalid parser result")
+                result.update(parsed)
+                continue
             else:
                 result.update(status="unsupported", reason="format_opener_not_available")
                 continue
