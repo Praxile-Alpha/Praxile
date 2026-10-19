@@ -277,6 +277,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。
 - [ ] 按实际任务依赖建立版本化 capability profiles：表格读写/公式重算、文档/PDF抽取与渲染、网页浏览器操作、代码与脚本执行。
+  渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
+  依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
+  各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
+  或实际渲染验收，完整项仍未完成。
 - [ ] 浏览器具备 click/fill/navigation/download、页面状态断言、截图和错误记录；截图存在不能充当视觉质量通过。
 - [ ] 任务状态机：queued/running/waiting_approval/paused/completed/failed/cancelled；子任务边界 checkpoint，恢复前重新确认环境与产物状态。
 - [ ] 本地自检检查“产物存在、能打开、结构符合请求”；与官方评分器物理分离。

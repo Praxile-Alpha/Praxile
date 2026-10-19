@@ -209,6 +209,18 @@ rubric，也不能证明任意调用方标注 user_request 的对象真的得到
 Harbor 0.18 与 0.22 各 2 项 Docker 测试通过；本机 worker 集成 8 项、输入
 契约单元 7 项通过，fast suite 582 passed。本轮没有付费模型调用。
 
+## Harbor 渲染依赖预检
+
+配置 `renderer_executable` 时，`setup()` 在 worker 虚拟环境的隔离 Python 中
+导入 `python-docx`、`defusedxml`、`pypdf`，并检查 POSIX 与渲染器可执行路径。
+预检限时 15 秒，失败即停止 setup，不读取模型凭据、不开始模型调用；错误不会
+回显容器原始输出。未配置渲染器的任务保持既有安装行为。
+
+这只是依赖可用性检查，不证明实际渲染成功或产物合格。安装仍为
+`--no-index --no-deps`，不会自动联网补依赖或改动冻结镜像。实验所需额外依赖
+须明确授权、固定版本并记录摘要；改变依赖后的环境不能冒充原环境严格 A/B。
+Harbor 0.18/0.22 各 18 项适配器测试通过（各 2 项跳过、6 项排除）。
+
 ## 模型输出截断诊断
 
 OpenAI-compatible 的 `finish_reason` 与 Anthropic 的 `stop_reason` 统一保留为

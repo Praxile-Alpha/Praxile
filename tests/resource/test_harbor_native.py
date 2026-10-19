@@ -278,6 +278,38 @@ def test_renderer_configuration_reaches_worker_and_execution_record(tmp_path, mo
     assert commands[0][commands[0].index("--deliverable-contract-file") + 1] == remote
 
 
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_renderer_setup_checks_worker_dependencies_before_run(tmp_path, exit_code):
+    from types import SimpleNamespace
+    import shlex
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    commands = []
+    class Environment:
+        async def exec(self, command, **kwargs):
+            argv = shlex.split(command)
+            commands.append((argv, kwargs))
+            return SimpleNamespace(return_code=exit_code if "-I" in argv else 0)
+        async def upload_file(self, source, destination):
+            assert source == wheel
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture",
+        renderer_executable="/opt/Office Suite/soffice",
+        credential_file=str(tmp_path / "must-not-be-read"))
+    if exit_code:
+        with pytest.raises(RuntimeError, match="Document renderer preflight failed"):
+            asyncio.run(agent.setup(Environment()))
+    else:
+        asyncio.run(agent.setup(Environment()))
+    argv, options = commands[-1]
+    assert argv[0] == agent.remote_root + "/venv/bin/python"
+    assert argv[1:3] == ["-I", "-c"]
+    assert "from pypdf import PdfReader" in argv[3]
+    assert argv[-1] == "/opt/Office Suite/soffice"
+    assert options["timeout_sec"] == 15
+
+
 @pytest.mark.slow
 @pytest.mark.timeout(300)
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")

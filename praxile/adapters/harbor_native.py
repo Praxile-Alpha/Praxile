@@ -100,6 +100,22 @@ class PraxileAgent(BaseAgent):
         await self._exec(environment, shlex.join([*venv, self.remote_root + "/venv"]))
         await self._exec(environment, shlex.join([self.remote_root + "/venv/bin/python", "-m", "pip",
                                                 "install", "--no-index", "--no-deps", remote_wheel]))
+        if self.renderer_executable:
+            # Probe the worker interpreter, not the image's system Python.
+            probe = ("import os,sys; from defusedxml.ElementTree import fromstring; "
+                     "from pypdf import PdfReader; from docx import Document; "
+                     "sys.exit(0 if os.path.isfile(sys.argv[1]) and "
+                     "os.access(sys.argv[1], os.X_OK) and os.name == 'posix' else 1)")
+            try:
+                await self._exec(environment, shlex.join([
+                    self.remote_root + "/venv/bin/python", "-I", "-c", probe,
+                    self.renderer_executable]), timeout_seconds=15)
+            except Exception as error:
+                raise RuntimeError(
+                    "Document renderer preflight failed: provision an executable renderer "
+                    "and praxile[documents] dependencies in the worker environment before "
+                    "running this experiment; no model request was started by setup"
+                ) from error
 
     async def _exec(self, environment, command: str, *, timeout_seconds: int | None = None):
         result = await environment.exec(command, timeout_sec=timeout_seconds or self.timeout_seconds)
