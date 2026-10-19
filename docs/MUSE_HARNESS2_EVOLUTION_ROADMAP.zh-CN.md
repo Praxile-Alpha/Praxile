@@ -329,6 +329,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   再写入统一日志/SQLite，支持幂等导入、冲突拒绝和收据失败恢复。7 项隔离测试
   通过；真实冻结 compact repair 离线导入 41/重复0/重建41，0 模型调用。
   不认证来源、不导入官方评分或产物实体；完整双 arm 仍未完成。
+  官方结果绑定增补：适配器把 native result 原始摘要写入 Harbor metadata；
+  JobBench/WorkBuddy 导入器核对摘要、轨迹身份和重算事件，输出可关联 EventStore
+  收据的 native_trace_binding。旧 Trial 明确 unbound，评分不可用不补零。
+  本地一致性不是来源认证，真实完整 Trial 与双 arm 编排仍未完成，总项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

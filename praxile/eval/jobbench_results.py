@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import BenchmarkOutcome, BenchmarkScore
+from .native_trial_binding import bind_native_trace
 from .v2.schema import EvalSchemaError
 
 
@@ -114,6 +115,7 @@ def import_trial(task_id: str, trial_dir: Path, *, expected_task_checksum: str,
             reason = "official verifier reported an error"
     elif exception.get("exception_type") == "VerifierTimeoutError":
         status, reason = "timed_out", "official verifier timed out"
+    report["native_trace_binding"] = bind_native_trace(trial, read, evidence)
     report["outcome"] = BenchmarkOutcome(task_id, status, scores, tuple(evidence)).to_dict()
     report["reason"] = reason
     report["evidence_digests"] = evidence

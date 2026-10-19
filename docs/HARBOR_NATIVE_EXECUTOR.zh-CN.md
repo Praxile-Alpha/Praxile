@@ -606,6 +606,21 @@ python -m praxile.eval.workbuddy_results \
 
 验证：16 项结果导入测试（含上游 ArtifactWriter 输出兼容），与清单/准备/job 测试合计 47 项通过；没有把 fixture 结果冒充真实 benchmark 成绩。
 
+## 官方 Trial 与 Native Trace 的绑定
+
+新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。
+JobBench/WorkBuddy 官方导入器据此验证同一 Trial 的
+`agent/praxile-result.json` 与 `agent/praxile-events.json`：核对原始字节摘要、
+trajectory task ID、experience mode，并重算完整事件投影。错配或篡改拒绝导入，
+通过后输出 `native_trace_binding`，包含 trace/run identity 和事件数量。
+这使控制面可用摘要和 trace ID 关联 `eval import-native` 的收据与官方评分报告，
+不需要把 rubric 或完整评审记录写进执行轨迹。
+
+旧 Trial 缺少摘要时仍支持原有评分导入，但明确标记 `unbound`，不会从邻近文件
+自动推断关联。`bound` 只证明本地证据一致性，不证明来源可信、环境隔离或因果效果。
+没有官方评分时，即使绑定成功，也不补零分、不改为 completed。此功能不自动
+晋升候选，也尚未完成原生双 arm 编排及真实官方 Trial 端到端验收。
+
 ## 首次真实 Office 镜像构建记录
 
 2026-10-19，任务 `api-usage-explain-cli-l3-001`，使用已冻结 Office 副本中的原始 Dockerfile，未改写任务环境。该 Dockerfile 固定下载 `node-v20.18.1-linux-x64.tar.xz`，因此在 ARM64 宿主机上先显式检查 amd64 构建：

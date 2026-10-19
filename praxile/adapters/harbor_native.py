@@ -426,6 +426,7 @@ class PraxileAgent(BaseAgent):
         context.n_input_tokens = evidence["complete_tokens"]["prompt_tokens"]
         context.n_output_tokens = evidence["complete_tokens"]["completion_tokens"]
         context.metadata = {**(context.metadata or {}), "praxile": {
+            "source_result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
             "wheel_sha256": self.wheel_sha256, "trajectory_task_id": trajectory.get("task_id"),
             "worker_environment": self.worker_environment,
             "worker_environment_sha256": self.worker_environment_sha256,

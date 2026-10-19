@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from .contracts import BenchmarkOutcome, BenchmarkScore
+from .native_trial_binding import bind_native_trace
 from .v2.schema import EvalSchemaError
 
 
@@ -93,6 +94,7 @@ def import_trial(task_id: str, trial_dir: Path, *, expected_task_checksum: str) 
         # Preserve non-fatal judge errors; never infer model identity or enablement.
         report["judge_issues"] = [item for item in details["judges"]
                                   if item.get("status") in {"judge_error", "build_error", "abstain", "review"}]
+    report["native_trace_binding"] = bind_native_trace(trial, read, evidence)
     report["outcome"] = BenchmarkOutcome(task_id, status, scores, tuple(evidence)).to_dict()
     report["evidence_digests"] = evidence
     return report

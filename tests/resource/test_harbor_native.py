@@ -345,6 +345,9 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
     agent.populate_context_post_run(context)
     assert context.n_input_tokens == 12
     assert context.n_output_tokens == 7
+    serialized = context.model_dump(mode="json")
+    assert serialized["metadata"]["praxile"]["source_result_sha256"] == hashlib.sha256(
+        (tmp_path / "praxile-result.json").read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize("calls,count,expected", [
