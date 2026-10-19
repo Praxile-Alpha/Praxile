@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import threading
+import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -12,7 +13,8 @@ from praxile.eval.native_worker import benchmark_config
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
-def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path):
+@pytest.mark.parametrize("structured", [False, True])
+def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structured):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -37,13 +39,19 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path):
     workspace.mkdir()
     instruction = tmp_path / "instruction.txt"
     instruction.write_text("Read the available project and summarize it.")
+    extra = []
+    if structured:
+        instruction.write_text("If asked to modify a database, save the final copy in output.")
+        body = workspace / "task.txt"
+        body.write_text("Summarize the available files.")
+        extra = ["--task-body-file", "task.txt", "--task-body-sha256", hashlib.sha256(body.read_bytes()).hexdigest()]
     result = tmp_path / "result.json"
     try:
         process = subprocess.run([
             sys.executable, "-m", "praxile.eval.native_worker", "--workspace", str(workspace),
             "--instruction", str(instruction), "--result", str(result), "--model", "fixture",
             "--base-url", f"http://127.0.0.1:{server.server_port}/v1", "--max-steps", "2",
-        ], capture_output=True, text=True, timeout=20)
+        ] + extra, capture_output=True, text=True, timeout=20)
     finally:
         server.shutdown()
         server.server_close()
@@ -54,6 +62,10 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path):
     assert report["official_evaluation"] == "not_run"
     assert report["trajectory"]["cost"]["prompt_tokens"] == 12
     assert report["trajectory"]["result"]["status"] == "completed"
+    if structured:
+        assert report["trajectory"]["task_input"]["source"] == "task.txt"
+        assert any("If asked to modify a database" in message["content"]
+                   for request in requests for message in request["messages"])
     assert list((workspace / ".praxile/experience/trajectories").glob("*.json"))
 
 

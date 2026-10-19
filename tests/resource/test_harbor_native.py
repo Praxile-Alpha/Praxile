@@ -195,6 +195,11 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
                   base_url="http://127.0.0.1:18888/v1", model_name="fixture")
     with pytest.raises(ValueError, match="digest"):
         PraxileAgent(**kwargs, wheel_sha256="bad")
+    for invalid in ({"task_body_file": "task.txt"},
+                    {"task_body_file": "../task.txt", "task_body_sha256": "a" * 64},
+                    {"task_body_file": "task.txt", "task_body_sha256": "bad"}):
+        with pytest.raises(ValueError, match="task body"):
+            PraxileAgent(**kwargs, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), **invalid)
     agent = PraxileAgent(**kwargs, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
     report = {"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
               "trajectory": {"task_id": "fixture", "model_routing": {"calls": [

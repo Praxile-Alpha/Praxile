@@ -23,7 +23,17 @@ class PraxileAgent(BaseAgent):
 
     def __init__(self, *args, wheel_path: str, wheel_sha256: str,
                  workspace: str, base_url: str, max_steps: int = 50,
-                 timeout_seconds: int = 900, credential_file: str | None = None, **kwargs):
+                 timeout_seconds: int = 900, credential_file: str | None = None,
+                 task_body_file: str | None = None, task_body_sha256: str | None = None, **kwargs):
+        if bool(task_body_file) != bool(task_body_sha256):
+            raise ValueError("task body file and digest must be configured together")
+        if task_body_file:
+            body_path = PurePosixPath(task_body_file)
+            if body_path.is_absolute() or ".." in body_path.parts or not body_path.parts:
+                raise ValueError("task body must be workspace-relative")
+            if len(task_body_sha256) != 64 or any(c not in "0123456789abcdef" for c in task_body_sha256):
+                raise ValueError("task body SHA-256 required")
+        self.task_body_file, self.task_body_sha256 = task_body_file, task_body_sha256
         self.wheel = Path(wheel_path).resolve(strict=True)
         if not self.wheel.name.endswith(".whl") or hashlib.sha256(self.wheel.read_bytes()).hexdigest() != wheel_sha256:
             raise ValueError("Praxile wheel digest mismatch")
@@ -122,6 +132,8 @@ class PraxileAgent(BaseAgent):
         ]
         if capability_file:
             argv.extend(["--capability-file", capability_file])
+        if self.task_body_file:
+            argv.extend(["--task-body-file", self.task_body_file, "--task-body-sha256", self.task_body_sha256])
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",

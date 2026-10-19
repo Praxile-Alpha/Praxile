@@ -8,12 +8,30 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import hashlib
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from ..config import Config, ProjectPaths, default_config, validate_config
 from ..runtime import AgentRuntime
+from ..task_input import TaskInput
+
+
+def load_task_input(root: Path, instruction: str, relative_path: str, expected_sha256: str) -> TaskInput:
+    """Read only a controller-selected public file before starting model execution."""
+    path = Path(relative_path)
+    root = root.resolve(strict=True)
+    if path.is_absolute() or ".." in path.parts or not path.parts:
+        raise ValueError("task body must be workspace-relative")
+    target = root / path
+    if target.resolve(strict=True) != target or not target.is_file():
+        raise ValueError("task body must be a regular file without symlink components")
+    with target.open("rb") as handle:
+        raw = handle.read(262145)
+    if len(raw) > 262144 or hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError("task body size or digest mismatch")
+    return TaskInput(raw.decode("utf-8"), instruction, relative_path)
 
 
 def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int) -> Config:
@@ -38,8 +56,8 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int) -
     return Config(data, ProjectPaths(root))
 
 
-def run_native(root: Path, instruction: str, *, model: str, base_url: str, max_steps: int) -> dict[str, Any]:
-    if not instruction.strip():
+def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url: str, max_steps: int) -> dict[str, Any]:
+    if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
     config = benchmark_config(root, model=model, base_url=base_url, max_steps=max_steps)
     runtime = AgentRuntime(config)
@@ -64,13 +82,20 @@ def main() -> None:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--max-steps", type=int, required=True)
     parser.add_argument("--capability-file", type=Path)
+    parser.add_argument("--task-body-file")
+    parser.add_argument("--task-body-sha256")
     args = parser.parse_args()
+    if bool(args.task_body_file) != bool(args.task_body_sha256):
+        parser.error("task body file and digest must be configured together")
+    instruction = args.instruction.read_text(encoding="utf-8")
+    if args.task_body_file:
+        instruction = load_task_input(args.workspace, instruction, args.task_body_file, args.task_body_sha256)
     if args.capability_file is not None:
         from .credential_broker import read_private_key
         capability = read_private_key(args.capability_file)
         args.capability_file.unlink()
         os.environ["PRAXILE_BENCHMARK_API_KEY"] = capability
-    result = run_native(args.workspace, args.instruction.read_text(encoding="utf-8"),
+    result = run_native(args.workspace, instruction,
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")

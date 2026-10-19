@@ -27,6 +27,7 @@ from .silent_failure import detect_silent_failure_signals
 from .specs import build_spec_context, spec_context_prompt, verify_spec_compliance
 from .store import ExperienceStore
 from .task_analyzer import TaskAnalyzer
+from .task_input import TaskInput
 from .tools import MUTATING_ACTIONS, ToolRegistry
 from .trajectory import TrajectoryLogger
 from .utils import append_jsonl, shorten, utc_now
@@ -58,7 +59,7 @@ class AgentRuntime:
 
     def run(
         self,
-        task: str,
+        task: str | TaskInput,
         *,
         test_commands: list[str] | None = None,
         max_steps: int | None = None,
@@ -72,6 +73,12 @@ class AgentRuntime:
         progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         try:
+            task_input = task if isinstance(task, TaskInput) else None
+            if task_input is not None and resume:
+                raise ValueError("structured task input cannot override a resumed run")
+            intent = task_input.body if task_input else task
+            if task_input:
+                task = task_input.prompt()
             self.tools.bind_deliverable_contract(deliverable_contract)
             self.tools.cancel_requested = cancel_requested
             self._emit_progress(progress_callback, "initializing", "Initializing Praxile runtime.")
@@ -89,6 +96,8 @@ class AgentRuntime:
             snapshot = self.project.snapshot(refresh=True)
             snapshot["interop"] = interop_policy(self.config)
             logger = TrajectoryLogger(task, snapshot)
+            if task_input:
+                logger.data["task_input"] = task_input.record()
             if self.tools.deliverable_contract is not None:
                 logger.data["deliverable_contract"] = self.tools.deliverable_contract
                 logger.data["deliverable_contract_sha256"] = hashlib.sha256(json.dumps(
@@ -102,7 +111,7 @@ class AgentRuntime:
             self._emit_progress(progress_callback, "spec", "Loading spec context.")
             logger.set_spec_context(build_spec_context(self.config.paths.root, spec_files))
             self._emit_progress(progress_callback, "retrieve", "Retrieving project experience.")
-            retrieved = self.store.retrieve(task, limit=8) if use_experience else []
+            retrieved = self.store.retrieve(intent, limit=8) if use_experience else []
             logger.set_loaded_context(retrieved, injected_paths=set())
             activation_assets = [
                 {
@@ -115,7 +124,11 @@ class AgentRuntime:
             self.store.record_asset_usage(logger.task_id, activation_assets, used_in_prompt=False)
             self._emit_progress(progress_callback, "analyze", "Analyzing task risk and intent.")
             analysis_rules = [item for item in retrieved if item.get("kind") == "rule"]
-            analysis = self.analyzer.analyze(task, analysis_rules)
+            if task_input:
+                analysis = self.analyzer.analyze(intent, analysis_rules,
+                    environment_instructions=task_input.environment_instructions)
+            else:
+                analysis = self.analyzer.analyze(task, analysis_rules)
             logger.set_task_analysis(analysis)
             activation_observations = self._activation_observations(snapshot)
             logger.data["activation_observations"] = activation_observations

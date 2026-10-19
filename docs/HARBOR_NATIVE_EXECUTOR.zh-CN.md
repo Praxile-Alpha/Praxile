@@ -258,6 +258,26 @@ build-context 映射获取。构建证据：
 真正的架构变更、命中的 frozen boundary 和文件/命令权限仍须生效；修复后重跑时
 使用新的 run 身份，保留本次失败证据。
 
+#### 显式任务正文入口
+
+适配器现在接受成对的 `task_body_file`（workspace-relative）和
+`task_body_sha256` 参数。调用方必须从冻结的公开材料计算摘要，例如 JobBench
+的 `task_folder/TASK_INSTRUCTIONS.txt`，不能从模型响应中自动挑选正文。
+worker 在运行前验证文件大小（最多 256 KiB）、真实路径及摘要，拒绝符号链接
+组件和越界路径；不读取隐藏评分材料。路径/摘要未配置时，原入口行为保持不变。
+
+`TaskInput V1` 把正文、原始完整环境说明、来源与两个文本摘要写入 trajectory。
+正文用于意图分析和初始经验检索，完整说明仍进入模型提示词；环境说明中的隐私
+信号仍参与风险判断。正文里的架构信号与命中的 frozen boundary 不降级，
+工具权限不改变，也不新增模型可调用的 gate bypass。结构化输入不能覆盖 resume；
+恢复沿用原 checkpoint。正文文件的字节摘要由 worker 验证，trajectory 的正文
+摘要按 UTF-8 编码计算；两者对合法 UTF-8 文件一致。
+
+这是**可信控制面 API**，不是自动语义分类或授权认证：把真正的用户改动指令错误
+放进 environment_instructions 会影响分类，因此不能把该选项直接交给执行模型。
+它也不抵御同权限宿主进程在校验期间并发替换文件。当前通过本地 fixture 完整
+worker 测试，新的真实 MiniMax 运行和官方评分尚待复验。
+
 另检查官方 judge 使用 `max_completion_tokens=200000`。宿主代理新增该字段的
 保真转发和同一预算校验（不能同时携带 max_tokens），未改写官方 judge。
 只有显式配置足够输出预留时才允许请求；provider 实际是否支持此上限、

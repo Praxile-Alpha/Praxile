@@ -143,6 +143,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+任务意图边界修复：新增显式 TaskInput V1，正文与完整环境说明分别记录；Harbor
+适配器可通过公开正文相对路径和冻结 SHA-256 传递该输入。worker 校验路径、
+大小和摘要；正文用于意图分析，完整说明继续进入模型，隐私信号不丢失。
+真实架构正文及 frozen boundary 的拦截保留。该入口仅供可信控制面配置，
+不自动识别/忽略条件句，不开放模型 gate bypass；新的真实任务复验仍待执行。
+
 隔离构建与真实执行入口复验：用户批准仅在副本把 Debian HTTP 改 HTTPS，
 Linux ARM64 任务镜像构建及无网络依赖检查通过，原冻结 manifest 未变。
 随后用 Harbor 0.22 原生适配器运行原始公开 instruction（30 步/900 秒上限），

@@ -99,12 +99,14 @@ class TaskAnalyzer:
         self.config = config
         self.router = router
 
-    def analyze(self, task: str, retrieved: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def analyze(self, task: str, retrieved: list[dict[str, Any]] | None = None,
+                *, environment_instructions: str = "") -> dict[str, Any]:
         retrieved = retrieved or []
         lower = task.lower()
         keyword_hits = sorted(term for term in ARCHITECTURE_TERMS if term in lower)
         ui_hits = sorted(term for term in UI_TERMS if term in lower)
-        privacy_hits = sorted(term for term in PRIVACY_TERMS if term in lower)
+        privacy_text = lower + "\n" + environment_instructions.lower()
+        privacy_hits = sorted(term for term in PRIVACY_TERMS if term in privacy_text)
         frozen_hits = [
             item for item in retrieved if item.get("kind") == "rule" and "frozen-boundaries" in item.get("path", "")
         ]
