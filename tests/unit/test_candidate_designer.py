@@ -68,7 +68,31 @@ def test_one_explicit_repair_preserves_failed_attempt_and_both_costs():
     repaired = json.loads(calls[1][0][1]["content"])
     assert repaired["allowed_refs"] == ["event:e1"]
     assert repaired["validation_repair"]["validation_stage"] == "candidate_evidence_refs"
+    assert repaired["validation_repair"]["validation_diagnostic"]["candidate_position"] == "first"
+    assert repaired["validation_repair"]["validation_diagnostic"]["citations_must_exactly_match_allowed_refs"] is True
     assert "previous_submission" not in json.dumps(records)
+
+
+def test_repair_passes_safe_specific_action_diagnostics_without_exception_text():
+    bad = proposal()
+    for draft in [*bad["candidates"], bad["composition"]]:
+        draft["action_examples"] = [{"type": "read_document", "path": "doc.docx", "start": "PRIVATE", "limit": "PRIVATE"}]
+    kwargs, _ = inputs({})
+    calls = []
+    def chat(messages, **options):
+        calls.append(messages)
+        return {"content": json.dumps(bad if len(calls) == 1 else {"decision": "abstain"})}
+    kwargs["router"] = SimpleNamespace(chat=chat)
+    result = design_development_candidates(**kwargs, repair_attempts=1,
+        executor_profile={"schema_version": "praxile.executor_action_profile.v2",
+            "executor": "praxile", "version": "1", "actions": ["read_document"]})
+    assert result["decision"] == "NO_ENTRY"
+    feedback = json.loads(calls[1][1]["content"])["validation_repair"]
+    diagnostic = feedback["validation_diagnostic"]
+    assert diagnostic["action"]["field_error_counts"] == {"start": 2, "limit": 2}
+    assert diagnostic["integer_fields_must_be_json_numbers_not_strings"] is True
+    assert "PRIVATE" not in json.dumps(diagnostic)
+    assert "PRIVATE" in feedback["previous_submission"]
 
 
 @pytest.mark.parametrize("repairs, expected", [(0, 1), (1, 2)])

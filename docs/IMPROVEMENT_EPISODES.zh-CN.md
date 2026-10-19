@@ -482,6 +482,17 @@ manifest 冻结修订预算，resume 不得更换。每次请求使用完整的�
 因此开启一次修订可使设计成本上限翻倍；外层 supervisor 应按整个流程另设期限。
 原有 candidate 校验、证据范围和 promotion_eligible=false 均不放宽；模型可以
 弃权。测试证明预算和状态行为，不证明真实修订成功率；尚未追加付费修订实验。
+
+真实修订验收更新：bounded-repair-001 执行了首次设计及一次修订，各自 HTTP
+零重试。首次返回 4 个候选（应为 2），修订后通过顶层结构，但首个 read_document
+的 start/limit 类型与范围校验失败。两次用量合计输入 15800、输出 11389 tokens，
+无候选、无 probe、无晋升。记录见 `results/docx-repair-bounded-repair-20261019.json`。
+这验证了真实限次执行和用量留存，不证明修订能改善候选质量。
+
+该实验后，修订反馈增加控制面生成的具体 proposal/action 诊断、候选位置、
+精确候选数及 JSON 整数类型要求，不转发任意 exception 文本、未知字段名或
+评审器内容；上次模型提交仍作为不可信内容单独传入，不作为证据。该增强已
+通过离线测试，尚未进行追加模型验收，不回填历史结果。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

@@ -28,7 +28,8 @@ def design_development_candidates(*, repair_attempts=0, attempt_checkpoint=None,
                     or not isinstance(response_content[0], str) or len(response_content[0]) > 65536):
                 raise
             feedback = {"previous_submission": response_content[0], "validation_stage": stage,
-                        "instruction": "Replace the entire submission; obey the unchanged contract and allowed_refs."}
+                        "instruction": "Replace the entire submission; obey the unchanged contract and allowed_refs.",
+                        "validation_diagnostic": getattr(error, "candidate_repair_diagnostic", {})}
         finally:
             if attempt_checkpoint is not None:
                 attempt_checkpoint()
@@ -240,4 +241,15 @@ def _design_development_candidates(*, evidence, development_task_ids, heldout_ta
                 "proposal_schema", "abstention_schema", "candidate_fields", "candidate_text_bounds",
                 "candidate_evidence_refs", "candidate_action_examples", "candidate_distinctness"}:
             error.candidate_validation_stage = stage
+            # Only control-plane generated fields go back to the model; never
+            # arbitrary exception strings, unknown keys or evaluator feedback.
+            error.candidate_repair_diagnostic = {
+                "candidate_position": candidate_position,
+                "proposal": record.get("proposal_validation_diagnostic"),
+                "action": record.get("action_validation_diagnostic"),
+                "required_candidate_count": 2,
+                "required_composition_count": 1,
+                "citations_must_exactly_match_allowed_refs": True,
+                "integer_fields_must_be_json_numbers_not_strings": True,
+            }
         raise
