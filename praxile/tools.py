@@ -14,7 +14,7 @@ from .utils import utc_now
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
-MUTATING_ACTIONS = {"edit_file", "run_command", "browser_click", "browser_fill", "browser_download"}
+MUTATING_ACTIONS = {"edit_file", "create_docx", "run_command", "browser_click", "browser_fill", "browser_download"}
 
 
 class ToolRegistry:
@@ -72,6 +72,7 @@ class ToolRegistry:
             {"name": "browser_download", "description": "Download an allowed public HTTP URL as a bounded artifact; no session credentials."},
             {"name": "check_deliverables", "description": "Check public user-request output contracts locally; not official evaluation or semantic judgment."},
             {"name": "edit_file", "description": "Write a full project-relative file with backup."},
+            {"name": "create_docx", "description": "Create a new DOCX from paragraph/heading/bullet/table/page_break blocks; never overwrite, no model code execution."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
         ]
@@ -121,6 +122,9 @@ class ToolRegistry:
                 return {"status": "failure", "output": "paths must be a list", "data": {}, "risk_level": "low"}
             paths = [str(path) for path in raw_paths]
             return self.fs.read_files(paths).to_dict()
+        if action_type == "create_docx":
+            from .documents import create_docx
+            return create_docx(self.config, self.safety, str(action.get("path", "")), action.get("document")).to_dict()
         if action_type == "edit_file":
             return self.fs.write_file(
                 str(action.get("path", "")),

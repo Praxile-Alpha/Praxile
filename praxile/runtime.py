@@ -193,7 +193,7 @@ class AgentRuntime:
                         "data": {
                             **analysis,
                             "implementation_blocked": True,
-                            "blocked_action_types": ["edit_file", "run_command"],
+                            "blocked_action_types": ["edit_file", "create_docx", "run_command"],
                             "resume_policy": "Accept or edit the architecture-gate proposal, then start an explicit implementation task.",
                         },
                         "risk_level": "medium",
@@ -1194,7 +1194,7 @@ class AgentRuntime:
         action_type: str | None,
         observation: dict[str, Any],
     ) -> None:
-        if action_type not in {"edit_file", "run_command"}:
+        if action_type not in {"edit_file", "create_docx", "run_command"}:
             return
         if observation.get("status") not in {"success", "failure"}:
             return
@@ -1427,6 +1427,7 @@ class AgentRuntime:
             '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v2","source":"user_request","outputs":[],"state_equals":{"browser.session_active":true}}}\n'
             '{"type":"browser_download","url":"https://allowed-host.example/report.csv"}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
+            '{"type":"create_docx","path":"output/memo.docx","document":{"blocks":[{"type":"heading","text":"Memo","level":1},{"type":"paragraph","text":"Draft content"}]}}\n'
             '{"type":"run_command","command":"safe configured test/lint/build command"}\n'
             '{"type":"finish","status":"completed|needs_human|failed","summary":"short result"}\n\n'
             "Rules: inspect before editing; keep changes scoped; do not read sensitive files; do not edit .praxile; "

@@ -76,7 +76,31 @@ def main():
             resource.setrlimit(resource.RLIMIT_AS, (1024 ** 3, 1024 ** 3))
     path, options = Path(sys.argv[1]), json.loads(sys.argv[2])
     try:
-        result = {"status": "success", "data": extract(path, **options)}
+        if options.get("operation") == "create_docx":
+            import docx
+            from docx.shared import Pt
+            document = docx.Document()
+            document.styles["Normal"].font.name = "Calibri"
+            document.styles["Normal"].font.size = Pt(11)
+            spec = json.loads(path.read_text())
+            for block in spec["blocks"]:
+                kind = block["type"]
+                if kind == "heading":
+                    document.add_heading(block["text"], level=block.get("level", 1))
+                elif kind == "page_break":
+                    document.add_page_break()
+                elif kind == "table":
+                    table = document.add_table(rows=0, cols=len(block["rows"][0]))
+                    table.style = "Table Grid"
+                    for row in block["rows"]:
+                        for cell, text in zip(table.add_row().cells, row):
+                            cell.text = text
+                else:
+                    document.add_paragraph(block["text"], style="List Bullet" if kind == "bullet" else None)
+            document.save(path.parent / "result.docx")
+            result = {"status": "success"}
+        else:
+            result = {"status": "success", "data": extract(path, **options)}
     except ImportError:
         result = {"status": "failure", "error": "Missing document parser; install praxile[documents]."}
     except Exception as error:

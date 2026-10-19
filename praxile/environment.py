@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import signal
 import shlex
 import shutil
@@ -590,6 +591,26 @@ class ProjectEnv:
         restored: list[dict[str, Any]] = []
         actions = list(trajectory.get("actions", []))
         for action in reversed(actions):
+            if action.get("action_type") == "create_docx" and action.get("status") == "success":
+                data = (action.get("observation", {}) or {}).get("data", {}) or {}
+                rel = data.get("path")
+                if not isinstance(rel, str) or data.get("before_exists") is not False:
+                    continue
+                decision = self.fs.safety.check_path(rel, write=True)
+                target = self.root / rel
+                if (not decision.allowed or target.is_symlink()
+                        or not target.resolve().is_relative_to(self.root.resolve())):
+                    restored.append({"path": rel, "mode": "blocked"})
+                    continue
+                if target.is_file():
+                    with target.open("rb") as handle:
+                        current = handle.read(1024 * 1024 + 1)
+                    if len(current) > 1024 * 1024 or hashlib.sha256(current).hexdigest() != data.get("sha256"):
+                        restored.append({"path": rel, "mode": "skipped_modified"})
+                        continue
+                    target.unlink()
+                    restored.append({"path": rel, "mode": "deleted_new_file"})
+                continue
             if action.get("action_type") != "edit_file":
                 continue
             obs = action.get("observation", {})

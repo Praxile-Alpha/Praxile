@@ -93,7 +93,7 @@ class EvidenceExtractor:
     def _read_files(trajectory: dict[str, Any]) -> list[str]:
         read_files = []
         for action in trajectory.get("actions", []):
-            if action.get("action_type") in {"read_file", "search_files"} and action.get("status") == "success":
+            if action.get("action_type") in {"read_file", "read_document", "search_files"} and action.get("status") == "success":
                 path = action.get("input", {}).get("path")
                 if path:
                     read_files.append(str(path))

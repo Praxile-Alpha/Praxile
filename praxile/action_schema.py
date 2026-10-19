@@ -36,6 +36,7 @@ class ActionSchemaRegistry:
             "subtask_reflect": {"required": {"source_episode_id": str,
                 "ttl_steps": int, "requirements": dict}, "optional": {}},
             "edit_file": {"required": {"path": str, "content": str}, "optional": {}},
+            "create_docx": {"required": {"path": str, "document": dict}, "optional": {}},
             "run_command": {"required": {"command": str}, "optional": {}},
             "finish": {"required": {"summary": str}, "optional": {"status": str}},
         }
@@ -62,6 +63,12 @@ class ActionSchemaRegistry:
         for key, expected_type in schema["optional"].items():
             if key in action and action[key] is not None and not isinstance(action[key], expected_type):
                 errors.append(f"{action_type}.{key} must be {expected_type.__name__}")
+        if action_type == "create_docx":
+            from .document_spec import validate_docx_spec
+            try:
+                validate_docx_spec(action.get("document"))
+            except (ValueError, TypeError) as error:
+                errors.append(str(error))
         if action_type == "read_files":
             paths = action.get("paths")
             if isinstance(paths, list) and not all(isinstance(item, str) for item in paths):
