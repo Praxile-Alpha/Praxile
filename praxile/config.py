@@ -220,6 +220,8 @@ def default_config(project_root: Path) -> dict[str, Any]:
         "browser": {
             "enabled": False,
             "allow_interactions": False,
+            "allow_downloads": False,
+            "max_download_bytes": 10000000,
             "adapter": "playwright",
             "dev_server_url": None,
             "artifact_dir": ".praxile/experience/artifacts",

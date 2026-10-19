@@ -14,7 +14,7 @@ from .utils import utc_now
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
-MUTATING_ACTIONS = {"edit_file", "run_command", "browser_click", "browser_fill"}
+MUTATING_ACTIONS = {"edit_file", "run_command", "browser_click", "browser_fill", "browser_download"}
 
 
 class ToolRegistry:
@@ -68,6 +68,7 @@ class ToolRegistry:
             {"name": "browser_fill", "description": "Fill a selector in the current opt-in browser session."},
             {"name": "browser_assert_text", "description": "Assert exact visible element text in the current browser session."},
             {"name": "browser_capture", "description": "Capture current session state without reloading; not a visual quality judgment."},
+            {"name": "browser_download", "description": "Download an allowed public HTTP URL as a bounded artifact; no session credentials."},
             {"name": "check_deliverables", "description": "Check public user-request output contracts locally; not official evaluation or semantic judgment."},
             {"name": "edit_file", "description": "Write a full project-relative file with backup."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
@@ -132,6 +133,9 @@ class ToolRegistry:
                 selector=str(action.get("selector", "")), value=str(action.get("value", ""))).to_dict()
         if action_type == "finish":
             return {"status": "success", "output": action.get("summary", "finished"), "data": {}, "risk_level": "low"}
+        if action_type == "browser_download":
+            from .browser_download import download
+            return download(self.browser, str(action.get("url", ""))).to_dict()
         if action_type == "check_deliverables":
             from .deliverables import validate_contract, verify_deliverables
             try:

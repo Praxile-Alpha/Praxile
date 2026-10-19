@@ -13,6 +13,7 @@ from praxile.trajectory import TrajectoryLogger
 @pytest.mark.parametrize("action", [
     {"type": "browser_click", "selector": "button"},
     {"type": "browser_fill", "selector": "input", "value": "example"},
+    {"type": "browser_download", "url": "https://example.com/report.csv"},
     {"type": "edit_file", "path": "file.txt", "content": "example"},
     {"type": "run_command", "command": "python task.py"},
 ])

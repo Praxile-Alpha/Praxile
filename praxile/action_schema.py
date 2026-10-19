@@ -26,6 +26,7 @@ class ActionSchemaRegistry:
             "browser_fill": {"required": {"selector": str, "value": str}, "optional": {}},
             "browser_assert_text": {"required": {"selector": str, "value": str}, "optional": {}},
             "browser_capture": {"required": {}, "optional": {}},
+            "browser_download": {"required": {"url": str}, "optional": {}},
             "check_deliverables": {"required": {"contract": dict}, "optional": {}},
             "subtask_begin": {"required": {"goal": str}, "optional": {}},
             "subtask_end": {"required": {"claimed_outcome": str, "summary": str}, "optional": {}},

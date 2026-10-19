@@ -2,6 +2,33 @@
 
 R1 增量能力：同一个 AgentRuntime 的浏览器可以保持页面状态，连续导航、填写、点击、断言文本并截图。不表示已实现完整浏览器工作流、下载、人工接管或崩溃恢复。
 
+## 公开 URL 下载（后续增补）
+
+`browser_download` 支持明确 HTTP(S) URL 的流式 GET 下载，不依赖 Playwright：
+
+```json
+{"type":"browser_download","url":"https://example.com/report.csv"}
+```
+
+需显式配置 browser.enabled=true、browser.allow_downloads=true 和非空 allowed_hosts。
+max_download_bytes 默认 10000000，范围 1..100000000。初始 URL、每次重定向及最终 URL
+均检查域名和嵌入凭据；禁用环境代理，不携带浏览器 cookie、Authorization 或连接器凭据。
+HTTP 请求自身仍可能有服务端副作用，故 dry-run 阻止该动作。
+
+只写入项目内 artifact_dir/browser 的随机 `.bin` 文件，不采用服务器文件名，
+不自动执行或打开下载内容。大小超限、残缺响应、慢速超时及重定向被拒时不发布最终文件，
+临时文件清理；成功记录路径、字节数、SHA-256 和来源 host，不记录完整认证查询 URL。
+下载成功不代表内容安全或交付质量通过，需单独检查文件。
+
+实现使用分块 read1、socket timeout 和分块间截止检查，避免 read(n) 长时间等待整块。
+这不是硬实时期限或网络沙箱：DNS/系统调用、域名解析到的 IP 和站点自身权限仍需环境隔离。
+不支持登录态导出、点击触发下载、自动 cookie 转发、续传或下载内容安全扫描。
+Playwright 会话仍禁用隐式下载，原有安全边界不放宽。
+
+6 项本机 HTTP 资源测试覆盖成功、声明超限、实际超限、残缺、跨域重定向及慢速响应；
+单元测试覆盖 opt-in、空白名单、嵌入凭据、符号链接逃逸和真实 action-loop dry-run 分发。
+该增补不使路线图的完整浏览器下载/接管项自动完成。
+
 ## 启用
 
 安装 `praxile[browser]`，运行 `python -m playwright install chromium`。交互需要 Playwright >=1.48，旧版本缺 WebSocket 拦截能力时失败关闭会话。

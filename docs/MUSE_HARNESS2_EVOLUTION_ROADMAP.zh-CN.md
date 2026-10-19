@@ -179,6 +179,8 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 
 回归审计：新增浏览器修改动作后发现 dry-run 原先仅阻止 edit_file/run_command，已将 click/fill 纳入共用修改动作集合。8 项实际 action-loop 单元测试覆盖正常与 dry-run 分发差异；不启用模型、浏览器或 SQLite。导航仍是允许的网络读取，dry-run 不等于完全无副作用沙箱。
 
+下载增补：browser_download 为显式 opt-in 的公开 HTTP URL GET，逐跳白名单、流式大小限制、临时文件清理、项目内随机产物路径和 SHA-256 证据已接入 runtime；dry-run 阻止分发。6 项真实本机 HTTP 测试通过。无 cookie/登录态/点击下载，Playwright 隐式下载仍关闭；DNS/IP 隔离、认证导出、接管与完整浏览器工作流未完成，总项不勾选。见 BROWSER_SESSIONS.zh-CN.md。
+
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。
