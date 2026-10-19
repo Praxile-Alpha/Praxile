@@ -217,6 +217,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "project_memory_soft_limit_bytes": 200000,
             "shard_by": "month",
         },
+        "documents": {"renderer_executable": ""},
         "browser": {
             "enabled": False,
             "allow_interactions": False,
@@ -567,6 +568,13 @@ def deep_update(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
 
 def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None:
     errors: list[str] = []
+    documents = data.get("documents", {})
+    if not isinstance(documents, dict):
+        errors.append("documents: expected object")
+    else:
+        renderer = documents.get("renderer_executable", "")
+        if not isinstance(renderer, str) or (renderer and not Path(renderer).is_absolute()):
+            errors.append("documents.renderer_executable: expected empty string or trusted absolute executable path")
 
     def expect(path: str, expected: type | tuple[type, ...]) -> None:
         cur: Any = data

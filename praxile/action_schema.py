@@ -19,6 +19,7 @@ class ActionSchemaRegistry:
             "read_file": {"required": {"path": str}, "optional": {"max_chars": int, "start_line": int, "end_line": int}},
             "read_files": {"required": {"paths": list}, "optional": {"max_chars_each": int}},
             "read_document": {"required": {"path": str}, "optional": {"start": int, "limit": int, "sheet": str, "char_offset": int}},
+            "check_document_layout": {"required": {"path": str}, "optional": {"max_pages": int}},
             "batch": {"required": {"actions": list}, "optional": {}},
             "browser_open": {"required": {"url": str}, "optional": {}},
             "browser_screenshot": {"required": {"url": str}, "optional": {"name": str}},
@@ -69,6 +70,9 @@ class ActionSchemaRegistry:
                 validate_docx_spec(action.get("document"))
             except (ValueError, TypeError) as error:
                 errors.append(str(error))
+        if action_type == "check_document_layout" and "max_pages" in action:
+            if type(action["max_pages"]) is not int or not 1 <= action["max_pages"] <= 2000:
+                errors.append("check_document_layout.max_pages must be an integer in [1, 2000]")
         if action_type == "read_files":
             paths = action.get("paths")
             if isinstance(paths, list) and not all(isinstance(item, str) for item in paths):
@@ -115,6 +119,10 @@ class ActionSchemaRegistry:
             optional = ", ".join(schema["optional"].keys()) or "(none)"
             lines.append(f"- {action_type}: required={required}; optional={optional}")
         lines.append(docx_spec_prompt())
+        lines.append("check_document_layout renders DOCX using an opt-in trusted renderer; max_pages checks an explicit page limit. "
+                     "Use before claiming a page requirement is met. Missing renderer is not a pass. "
+                     "If over limit, shorten content and create a revised document at a new path, then check again. "
+                     "It does not verify visual or factual quality.")
         lines.append("edit_file writes UTF-8 text only. Never use it for .docx/.xlsx/.pptx/.pdf, "
                      "including base64 strings. Use create_docx for Word output.")
         lines.append("read_document pagination: start is 1-based; limit is 1..20 (default 5); "

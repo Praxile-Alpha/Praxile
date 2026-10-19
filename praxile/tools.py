@@ -74,6 +74,7 @@ class ToolRegistry:
             {"name": "edit_file", "description": "Write UTF-8 text with backup, never DOCX/XLSX/PPTX/PDF bytes or base64."},
             {"name": "create_docx", "description": "Create a new DOCX from paragraph/heading/bullet/table/page_break blocks; never overwrite, no model code execution."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
+            {"name": "check_document_layout", "description": "Opt-in DOCX rendering and page-count check; not visual quality verification."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
         ]
 
@@ -116,6 +117,10 @@ class ToolRegistry:
             return read_document(self.config, self.safety, str(action.get("path", "")),
                 start=action.get("start", 1), limit=action.get("limit", 5),
                 sheet=action.get("sheet"), char_offset=action.get("char_offset", 0)).to_dict()
+        if action_type == "check_document_layout":
+            from .document_layout import check_layout
+            return check_layout(self.config, self.safety, str(action.get("path", "")),
+                max_pages=action.get("max_pages")).to_dict()
         if action_type == "read_files":
             raw_paths = action.get("paths", [])
             if not isinstance(raw_paths, list):

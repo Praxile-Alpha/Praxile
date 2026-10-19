@@ -100,6 +100,37 @@ R1 专业交付能力，也不能宣称 benchmark 得分提升。
 和修订闭环接入 runtime，而不是把结束后的人工检查写成已实现的 Agent 能力。
 公开摘要见 `results/jobbench-inventory-smoke-20261019.json`；不发布 rubric 原文。
 
+## Runtime 页数检查
+
+`check_document_layout` 已接入 Action Schema、ToolRegistry 和路径权限检查。
+先安装 `praxile[documents]`，再由用户在配置中显式指定受信任的 LibreOffice：
+
+```json
+{"documents":{"renderer_executable":"/absolute/path/to/soffice"}}
+```
+
+默认空字符串禁用，模型动作不能提供执行路径。调用示例：
+
+```json
+{"type":"check_document_layout","path":"output/checklist.docx","max_pages":1}
+```
+
+返回真实渲染 PDF 页数、输入/PDF 摘要、page_limit_met；超页为 failure，未
+指定上限只报告页数。上限来源标记为 action_argument，不伪装成用户确认的契约。
+提示模型缩短内容、新建修订路径、再次检查；不覆盖原文件，不静默缩字号。
+已用真实两页 fixture 验证失败及一页修订通过；上一轮真实 checklist 的离线
+复查同样返回 pages=5、page_limit_met=false，未调用模型、未修改原始产物。
+
+当前仅 POSIX；临时快照 10 MB，ZIP 展开声明上限 50 MB/2000 条目，拒绝宏、
+嵌入对象、外部关系与 XML 实体；固定子进程 45 秒超时后回收进程组，CPU 30 秒、
+单文件 20 MB，Linux 地址空间 2 GB。使用独立 LibreOffice profile，子进程
+不继承模型 API Key。此防御不是网络或 OS 沙箱；应在隔离容器中处理不可信文档，
+信任配置的可执行文件。PDF 在临时目录中检查后删除，尚不提供页面图像回传。
+
+本动作只验证页数，不检查表格断行、视觉质量或事实正确，也不是官方评分。
+尚未接入 Harbor renderer 配置透传、用户约束强制完成门禁或真实模型自动修订
+验收；因此不能把此工具验收称作完整自主修订闭环。
+
 ## 模型输出截断诊断
 
 OpenAI-compatible 的 `finish_reason` 与 Anthropic 的 `stop_reason` 统一保留为
