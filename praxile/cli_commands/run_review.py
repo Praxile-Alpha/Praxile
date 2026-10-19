@@ -7,6 +7,19 @@ def cmd_run(args: argparse.Namespace, project_root: Path) -> int:
     if not args.task and not args.resume:
         raise ValueError("run requires a task, or --resume <TASK_ID>")
     config, store = load(project_root)
+    args.bound_deliverable_contract = None
+    contract_path = getattr(args, "deliverable_contract", None)
+    if contract_path:
+        from ..deliverables import validate_contract
+        path = (project_root / contract_path).resolve(strict=True)
+        if not path.is_file():
+            raise ValueError("deliverable contract must be a regular file")
+        with path.open("rb") as handle:
+            content = handle.read(65537)
+        if len(content) > 65536:
+            raise ValueError("deliverable contract exceeds 64 KiB")
+        args.bound_deliverable_contract = json.loads(content)
+        validate_contract(args.bound_deliverable_contract)
     route_overrides = apply_run_overrides(args, config)
     store.initialize(config)
     workspace_mode = getattr(args, "workspace_mode", None) or str(config.get("workspace", "default_mode", default="in-place"))
@@ -21,6 +34,7 @@ def cmd_run(args: argparse.Namespace, project_root: Path) -> int:
         spec_files=args.spec or None,
         parallel_readonly_explore=getattr(args, "parallel_readonly_explore", None),
         use_experience=not bool(getattr(args, "without_experience", False)),
+        deliverable_contract=args.bound_deliverable_contract,
     )
     print(f"Task: {trajectory['task_id']}")
     print(f"Status: {trajectory['result']['status']}")

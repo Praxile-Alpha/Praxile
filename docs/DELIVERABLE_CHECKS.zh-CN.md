@@ -4,6 +4,33 @@
 
 ## Contract 与 Runtime Action
 
+### 调用方绑定与最终复验
+
+```sh
+praxile run "生成报告" --deliverable-contract requirements.json
+```
+
+JSON 文件使用本文 V1 或 V2 契约格式，路径相对项目根目录解析（也可显式绝对路径），
+限制为 64 KiB 常规文件。CLI 在调度原地/隔离工作区前读取并验证，运行期间不重读
+可被 Agent 修改的文件。库调用可传 `AgentRuntime.run(..., deliverable_contract=contract)`，
+共用 RunService 透传该参数。Web Console 暂无此输入控件。
+
+运行时复制并规范化契约，将副本及 SHA-256 写入 trajectory，随既有 checkpoint 保存，
+并将要求提供给模型。check_deliverables 请求不能替换/弱化绑定契约；返回给调用方的
+副本也不能修改内部绑定。resume 自动恢复原契约，显式提供不同契约或更改原任务文本
+会被拒绝，需开启新任务。无绑定的旧任务和模型自行提出的检查保持兼容。
+
+结束时 Runtime 独立执行一次绑定要求检查，不依赖模型是否调用过检查工具。
+若模型声明 completed 而检查失败/未知/安全策略拒绝，则结果降为 needs_human。
+该自动检查以 deliverable_verification 动作保存，不计为模型工具调用；报告标记
+contract_binding=run_argument，未绑定则 model_proposed。取消的未完成任务不因此变成成功。
+
+绑定证明“本次调用方明确提供的要求未被模型替换”，并非带签名的人工审批，
+不授予读敏感文件/越权操作权限，也不证明自然语言要求被完整翻译进契约。
+V2 的前后状态变化、可信观测持久化和官方评分仍是独立未完成项。
+验证含 CLI 分发、不可变副本、模型弱化拒绝、终态强制复验与 resume 冻结；
+完整快速单元测试为 458 passed / 6 skipped / 10 deselected。
+
 ### V2 终态约束
 
 V1 文件契约与报告保持原样。V2 增加必填 `state_equals`（1 到 20 条精确终态要求），

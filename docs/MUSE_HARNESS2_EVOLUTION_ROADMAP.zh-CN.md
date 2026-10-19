@@ -169,6 +169,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 终态契约增补：Deliverable Contract V2 支持 state_equals，可与文件要求共同检查或表达纯状态交付；ToolRegistry 使用当前浏览器观测，不采用模型自报状态，未知/类型不符均不通过。33 项交付测试和 455 项快速单元测试通过。V1 不变；前后允许变化范围、用户可信确认与持久化观测来源尚缺，明确不宣称状态转换验证，完整项不勾选。
 
+调用方契约绑定增补：run --deliverable-contract 及 Runtime 参数可冻结公开契约副本/摘要，经轨迹和 checkpoint 保存；模型不能弱化、resume 不能换契约或任务，结束时强制复验，不满足则 completed 降为 needs_human。原地和隔离 CLI 路径均传递绑定。458 项快速单元测试通过。该机制是明确调用方输入，不等于签名人工审批；Web 输入控件、前后允许变化及完整来源证据链仍缺，总项继续未勾选。
+
 回归审计：新增浏览器修改动作后发现 dry-run 原先仅阻止 edit_file/run_command，已将 click/fill 纳入共用修改动作集合。8 项实际 action-loop 单元测试覆盖正常与 dry-run 分发差异；不启用模型、浏览器或 SQLite。导航仍是允许的网络读取，dry-run 不等于完全无副作用沙箱。
 
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。

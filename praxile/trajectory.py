@@ -169,6 +169,7 @@ class TrajectoryLogger:
             "architecture_gate",
             "dry_run_skip_tests",
             "run_test",
+            "deliverable_verification",
             "model_unavailable",
             "model_response",
             "finish",

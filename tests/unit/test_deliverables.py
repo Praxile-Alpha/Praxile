@@ -151,3 +151,18 @@ def test_tool_observation_failure_is_unknown(tmp_path):
         "contract": state_contract(**{"browser.session_active": False})}, task_id="t", step=1)
     assert result["status"] == "failure"
     assert result["data"]["state_check"]["checks"][0]["status"] == "unknown"
+
+
+def test_bound_contract_is_copied_and_cannot_be_weakened(tmp_path):
+    tools = ToolRegistry(Config(default_config(tmp_path), ProjectPaths(tmp_path)))
+    request = contract(required_fields=["summary"])
+    tools.bind_deliverable_contract(request)
+    request["outputs"][0]["required"] = False
+    exposed = tools.deliverable_contract
+    exposed["outputs"] = []
+    result = tools.execute({"type": "check_deliverables", "contract": request}, task_id="t", step=1)
+    assert result["status"] == "blocked"
+    assert tools.deliverable_contract["outputs"] == contract(required_fields=["summary"])["outputs"]
+    result = tools.execute({"type": "check_deliverables", "contract": tools.deliverable_contract}, task_id="t", step=2)
+    assert result["status"] == "failure"
+    assert result["data"]["contract_binding"] == "run_argument"

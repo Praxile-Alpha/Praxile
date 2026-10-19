@@ -432,6 +432,7 @@ def run_in_isolated_workspace(
             max_steps=args.max_steps,
             dry_run=args.dry_run,
             spec_files=args.spec or None,
+            deliverable_contract=getattr(args, "bound_deliverable_contract", None),
             parallel_readonly_explore=getattr(args, "parallel_readonly_explore", None),
         )
         diff_summary = workspace_diff_summary(config.paths.root, record.root)

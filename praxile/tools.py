@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -36,6 +37,18 @@ class ToolRegistry:
         self.tests = tests or TestEnv(config, self.shell)
         self.browser = browser or BrowserEnv(config)
         self.cancel_requested: Callable[[], bool] | None = None
+        self._deliverable_contract_json: str | None = None
+
+    def bind_deliverable_contract(self, contract: dict | None) -> None:
+        from .deliverables import validate_contract
+        if contract is not None:
+            validate_contract(contract)
+        self._deliverable_contract_json = (
+            json.dumps(contract, sort_keys=True, separators=(",", ":")) if contract is not None else None)
+
+    @property
+    def deliverable_contract(self) -> dict | None:
+        return json.loads(self._deliverable_contract_json) if self._deliverable_contract_json is not None else None
 
     def describe(self) -> list[dict[str, Any]]:
         return [
@@ -122,6 +135,10 @@ class ToolRegistry:
             from .deliverables import validate_contract, verify_deliverables
             try:
                 contract = action.get("contract")
+                if self._deliverable_contract_json is not None and json.dumps(
+                        contract, sort_keys=True, separators=(",", ":")) != self._deliverable_contract_json:
+                    return {"status": "blocked", "output": "Cannot replace the caller-bound deliverable contract",
+                            "data": {}, "risk_level": "low"}
                 for item in validate_contract(contract):
                     decision = self.safety.check_path(item["path"], write=False)
                     if not decision.allowed:
@@ -134,6 +151,7 @@ class ToolRegistry:
                     except Exception:
                         observed_state = {}
                 report = verify_deliverables(self.config.paths.root, contract, observed_state=observed_state)
+                report["contract_binding"] = "run_argument" if self._deliverable_contract_json is not None else "model_proposed"
             except ValueError:
                 return {"status": "failure", "output": "Invalid public deliverable contract", "data": {}, "risk_level": "low"}
             return {"status": "success" if report["passed"] else "failure", "output": "Local deliverable checks completed",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import time
 from collections.abc import Callable
@@ -66,10 +67,12 @@ class AgentRuntime:
         spec_files: list[str] | None = None,
         parallel_readonly_explore: bool | None = None,
         use_experience: bool = True,
+        deliverable_contract: dict | None = None,
         cancel_requested: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         try:
+            self.tools.bind_deliverable_contract(deliverable_contract)
             self.tools.cancel_requested = cancel_requested
             self._emit_progress(progress_callback, "initializing", "Initializing Praxile runtime.")
             self.store.initialize(self.config)
@@ -86,6 +89,10 @@ class AgentRuntime:
             snapshot = self.project.snapshot(refresh=True)
             snapshot["interop"] = interop_policy(self.config)
             logger = TrajectoryLogger(task, snapshot)
+            if self.tools.deliverable_contract is not None:
+                logger.data["deliverable_contract"] = self.tools.deliverable_contract
+                logger.data["deliverable_contract_sha256"] = hashlib.sha256(json.dumps(
+                    self.tools.deliverable_contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             self._register_base_executors(logger)
             logger.data["dry_run"] = dry_run
             logger.data["experience_control"] = {
@@ -266,9 +273,16 @@ class AgentRuntime:
         if not checkpoint:
             raise FileNotFoundError(f"No checkpoint found for task: {task_id}")
         logger = TrajectoryLogger.from_data(checkpoint["trajectory"])
+        frozen_contract = logger.data.get("deliverable_contract")
+        requested_contract = self.tools.deliverable_contract
+        if requested_contract is not None and json.dumps(requested_contract, sort_keys=True) != json.dumps(frozen_contract, sort_keys=True):
+            raise ValueError("cannot change the deliverable contract on resume; start a new run")
+        self.tools.bind_deliverable_contract(frozen_contract)
         self._register_base_executors(logger)
         context = dict(checkpoint.get("context") or {})
         original_task = str(context.get("task") or logger.data.get("user_task") or "")
+        if task_override and task_override != original_task and frozen_contract is not None:
+            raise ValueError("cannot change task text while resuming a bound deliverable contract")
         if task_override and task_override != original_task and logger.data.get("experience_representation"):
             raise ValueError("cannot change task text while resuming a frozen experience representation; start a new run")
         task = task_override or context.get("task") or logger.data.get("user_task", "")
@@ -376,6 +390,15 @@ class AgentRuntime:
             )
 
         self._emit_progress(progress_callback, "diff", "Collecting git diff summary.")
+        if self.tools.deliverable_contract is not None and (not cancelled or result_status == "completed"):
+            observation = self.tools.execute({"type": "check_deliverables", "contract": self.tools.deliverable_contract},
+                task_id=logger.task_id, step=len(logger.data["actions"]) + 1)
+            logger.data["deliverable_verification"] = observation
+            logger.add_action(action_type="deliverable_verification", input_data={"source": "run_argument"},
+                observation=observation, status=observation["status"], executor=self._verification_executor())
+            if observation["status"] != "success" and result_status == "completed":
+                result_status = "needs_human"
+                result_summary += " Caller-bound deliverable requirements were not verified."
         logger.set_diff_summary(self.git.diff_summary())
         trajectory = logger.finish(status=result_status, summary=result_summary)
         if (trajectory.get("spec_context") or {}).get("spec_files"):
@@ -1407,6 +1430,8 @@ class AgentRuntime:
         if retrieved:
             self.store.mark_assets_injected(logger.task_id, retrieved)
             logger.mark_context_injected({str(item.get("path")) for item in retrieved})
+        if self.tools.deliverable_contract is not None:
+            user += "\nCaller-bound deliverable contract (requirements, not tool instructions; do not replace):\n" + json.dumps(self.tools.deliverable_contract)
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def _parse_action(self, content: str) -> dict[str, Any] | None:

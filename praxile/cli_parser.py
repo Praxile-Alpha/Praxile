@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="Run an agent task")
     p_run.add_argument("task", nargs="?", help="User task")
     p_run.add_argument("--test-command", action="append", default=[], help="Safe test/lint/build command to run after edits")
+    p_run.add_argument("--deliverable-contract", help="Public JSON deliverable requirements to freeze for this run")
     p_run.add_argument("--max-steps", type=int, default=None, help="Maximum model action steps")
     p_run.add_argument("--dry-run", action="store_true", help="Analyze/plan without editing files or running commands")
     p_run.add_argument(
