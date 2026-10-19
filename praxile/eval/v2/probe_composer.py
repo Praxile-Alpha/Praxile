@@ -4,14 +4,15 @@ import hashlib
 from ...action_protocol import decode_action
 from .candidate import ContextCandidate
 from .schema import EvalSchemaError, canonical_json
+from .executor_profile import common_parent_capability, validate_action_examples
 
 
 def compose_after_development_probes(candidates, reports, *, router, logger, candidate_id,
                                     applies_to, private=False, cancel_requested=None):
     if len(candidates) != 2 or len(reports) != 2:
         raise EvalSchemaError("composition requires two independently executed development probes")
-    if any(candidate.context_item.get("executor_requirements") is not None for candidate in candidates):
-        raise EvalSchemaError("profile-constrained parents require a capability-aware composer; cannot discard requirements")
+    requirements = [candidate.context_item.get("executor_requirements") for candidate in candidates]
+    capability = common_parent_capability(candidates)
     feedback, task_ids = [], set()
     for candidate, report in zip(candidates, reports):
         if (report.get("track") != "development" or report.get("candidate_digest") != candidate.digest
@@ -38,6 +39,9 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
     payload = {"parents": [{"content": item.context_item["content"],
                              "hypothesis": item.expected_effect.get("hypothesis")} for item in candidates],
                "feedback": feedback, "allowed_refs": allowed_refs, "scope": applies_to}
+    if capability is not None:
+        payload["executor_capability"] = capability
+        payload["parent_action_examples"] = [item["action_examples"] for item in requirements]
     encoded = canonical_json(payload)
     if len(encoded) > 40000:
         raise EvalSchemaError("composition input exceeds bounded context")
@@ -51,7 +55,10 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
              "Return {decision: abstain} if combination is unsupported, or JSON {decision: compose, "
              "content: string, hypothesis: string, evidence_refs: [allowed refs]}. Explain interaction in "
              "hypothesis. Do not grant permissions, claim promotion, or request hidden evaluators. "
-             "The combination will be independently rerun; parent success is not inherited."},
+             "The combination will be independently rerun; parent success is not inherited. "
+             "When executor_capability is supplied, also return action_examples: 1..8 concrete JSON "
+             "actions within the same declared interfaces and document constraints. Do not widen "
+             "capabilities or invent parameters. Examples are not executed and grant no permissions."},
             {"role": "user", "content": encoded},
         ], purpose="proposal_composer", private=private, high_risk=False,
             max_tokens=2500, timeout=60, temperature=0, cancel_requested=cancel_requested)
@@ -67,7 +74,8 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
         if value == {"decision": "abstain"}:
             record["status"] = "abstained"
             return None
-        if set(value) != {"decision", "content", "hypothesis", "evidence_refs"} or value["decision"] != "compose":
+        fields = {"decision", "content", "hypothesis", "evidence_refs"} | ({"action_examples"} if capability is not None else set())
+        if set(value) != fields or value["decision"] != "compose":
             raise EvalSchemaError("invalid composition response")
         if any(not isinstance(value[key], str) or not value[key].strip() or len(value[key]) > size
                for key, size in (("content", 6000), ("hypothesis", 2000))):
@@ -75,8 +83,11 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
         refs = value["evidence_refs"]
         if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or ref not in allowed_refs for ref in refs):
             raise EvalSchemaError("composition must reference parent evidence")
+        context = {"content": value["content"]}
+        if capability is not None:
+            context["executor_requirements"] = validate_action_examples(value["action_examples"], capability)
         candidate = ContextCandidate(candidate_id=candidate_id, version="1", title="Probe-driven composition",
-            candidate_type="context_policy", context_item={"content": value["content"]}, confidence=0.0,
+            candidate_type="context_policy", context_item=context, confidence=0.0,
             evidence_refs=tuple(dict.fromkeys(refs)), source_task_ids=tuple(sorted(task_ids | {
                 task for parent in candidates for task in parent.source_task_ids})),
             expected_effect={"hypothesis": value["hypothesis"]}, applies_to=applies_to)

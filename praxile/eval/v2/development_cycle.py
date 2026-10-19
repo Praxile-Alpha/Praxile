@@ -5,6 +5,7 @@ import re
 from ...utils import file_lock, read_json, write_json
 from .candidate import ContextCandidate
 from .cycle_usage import cycle_usage
+from .executor_profile import common_parent_capability
 from .experiment import ControlledABExperiment, _write_once
 from .schema import EvalSchemaError
 
@@ -22,12 +23,15 @@ class DevelopmentContextCycle:
             raise EvalSchemaError("unsafe development cycle ID")
         if len(candidates) != 2:
             raise EvalSchemaError("development cycle requires exactly two candidates")
+        parent_capability = common_parent_capability(candidates)
         adaptive = composer is not None
         if adaptive and (composed_candidate is not None or not isinstance(composer_identity, dict) or not composer_identity):
             raise EvalSchemaError("probe-driven composition requires a frozen composer identity and no preset composition")
         if not adaptive and (composed_candidate is None or composer_identity is not None):
             raise EvalSchemaError("provide either a preset composition or a composer")
         versions = [*candidates] if adaptive else [*candidates, composed_candidate]
+        if parent_capability is not None:
+            common_parent_capability(versions)
         if len({item.candidate_id for item in versions}) != len(versions):
             raise EvalSchemaError("composition must have a distinct candidate ID")
         task_ids = {task.task_id for task in task_set.tasks}
@@ -80,6 +84,8 @@ class DevelopmentContextCycle:
                     if frozen["candidate"] is None:
                         break
                     composed_candidate = ContextCandidate.from_dict(frozen["candidate"])
+                    if parent_capability is not None:
+                        common_parent_capability([*candidates, composed_candidate])
                     if (composed_candidate.candidate_id in {item.candidate_id for item in candidates}
                             or set(composed_candidate.source_task_ids) & set(heldout_task_ids)
                             or not isinstance(composed_candidate.expected_effect.get("hypothesis"), str)

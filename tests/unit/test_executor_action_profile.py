@@ -51,3 +51,17 @@ def test_native_candidate_cannot_enter_different_executor(tmp_path):
     with pytest.raises(EvalSchemaError, match="selected adapter"):
         ControlledABExperiment(tmp_path, None).run(None, adapter=FixtureAgentAdapter(), evaluator=None,
             baseline_policy=AdapterPolicy(policy_id="base"), candidate=candidate, model={}, experiment_id="test")
+
+
+def test_cycle_rejects_precomposed_candidate_that_drops_parent_capabilities(tmp_path):
+    from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
+    from praxile.eval.v2.candidate import ContextCandidate
+    from praxile.eval.v2.development_cycle import DevelopmentContextCycle
+    candidates = [ContextCandidate(candidate_id=name, version="1", title=name, candidate_type="context_policy",
+        context_item={"content": name, **({"executor_requirements": validate_action_examples([action()], profile_context(profile()))}
+                                        if name != "composition" else {})}, confidence=0,
+        evidence_refs=("event:e",), expected_effect={"hypothesis": name}) for name in ("a", "b", "composition")]
+    with pytest.raises(EvalSchemaError, match="mix"):
+        DevelopmentContextCycle(tmp_path, None).run(None, candidates=candidates[:2], composed_candidate=candidates[2],
+            development_task_ids=["dev"], heldout_task_ids=["test"], cycle_id="cycle", model={},
+            adapter=FixtureAgentAdapter(), evaluator=None, baseline_policy=AdapterPolicy(policy_id="base"))

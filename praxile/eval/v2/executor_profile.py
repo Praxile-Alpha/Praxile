@@ -42,3 +42,20 @@ def validate_action_examples(examples, capability):
     return {"profile_digest": capability["digest"], "executor": capability["profile"]["executor"],
             "profile": deepcopy(capability["profile"]), "action_examples": deepcopy(examples),
             "schema_validated": True, "execution_verified": False, "permission_granted": False}
+
+
+def common_parent_capability(candidates):
+    requirements = [candidate.context_item.get("executor_requirements") for candidate in candidates]
+    if not any(item is not None for item in requirements):
+        return None
+    if not all(isinstance(item, dict) for item in requirements):
+        raise EvalSchemaError("cannot mix constrained and unconstrained parents")
+    capabilities = []
+    for item in requirements:
+        current = profile_context(item.get("profile"))
+        if validate_action_examples(item.get("action_examples"), current) != item:
+            raise EvalSchemaError("parent executor requirement validation or digest changed")
+        capabilities.append(current)
+    if len({item["digest"] for item in capabilities}) != 1:
+        raise EvalSchemaError("composition requires identical parent executor capabilities")
+    return capabilities[0]
