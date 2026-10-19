@@ -1,0 +1,50 @@
+{
+  "schema_version": "praxile.public_candidate_design_evidence.v1",
+  "date": "2026-10-19",
+  "implementation_commit": "6d89601",
+  "model": "MiniMax-M3.1-Flash",
+  "source_result_sha256": "351865f7c0cf274d95d72ad526e4f877d1d0388331e42a97f84d8641be248ad6",
+  "public_observation_count": 7,
+  "source_membership": "caller_declared_development",
+  "entrypoint": "run_native_candidate_design",
+  "design_id": "office-flash-durable-001",
+  "max_output_tokens": 8000,
+  "request_timeout_seconds": 60,
+  "supervisor_timeout_seconds": 120,
+  "transport_max_retries": 0,
+  "fallbacks": [],
+  "status": "transport_read_timeout",
+  "transport_evidence": {
+    "schema_version": "praxile.http_attempts.v1",
+    "transport": "urllib",
+    "max_retries": 0,
+    "attempt_count": 1,
+    "attempts": [{"attempt": 1, "status": "timeout", "status_code": null, "elapsed_ms": 60124}],
+    "scope": "non_streaming_transport_call",
+    "failed_attempt_usage_unknown": true
+  },
+  "supervision": {
+    "status": "failed",
+    "returncode": 1,
+    "worker_reaped": true,
+    "elapsed_seconds": 60.315726,
+    "remote_request_cancelled": null,
+    "remote_usage_known": false
+  },
+  "manifest_sha256": "b57185e964166b58ee0fc25383c8088277dbe1326ab2c6bcaa9deab5dedbc2ae",
+  "trajectory_sha256": "ac69e5242b7aa3599d88d0e8b0d934a4f3c8c3fe52858eeaa7d4ccfdaa0d5171",
+  "request_intent_sha256": "f79b22bfc40e84dadad0bc3d8aeb2e0958bc47e21e759eafb6ea3242da7e5ed7",
+  "input_tokens": null,
+  "output_tokens": null,
+  "cost_usd": null,
+  "candidate_count": 0,
+  "experiments_started": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "One observed client HTTP attempt does not establish provider receipt or billing.",
+    "Failure is not a model abstention and does not evaluate candidate quality.",
+    "The HTTP timeout occurred before the outer deadline; this run did not exercise forced termination.",
+    "No raw reasoning, credential, evaluator rubric or response body is published.",
+    "No further paid request was issued after this failure."
+  ]
+}

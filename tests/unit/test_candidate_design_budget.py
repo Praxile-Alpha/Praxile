@@ -120,3 +120,28 @@ def test_checkpoint_write_failure_prevents_request(setup_run, monkeypatch):
         module.run_candidate_design(config, None, **kwargs)
     assert calls == []
     assert (root / "request-intent.json").exists()
+
+
+def test_explicit_request_timeout_is_forwarded_frozen_and_not_changed_on_resume(setup_run, monkeypatch):
+    config, kwargs, calls, root = setup_run
+    def generate(**options):
+        calls.append(options["request_timeout_seconds"])
+        return {"decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}
+    monkeypatch.setattr(module, "design_development_candidates", generate)
+    module.run_candidate_design(config, None, **kwargs, request_timeout_seconds=120)
+    assert json.loads((root / "manifest.json").read_text())["generation_budget"] == {
+        "max_output_tokens": 4000, "timeout_seconds": 120}
+    module.run_candidate_design(config, None, **kwargs, request_timeout_seconds=120, resume=True)
+    for value in (None, 60, 180):
+        with pytest.raises(EvalSchemaError):
+            module.run_candidate_design(config, None, **kwargs, request_timeout_seconds=value, resume=True)
+    assert calls == [120]
+
+
+@pytest.mark.parametrize("value", [True, 0, 301, 1.5, "120"])
+def test_invalid_timeout_rejected_before_evidence(setup_run, monkeypatch, value):
+    config, kwargs, calls, root = setup_run
+    monkeypatch.setattr(module, "collect_development_evidence", lambda *a, **k: pytest.fail("source accessed"))
+    with pytest.raises(EvalSchemaError, match="request timeout"):
+        module.run_candidate_design(config, None, **kwargs, request_timeout_seconds=value)
+    assert calls == [] and not root.exists()

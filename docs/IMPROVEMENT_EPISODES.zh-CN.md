@@ -262,6 +262,21 @@ praxile eval design-native-context /absolute/path/to/native-result.json \
 不会因新增 CLI 被自动迁移。已完成用真实投影及设计解析器的离线入口测试，尚未通过
 此新 CLI 重新进行付费模型验收。
 
+后续真实持久化入口验收：在 `6d89601` 使用 `run_native_candidate_design`，固定同一
+7 条公开 Office 证据、M3.1 Flash、8000 输出上限、零传输重试、无 fallback 和
+120 秒外层截止。一次 HTTP 尝试在 60.124 秒读取超时，进程 60.316 秒失败退出并
+被回收；请求意图、manifest、失败轨迹都保留。没有候选，usage/费用未知，不记作
+模型 NO_ENTRY。外层未到截止，所以本次不是强杀测试。公开摘要见
+`results/office-flash-durable-design-20261019.json`。失败后未追加付费请求。
+
+为使推理模型的等待预算可显式调整，两种设计 CLI 新增 `--request-timeout 120`
+（整数 1..300 秒）。省略仍为 60；底层生成器参数为 `request_timeout_seconds`。
+显式值进入 v2 manifest 的 generation_budget.timeout_seconds，并传到实际 router
+调用与轨迹；resume 改变预算拒绝，须新 design ID。旧隐式 v1 以及已显式设置输出
+预算的 v2 manifest 字段不变。该选项仍是单次请求超时，不是总截止，也不会关闭
+内部重试。需要总截止仍应使用 supervisor，例如单请求 120 秒、进程 150 秒；
+这是下一次实验配置示例，并非已经完成更长预算的验收。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

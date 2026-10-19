@@ -11,7 +11,8 @@ from .schema import EvalSchemaError
 
 def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                          development_task_ids, heldout_task_ids, applies_to, private=False, resume=False,
-                         executor_profile=None, max_output_tokens=None):
+                         executor_profile=None, max_output_tokens=None, request_timeout_seconds=None):
+    _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
         raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
     # Verify source membership before constructing the model request.
@@ -20,13 +21,16 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
     return _run_design(config, bundle, design_id=design_id,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
-        executor_profile=executor_profile, max_output_tokens=max_output_tokens)
+        executor_profile=executor_profile, max_output_tokens=max_output_tokens,
+        request_timeout_seconds=request_timeout_seconds)
 
 
 def run_native_candidate_design(config, result_path, *, expected_sha256, track,
                                 design_id, development_task_ids, heldout_task_ids, applies_to,
-                                private=False, resume=False, executor_profile=None, max_output_tokens=None):
+                                private=False, resume=False, executor_profile=None, max_output_tokens=None,
+                                request_timeout_seconds=None):
     from .native_development_evidence import collect_native_evidence
+    _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
         raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
     bundle = collect_native_evidence(result_path, expected_sha256=expected_sha256,
@@ -34,20 +38,27 @@ def run_native_candidate_design(config, result_path, *, expected_sha256, track,
     return _run_design(config, bundle, design_id=design_id,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
-        executor_profile=executor_profile, max_output_tokens=max_output_tokens)
+        executor_profile=executor_profile, max_output_tokens=max_output_tokens,
+        request_timeout_seconds=request_timeout_seconds)
+
+
+def _validate_timeout(value):
+    if value is not None and (type(value) is not int or not 1 <= value <= 300):
+        raise EvalSchemaError("candidate request timeout must be an integer in [1, 300]")
 
 
 def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
-                applies_to, private, resume, executor_profile, max_output_tokens):
+                applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds):
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
                 "source_evidence": bundle, "designer": {**identity, "implementation": "praxile.candidate_designer.v2"},
                 "development_task_ids": sorted(set(development_task_ids)),
                 "heldout_task_ids": sorted(set(heldout_task_ids)), "applies_to": applies_to}
-        if max_output_tokens is not None:
+        if max_output_tokens is not None or request_timeout_seconds is not None:
             plan.update(schema_version="praxile.candidate_design_run.v2",
-                        generation_budget={"max_output_tokens": max_output_tokens, "timeout_seconds": 60})
+                        generation_budget={"max_output_tokens": max_output_tokens if max_output_tokens is not None else 4000,
+                                           "timeout_seconds": request_timeout_seconds if request_timeout_seconds is not None else 60})
         if executor_profile is not None:
             from .executor_profile import profile_context
             plan["executor_capability"] = profile_context(executor_profile)
@@ -83,6 +94,7 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                     development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
                     applies_to=applies_to, design_id=design_id, router=router, logger=logger,
                     private=private, executor_profile=executor_profile,
+                    request_timeout_seconds=request_timeout_seconds if request_timeout_seconds is not None else 60,
                     max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {
                         "decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}
             finally:

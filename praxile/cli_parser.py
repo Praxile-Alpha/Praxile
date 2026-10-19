@@ -618,6 +618,8 @@ def build_parser() -> argparse.ArgumentParser:
         design_parser.add_argument("--executor-profile", help="Versioned native action capability JSON; checks draft examples, grants no permissions")
         design_parser.add_argument("--max-output-tokens", type=int,
                           help="Explicit frozen designer output budget, 256..16384; omitted preserves legacy 4000")
+        design_parser.add_argument("--request-timeout", type=int,
+                          help="Frozen per-request timeout in seconds, 1..300; default 60, not a total deadline")
         design_parser.add_argument("--development-task-id", action="append", required=True)
         design_parser.add_argument("--heldout-task-id", action="append", required=True)
         design_parser.add_argument("--private", action="store_true")

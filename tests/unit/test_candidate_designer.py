@@ -30,6 +30,21 @@ def inputs(response):
         router=SimpleNamespace(chat=chat), logger=TrajectoryLogger("design-task", {})), calls
 
 
+def test_explicit_request_timeout_reaches_router_and_trajectory():
+    kwargs, calls = inputs({"content": '{"decision":"abstain"}', "usage": {}})
+    design_development_candidates(**kwargs, request_timeout_seconds=120)
+    assert calls[0][1]["timeout"] == 120
+    assert kwargs["logger"].data["development_candidate_designs"][0]["timeout_seconds"] == 120
+
+
+@pytest.mark.parametrize("value", [True, 0, 301, "120"])
+def test_invalid_request_timeout_never_calls_router(value):
+    kwargs, calls = inputs({})
+    with pytest.raises(EvalSchemaError, match="request timeout"):
+        design_development_candidates(**kwargs, request_timeout_seconds=value)
+    assert calls == []
+
+
 def test_designer_calls_configurable_role_and_produces_valid_frozen_drafts():
     kwargs, calls = inputs({"content": json.dumps(proposal()), "usage": {"prompt_tokens": 20}})
     result = design_development_candidates(**kwargs, private=True)

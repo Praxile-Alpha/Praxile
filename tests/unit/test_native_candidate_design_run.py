@@ -52,7 +52,7 @@ def test_native_projection_uses_durable_designer_and_resumes_without_model(setup
 
 
 @pytest.mark.parametrize("change", [{"expected_sha256": "0" * 64}, {"track": "heldout"},
-                                  {"heldout_task_ids": ["dev"]}])
+                                  {"heldout_task_ids": ["dev"]}, {"request_timeout_seconds": 301}])
 def test_native_rejects_invalid_source_before_router(setup_native, monkeypatch, change):
     config, source, options, calls = setup_native
     monkeypatch.setattr(module, "configured_design_router", lambda *a, **k: pytest.fail("router accessed"))
@@ -98,7 +98,10 @@ def test_native_cli_dispatches_without_legacy_event_store(setup_native, monkeypa
     args = build_parser().parse_args(["eval", "design-native-context", str(source),
         "--source-sha256", options["expected_sha256"], "--track", "development",
         "--design-id", "native-design", "--scope", str(scope),
-        "--development-task-id", "dev", "--heldout-task-id", "heldout", "--json"])
+        "--development-task-id", "dev", "--heldout-task-id", "heldout",
+        "--request-timeout", "120", "--json"])
     assert args.func(args, source.parent) == 0
     assert json.loads(capsys.readouterr().out)["experiments_started"] is False
     assert len(calls) == 1
+    root = config.paths.state / "eval/v2/candidate_designs/native-design"
+    assert json.loads((root / "manifest.json").read_text())["generation_budget"]["timeout_seconds"] == 120

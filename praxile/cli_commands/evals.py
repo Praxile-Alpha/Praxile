@@ -253,7 +253,8 @@ def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int
         profile_context(profile)
     options = dict(design_id=args.design_id, development_task_ids=args.development_task_id,
         heldout_task_ids=args.heldout_task_id, applies_to=scope, private=args.private, resume=args.resume,
-        executor_profile=profile, max_output_tokens=getattr(args, "max_output_tokens", None))
+        executor_profile=profile, max_output_tokens=getattr(args, "max_output_tokens", None),
+        request_timeout_seconds=getattr(args, "request_timeout", None))
     if getattr(args, "native_result", None) is not None:
         report = run_native_candidate_design(config, Path(args.native_result).expanduser(),
             expected_sha256=args.source_sha256, track=args.track, **options)
