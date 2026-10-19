@@ -60,6 +60,11 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
         payload["executor_capability"] = capability
     serialized = canonical_json(payload)
     record = {"design_id": design_id, "status": "requested",
+              "input_inventory": {"schema_version": "praxile.design_input_inventory.v1",
+                  "evidence_count": len(evidence),
+                  "public_task_context_supplied": public_task_context is not None,
+                  "executor_profile_supplied": capability is not None,
+                  "evidence_sufficiency_verified": False},
               "max_output_tokens": max_output_tokens, "timeout_seconds": request_timeout_seconds,
               "input_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
               "source_task_ids": sorted(set(refs.values())), "promotion_eligible": False}

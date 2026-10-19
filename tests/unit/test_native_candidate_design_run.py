@@ -123,6 +123,11 @@ def test_public_task_context_is_explicit_bound_and_not_execution_evidence(setup_
                    public_task_context_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     module.run_native_candidate_design(config, source, **options)
     payload = json.loads(calls[0][1]["content"])
+    root = config.paths.state / "eval/v2/candidate_designs/native-design"
+    inventory = json.loads((root / "trajectory.json").read_text())["development_candidate_designs"][0]["input_inventory"]
+    assert inventory["public_task_context_supplied"] is True
+    assert inventory["evidence_count"] == 1
+    assert inventory["evidence_sufficiency_verified"] is False
     assert payload["public_task_context"] == context
     assert payload["public_task_context_provenance_attested"] is False
     assert len(payload["allowed_refs"]) == 1

@@ -363,6 +363,22 @@ rubric 填入 goal 或 constraints。该机制不是物理信息隔离证明；�
 设计 manifest 不改写；投影版本变化需要新 design ID，不能把 v3 塞进旧冻结设计。
 任意 shell 的动作参数与文件修改归因仍未补齐，完整语义前后状态对齐仍未实现。
 
+公开上下文 + v3 实测（`bca6326`）：从官方公开 instruction 分段保留目标及三个
+sheet/输出路径约束，分别冻结原文件和上下文摘要，未打开 rubric。一次 M3.1 Flash
+low 请求在 15.618 秒返回 NO_ENTRY；2517 input / 1409 output，1383 reasoning。
+模型自报缺 public_content_constraints 和 action_parameters。前一项不能被当作
+确定事实：公开约束已经传入，但其充分性未被证明。见
+`results/office-flash-public-context-design-20261019.json`。投影版本与上下文同时变化，
+不能称为单因素消融；无候选、无 probe、无晋升，本次无第二个模型请求。
+
+由此增加确定性的 `praxile.design_input_inventory.v1`：记录 evidence_count、
+public_task_context_supplied、executor_profile_supplied，始终保留
+evidence_sufficiency_verified=false。它只记录验证后实际输入的存在性，不记录
+正文，也不覆盖模型的原始弃权解释。不能将“存在”当成“足够”，更不能根据模型
+自报缺失自动补取私有材料。本字段从新运行开始记录，历史轨迹不回填。
+这一来源的重复设计请求暂止，后续应先解决动作语义证据或选择有独立验证的
+新开发 Episode，而非对同一组稀疏状态信号继续增加模型调用次数。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

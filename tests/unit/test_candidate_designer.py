@@ -35,6 +35,10 @@ def test_explicit_request_timeout_reaches_router_and_trajectory():
     design_development_candidates(**kwargs, request_timeout_seconds=120)
     assert calls[0][1]["timeout"] == 120
     assert kwargs["logger"].data["development_candidate_designs"][0]["timeout_seconds"] == 120
+    assert kwargs["logger"].data["development_candidate_designs"][0]["input_inventory"] == {
+        "schema_version": "praxile.design_input_inventory.v1", "evidence_count": 1,
+        "public_task_context_supplied": False, "executor_profile_supplied": False,
+        "evidence_sufficiency_verified": False}
 
 
 @pytest.mark.parametrize("value", [True, 0, 301, "120"])
