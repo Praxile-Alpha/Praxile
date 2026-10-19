@@ -240,7 +240,7 @@ def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
 
 
 def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int:
-    from ..eval.v2.candidate_design_run import run_candidate_design
+    from ..eval.v2.candidate_design_run import run_candidate_design, run_native_candidate_design
     config, store = load(project_root)
     store.initialize(config)
     scope = read_json(Path(args.scope).expanduser().resolve(), None)
@@ -251,10 +251,15 @@ def cmd_eval_design_context(args: argparse.Namespace, project_root: Path) -> int
         from ..eval.v2.executor_profile import profile_context
         profile = read_json(Path(args.executor_profile).expanduser().resolve(), None)
         profile_context(profile)
-    report = run_candidate_design(config, EventStore(config.paths), design_id=args.design_id,
-        experiment_id=args.experiment_id, arm=args.arm, development_task_ids=args.development_task_id,
+    options = dict(design_id=args.design_id, development_task_ids=args.development_task_id,
         heldout_task_ids=args.heldout_task_id, applies_to=scope, private=args.private, resume=args.resume,
         executor_profile=profile, max_output_tokens=getattr(args, "max_output_tokens", None))
+    if getattr(args, "native_result", None) is not None:
+        report = run_native_candidate_design(config, Path(args.native_result).expanduser(),
+            expected_sha256=args.source_sha256, track=args.track, **options)
+    else:
+        report = run_candidate_design(config, EventStore(config.paths),
+            experiment_id=args.experiment_id, arm=args.arm, **options)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:

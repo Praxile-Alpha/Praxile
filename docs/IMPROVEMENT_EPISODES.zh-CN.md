@@ -234,8 +234,33 @@ checkpoint 写入失败时不进入生成器。意图记录保持原样，最终
 真实进程测试在生成器阻塞期间由 supervisor 强制终止，然后启动新进程尝试 resume：
 意图及初始轨迹可读、无 generated 文件、恢复被拒绝，生成器进入次数保持 1。
 不模拟付费 API，也不宣称恢复了被杀进程的内存响应。原子文件替换覆盖进程中断，
-未提供断电 fsync 保证；native evidence 的独立脚本直调生成器尚未使用这套 CLI
-checkpoint。完整响应恢复与所有入口统一接入仍未完成。
+未提供断电 fsync 保证。完整响应恢复与所有入口统一接入仍未完成。
+
+原生 benchmark 现在可以使用同一持久化设计入口，而不必编写直接调用生成器的脚本：
+
+```bash
+praxile eval design-native-context /absolute/path/to/native-result.json \
+  --source-sha256 SOURCE_SHA256 --track development \
+  --design-id native-design-001 --scope scope.json \
+  --development-task-id NATIVE_DEVELOPMENT_TASK_ID \
+  --heldout-task-id EXCLUDED_HELDOUT_TASK_ID \
+  --max-output-tokens 8000 --json
+```
+
+大写项须替换为实际冻结材料的摘要和成员 ID，不要为满足参数虚构 held-out 成员。
+支持重复声明成员，`--executor-profile` 可选，使用已配置的 `proposal_composer`。
+该入口仅接受 development；校验原生文件摘要及成员后投影允许字段，不读取相邻
+评审文件，不将原始 command/stdout 或评分详情发给设计模型。成员声明仍不是
+独立 split 认证。源摘要、投影版本、预算、模型配置身份与作用域进入同一设计 manifest。
+
+`run_native_candidate_design` 与原 `run_candidate_design` 共享请求意图、锁、轨迹、
+生成结果落盘和恢复逻辑，输出仍位于 `eval/v2/candidate_designs/<design-id>`。
+新入口不依赖旧 SWE A/B experiment/EventStore；旧命令的 manifest 和参数保持兼容。
+`--resume` 不会重发未知请求；改变源文件（即使提供新匹配摘要）须使用新 design ID。
+不会启动实验或晋升资产，也不会自动启用进程截止；需要总截止时继续显式包裹 supervisor。
+低层 `design_from_native` 保留供内存调用，其调用方仍需自己管理持久化，历史临时脚本
+不会因新增 CLI 被自动迁移。已完成用真实投影及设计解析器的离线入口测试，尚未通过
+此新 CLI 重新进行付费模型验收。
 
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。

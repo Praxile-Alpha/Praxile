@@ -17,6 +17,28 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
     # Verify source membership before constructing the model request.
     bundle = collect_development_evidence(config.paths.state, event_store, experiment_id=experiment_id,
         arm=arm, development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids)
+    return _run_design(config, bundle, design_id=design_id,
+        development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
+        applies_to=applies_to, private=private, resume=resume,
+        executor_profile=executor_profile, max_output_tokens=max_output_tokens)
+
+
+def run_native_candidate_design(config, result_path, *, expected_sha256, track,
+                                design_id, development_task_ids, heldout_task_ids, applies_to,
+                                private=False, resume=False, executor_profile=None, max_output_tokens=None):
+    from .native_development_evidence import collect_native_evidence
+    if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
+        raise EvalSchemaError("candidate output budget must be an integer in [256, 16384]")
+    bundle = collect_native_evidence(result_path, expected_sha256=expected_sha256,
+        development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids, track=track)
+    return _run_design(config, bundle, design_id=design_id,
+        development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
+        applies_to=applies_to, private=private, resume=resume,
+        executor_profile=executor_profile, max_output_tokens=max_output_tokens)
+
+
+def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
+                applies_to, private, resume, executor_profile, max_output_tokens):
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
