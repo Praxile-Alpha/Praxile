@@ -11,7 +11,7 @@ from .config import Config
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
 from .experience_context import RuntimeExperienceContext
-from .experience_conditions import observe_tool_versions
+from .experience_conditions import check_conditions, observe_tool_versions
 from .interop import interop_policy
 from .judge_governance import JudgeGovernance
 from .json_utils import RobustJSONError, parse_json_object
@@ -268,6 +268,19 @@ class AgentRuntime:
             logger.set_spec_context(build_spec_context(self.config.paths.root, resume_spec_files))
         messages = checkpoint.get("messages") or None
         retrieved = context.get("retrieved") or []
+        if any(item.get("activation_requirements") is not None for item in retrieved):
+            snapshot = self.project.snapshot(refresh=True)
+            snapshot["interop"] = interop_policy(self.config)
+            observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+            checks = [{"path": item.get("path"), **check_conditions(
+                item.get("activation_requirements"), observations)} for item in retrieved]
+            rejected = any(check["status"] == "abstained" for check in checks)
+            self._trace("resume_experience_conditions", task_id=logger.task_id,
+                        rejected=rejected, checks=checks)
+            if rejected:
+                raise ValueError("frozen experience conditions no longer hold; start a new run instead of resuming stale context")
+            logger.data.setdefault("activation_revalidations", []).append({
+                "at": utc_now(), "phase": "resume", "observations": observations, "checks": checks})
         private = bool(context.get("private", logger.data.get("task_analysis", {}).get("privacy_sensitive", False)))
         high_risk = bool(context.get("high_risk", logger.data.get("task_analysis", {}).get("high_risk", False)))
         logger.data.setdefault("resume_events", []).append({"resumed_at": utc_now(), "checkpoint": checkpoint.get("path")})

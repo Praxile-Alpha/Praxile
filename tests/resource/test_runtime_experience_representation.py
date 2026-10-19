@@ -60,7 +60,8 @@ def test_observed_conditions_gate_assets_even_when_routing_disabled(tmp_path):
     planner = RuntimeExperienceContext(config, store)
     observed = {"tool_versions": {"python": "3.12.0"}, "state": {"git": {"is_repo": False}}}
     assert not planner.plan("Fix parser", "task", {}, retrieved)[0]
-    assert planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
+    chosen = planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
+    assert chosen[0]["activation_requirements"]["tool_versions"] == {"python": "3.12.0"}
     assert not planner.plan("Adjust calendar", "task", {}, retrieved, observations=observed)[0]
     observed["tool_versions"]["python"] = "3.11.0"
     assert not planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
@@ -68,6 +69,31 @@ def test_observed_conditions_gate_assets_even_when_routing_disabled(tmp_path):
     assert not planner.plan("Fix parser", "task", {}, retrieved, observations=observed)[0]
 
 
+@pytest.mark.parametrize("actual_version", ["3.12.0", "3.11.0"])
+def test_resume_rechecks_frozen_conditions_before_model_call(tmp_path, monkeypatch, actual_version):
+    config = Config.load(tmp_path)
+    runtime = AgentRuntime(config)
+    runtime.store.initialize(config)
+    logger = TrajectoryLogger("Fix parser", {})
+    runtime.store.write_checkpoint({"task_id": logger.task_id, "trajectory": logger.data,
+        "context": {"task": "Fix parser", "retrieved": [{"path": ".praxile/memory/parser.md",
+            "activation_requirements": {"tool_versions": {"python": "3.12.0"}}}]},
+        "messages": [{"role": "user", "content": "previously injected experience"}]})
+    monkeypatch.setattr("praxile.runtime.observe_tool_versions", lambda: {"python": actual_version})
+    called = []
+    def loop(*args, **kwargs):
+        called.append(True)
+        return "completed", "test stub"
+    monkeypatch.setattr(runtime, "_run_action_loop", loop)
+    monkeypatch.setattr(runtime, "_finish_run", lambda logger, *args, **kwargs: logger.data)
+    if actual_version == "3.12.0":
+        result = runtime.run("Fix parser", resume=logger.task_id)
+        assert called
+        assert result["activation_revalidations"][0]["checks"][0]["status"] == "matched"
+    else:
+        with pytest.raises(ValueError, match="stale context"):
+            runtime.run("Fix parser", resume=logger.task_id)
+        assert not called
 def test_normal_run_routes_approved_assets_and_records_actual_injection(tmp_path, monkeypatch) -> None:
     config = Config.load(tmp_path)
     store = ExperienceStore(config.paths)

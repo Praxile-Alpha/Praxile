@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -90,7 +91,8 @@ class RuntimeExperienceContext:
                                       "reason": conditions["reason"], "condition_check": conditions})
                     continue
             if asset_type in _MANDATORY_TYPES or not enabled:
-                selected.append(dict(item))
+                selected.append({**item, "activation_requirements": deepcopy(
+                    asset.get("activation_requirements") if asset_type not in _MANDATORY_TYPES else None)})
                 decisions.append({"path": path, "activation": "activated", "representation": "legacy",
                                   "condition_check": conditions,
                                   "reason": "mandatory control rule" if asset_type in _MANDATORY_TYPES else "representation routing disabled"})
@@ -162,7 +164,8 @@ class RuntimeExperienceContext:
             if kind == "none":
                 continue
             chosen = {**item, "snippet": options[kind], "representation_kind": kind,
-                      "experience_layer": layer}
+                      "experience_layer": layer,
+                      "activation_requirements": deepcopy(asset.get("activation_requirements"))}
             selected.append(chosen)
             remaining -= int(representation["estimated_context_units"])
             if layer:
