@@ -1,0 +1,115 @@
+"""Bounded local artifact checks against public user requirements, never rubrics."""
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import json
+import stat
+from pathlib import Path
+
+from .eval.contracts import OutputContract
+from .eval.v2.schema import EvalSchemaError
+
+
+def validate_contract(value: object) -> list[dict]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "source", "outputs"}:
+        raise EvalSchemaError("invalid deliverable contract fields")
+    if value["schema_version"] != "praxile.deliverable_contract.v1" or value["source"] != "user_request":
+        raise EvalSchemaError("deliverables require a versioned public user_request contract")
+    outputs = value["outputs"]
+    if not isinstance(outputs, list) or not 1 <= len(outputs) <= 100:
+        raise EvalSchemaError("deliverable contract requires 1 to 100 outputs")
+    seen = set()
+    for item in outputs:
+        if not isinstance(item, dict) or set(item) - {"path", "media_type", "required", "required_fields"}:
+            raise EvalSchemaError("invalid deliverable requirement")
+        try:
+            output = OutputContract(item["path"], item["media_type"], item.get("required", True))
+        except (KeyError, TypeError) as exc:
+            raise EvalSchemaError("deliverable path and media_type required") from exc
+        if output.path in seen:
+            raise EvalSchemaError("duplicate deliverable path")
+        seen.add(output.path)
+        fields = item.get("required_fields", [])
+        if not isinstance(fields, list) or len(fields) > 100 or any(not isinstance(field, str) or not field for field in fields):
+            raise EvalSchemaError("required_fields must contain up to 100 non-empty names")
+    return outputs
+
+
+def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_000) -> dict:
+    """No code execution, network access, globbing, or symlink traversal.
+
+    Checks represent structural evidence only. source labels are not proof of
+    provenance; callers must supply the approved public contract.
+    """
+    outputs = validate_contract(contract)
+    if type(max_bytes) is not int or not 1 <= max_bytes <= 100_000_000:
+        raise ValueError("max_bytes must be in [1, 100000000]")
+    root = root.resolve(strict=True)
+    results = []
+    for requirement in outputs:
+        path = root / requirement["path"]
+        result = {"path": requirement["path"], "media_type": requirement["media_type"],
+                  "required": requirement.get("required", True), "status": "failed"}
+        results.append(result)
+        if any(part.is_symlink() for part in (path, *path.parents) if part != root and part.is_relative_to(root)):
+            result["reason"] = "symlink_forbidden"
+            continue
+        try:
+            mode = path.stat().st_mode
+            if not stat.S_ISREG(mode):
+                result["reason"] = "not_a_regular_file"
+                continue
+            with path.open("rb") as handle:
+                content = handle.read(max_bytes + 1)
+        except FileNotFoundError:
+            result.update(status="missing" if result["required"] else "optional_missing", reason="not_found")
+            continue
+        except OSError as exc:
+            result["reason"] = type(exc).__name__
+            continue
+        if len(content) > max_bytes:
+            result["reason"] = "size_limit"
+            continue
+        result.update(size_bytes=len(content), sha256=hashlib.sha256(content).hexdigest())
+        fields = requirement.get("required_fields", [])
+        try:
+            media = requirement["media_type"]
+            if media == "application/json":
+                def reject_constant(value):
+                    raise ValueError("nonfinite JSON constant")
+                value = json.loads(content, parse_constant=reject_constant)
+                if fields and not isinstance(value, dict):
+                    raise ValueError("object required")
+                missing = [field for field in fields if field not in value] if fields else []
+            elif media == "text/csv":
+                rows = csv.reader(io.StringIO(content.decode("utf-8-sig")), strict=True)
+                header = next(rows, None)
+                if not header or len(header) != len(set(header)):
+                    raise ValueError("unique CSV header required")
+                count = 0
+                for row in rows:
+                    if len(row) != len(header):
+                        raise ValueError("CSV row width mismatch")
+                    count += 1
+                result["data_rows"] = count
+                missing = [field for field in fields if field not in header]
+            elif media in {"text/plain", "text/markdown"}:
+                content.decode("utf-8")
+                if not content.strip():
+                    raise ValueError("empty text")
+                if fields:
+                    result.update(status="unsupported", reason="text_structure_checks_not_supported")
+                    continue
+                missing = []
+            else:
+                result.update(status="unsupported", reason="format_opener_not_available")
+                continue
+            result.update(status="failed" if missing else "passed", missing_fields=missing)
+        except (ValueError, UnicodeError, csv.Error, RecursionError):
+            result["reason"] = "invalid_structure_or_encoding"
+    passed = all(item["status"] in {"passed", "optional_missing"} for item in results)
+    return {"schema_version": "praxile.deliverable_check.v1", "passed": passed, "outputs": results,
+            "official_evaluation": False, "semantic_quality_verified": False,
+            "contract_sha256": hashlib.sha256(json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}

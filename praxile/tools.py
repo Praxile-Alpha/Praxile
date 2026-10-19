@@ -53,6 +53,7 @@ class ToolRegistry:
             {"name": "browser_fill", "description": "Fill a selector in the current opt-in browser session."},
             {"name": "browser_assert_text", "description": "Assert exact visible element text in the current browser session."},
             {"name": "browser_capture", "description": "Capture current session state without reloading; not a visual quality judgment."},
+            {"name": "check_deliverables", "description": "Check public user-request output contracts locally; not official evaluation or semantic judgment."},
             {"name": "edit_file", "description": "Write a full project-relative file with backup."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
@@ -116,6 +117,19 @@ class ToolRegistry:
                 selector=str(action.get("selector", "")), value=str(action.get("value", ""))).to_dict()
         if action_type == "finish":
             return {"status": "success", "output": action.get("summary", "finished"), "data": {}, "risk_level": "low"}
+        if action_type == "check_deliverables":
+            from .deliverables import validate_contract, verify_deliverables
+            try:
+                contract = action.get("contract")
+                for item in validate_contract(contract):
+                    decision = self.safety.check_path(item["path"], write=False)
+                    if not decision.allowed:
+                        return {"status": "blocked", "output": decision.reason, "data": {}, "risk_level": decision.risk_level}
+                report = verify_deliverables(self.config.paths.root, contract)
+            except ValueError:
+                return {"status": "failure", "output": "Invalid public deliverable contract", "data": {}, "risk_level": "low"}
+            return {"status": "success" if report["passed"] else "failure", "output": "Local structural checks completed",
+                    "data": report, "risk_level": "low"}
         return {"status": "failure", "output": f"unknown action type: {action_type}", "data": {}, "risk_level": "low"}
 
     async def execute_async(self, action: dict[str, Any], *, task_id: str, step: int) -> dict[str, Any]:

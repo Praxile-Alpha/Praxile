@@ -1284,6 +1284,7 @@ class AgentRuntime:
             '{"type":"browser_fill","selector":"input[name=query]","value":"example"}\n'
             '{"type":"browser_assert_text","selector":"[role=status]","value":"Saved"}\n'
             '{"type":"browser_capture"}\n'
+            '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/report.json","media_type":"application/json","required_fields":["summary"]}]}}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
             '{"type":"run_command","command":"safe configured test/lint/build command"}\n'
             '{"type":"finish","status":"completed|needs_human|failed","summary":"short result"}\n\n'
