@@ -94,7 +94,8 @@ R0 是首个实现阶段，不沿用旧 P0/P1 编号，避免与已完成的 V2 
 - [x] 增加版本化任务 envelope：instruction、输入材料 manifest、environment spec、输出 contract、private evaluator reference；不要求存在 Git。
 - [ ] 增加环境租约协议：prepare/reset/execute/collect/cancel/cleanup，分别支持已有 worktree 与 Harbor 管理的容器。
 - [ ] 任务输入和最终评分材料分别下载/存储/挂载；不把含 rubric 的原始数据行直接传给执行器。
-- [ ] 旧 SWE-bench task 经显式兼容映射继续运行；旧 manifest 的 digest 和 resume 语义不变。
+- [x] 旧 SWE-bench task 经显式兼容映射继续运行；旧 manifest 的 digest 和 resume 语义不变。
+  Eval Runner report 的 benchmark_contracts 使用现有 from_swebench 显式投影，版本标为输入任务集内容 digest；旧执行 backend/evaluator 不变，legacy manifest 不改写，resume 不重复运行已完成任务。25 项合同/runner/A-B 测试通过，包含 manifest 字节稳定、输入摘要稳定、投影一致与私有测试/答案不泄漏。这是兼容接入，不代表已用通用 Harbor 执行 SWE-bench，也不是新增模型性能验收。
 - [ ] doctor 输出缺失依赖、容器架构、磁盘、执行模型和评审模型状态；Linux 环境与 Mac Docker Desktop 分别给出实测支持矩阵。
   自检增补：在线查询 daemon OS/架构，主机磁盘容量只读观测；离线未查询 daemon 时不宣称 infrastructure_available。10 项测试通过，本机离线查询已验证；Docker VM 磁盘、模型/judge 连通性和 Linux/Mac 完整实测矩阵仍未完成。
 

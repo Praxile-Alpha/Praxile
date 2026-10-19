@@ -122,6 +122,17 @@ class BenchmarkEvalRunner:
             "metrics": aggregate_metrics(results),
             "tasks": results,
         }
+        # Add a read projection, leaving legacy execution and resume identities intact.
+        from ..contracts import BenchmarkTask
+        report["benchmark_contracts"] = {
+            "schema_version": "praxile.swebench_contract_projection.v1",
+            "revision_kind": "input_task_set_content_digest",
+            "source_task_set_digest": task_set.digest,
+            "legacy_manifest_digest": manifest.reproducibility_digest,
+            "execution_backend": "legacy_swebench_runner",
+            "tasks": [BenchmarkTask.from_swebench(task, dataset_revision=task_set.digest,
+                private_ref=f"legacy-evaluation:{task.fingerprint}").to_dict() for task in task_set.tasks],
+        }
         write_json(self._run_root(run_id) / "report.json", report)
         return report
 

@@ -67,9 +67,11 @@ def test_benchmark_runner_persists_trace_metrics_manifest_and_resumes(tmp_path: 
         task_id="owner__repo-1",
         instruction="Fix the issue",
         repository=RepositorySpec("owner/repo", commit, "https://invalid.example/owner/repo.git"),
-        evaluation=SWEbenchEvaluationSpec("SWE-bench/SWE-bench_Lite", "test"),
+        evaluation=SWEbenchEvaluationSpec("SWE-bench/SWE-bench_Lite", "test",
+            test_patch="PRIVATE_TEST_SENTINEL", reference_patch="PRIVATE_ANSWER_SENTINEL"),
     )
     task_set = EvalTaskSet("fixed-dev", "SWE-bench/SWE-bench_Lite", "test", (task,))
+    original_task_digest = task_set.digest
     digest = "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest()
     adapter = FixtureAgentAdapter(
         events=[
@@ -93,6 +95,8 @@ def test_benchmark_runner_persists_trace_metrics_manifest_and_resumes(tmp_path: 
         eval_run_id="fixed-run",
         source_overrides={"owner/repo": source},
     )
+    manifest_file = state_root / "eval" / "v2" / "runs" / "fixed-run" / "manifest.json"
+    original_manifest = manifest_file.read_bytes()
     resumed = runner.run(
         task_set,
         adapter=adapter,
@@ -129,6 +133,16 @@ def test_benchmark_runner_persists_trace_metrics_manifest_and_resumes(tmp_path: 
     assert evaluator_event.artifact_ids
     assert not Path(report["tasks"][0]["repository"]["workspace_root"]).exists()
     assert evaluator.calls == 1
+    assert manifest_file.read_bytes() == original_manifest
+    assert task_set.digest == original_task_digest
+    assert report["benchmark_contracts"] == resumed["benchmark_contracts"]
+    assert report["benchmark_contracts"]["legacy_manifest_digest"] == report["manifest_digest"]
+    from praxile.eval.contracts import BenchmarkTask
+    projected = BenchmarkTask.from_dict(report["benchmark_contracts"]["tasks"][0])
+    assert projected.dataset_revision == original_task_digest
+    assert "PRIVATE_TEST_SENTINEL" not in str(projected.to_dict())
+    assert "PRIVATE_ANSWER_SENTINEL" not in str(projected.to_dict())
+    assert "legacy-evaluation:" not in str(projected.to_adapter_task("/workspace", trace_id="t", run_id="r").to_dict())
     assert resumed["tasks"][0]["prediction_digest"] == report["tasks"][0]["prediction_digest"]
     assert (state_root / "eval" / "v2" / "runs" / "fixed-run" / "manifest.json").is_file()
 
