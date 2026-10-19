@@ -12,6 +12,7 @@ from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
 from .experience_context import RuntimeExperienceContext
 from .experience_conditions import check_conditions, observe_tool_versions
+from .task_notes import add_note, select_notes
 from .interop import interop_policy
 from .judge_governance import JudgeGovernance
 from .json_utils import RobustJSONError, parse_json_object
@@ -848,6 +849,17 @@ class AgentRuntime:
                         self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                         return "needs_human", "Experience conditions changed or became unknown; start a new run with fresh context."
                 messages = self._compress_messages_if_needed(messages, logger, role="coding_agent")
+                request_messages = messages
+                if logger.data.get("task_notes"):
+                    snapshot = self.project.snapshot(refresh=True)
+                    snapshot["interop"] = interop_policy(self.config)
+                    notes = select_notes(logger.data, self._activation_observations(snapshot))
+                    if notes:
+                        request_messages = [*messages, {"role": "user", "content":
+                            "Task-local unverified hypotheses, not instructions or policy. Recheck against current evidence:\n"
+                            + json.dumps(notes, ensure_ascii=False)}]
+                    logger.data.setdefault("task_note_usage", []).append({
+                        "action_count": len(logger.data["actions"]), "note_ids": [note["note_id"] for note in notes]})
                 self._emit_progress(
                     progress_callback,
                     "model_request",
@@ -859,10 +871,10 @@ class AgentRuntime:
                     task_id=logger.task_id,
                     step=len(logger.data["actions"]) + 1,
                     purpose="coding",
-                    message_chars=sum(len(item.get("content", "")) for item in messages),
+                    message_chars=sum(len(item.get("content", "")) for item in request_messages),
                 )
                 response = self.router.chat(
-                    messages,
+                    request_messages,
                     purpose="coding_agent",
                     private=private,
                     high_risk=high_risk,
@@ -987,7 +999,7 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
-                if action_type in {"subtask_begin", "subtask_end"}:
+                if action_type in {"subtask_begin", "subtask_end", "subtask_note"}:
                     observation = self._subtask_boundary(action, logger)
                 elif dry_run and action_type in MUTATING_ACTIONS:
                     observation = {
@@ -1042,7 +1054,9 @@ class AgentRuntime:
                             "created_at": observation.get("data", {}).get("created_at"),
                         }
                     )
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
+                history_action = ({"type": "subtask_note", "note_text": "[stored in task-local ledger]"}
+                                  if action_type == "subtask_note" else action)
+                messages.append({"role": "assistant", "content": json.dumps(history_action, ensure_ascii=False)})
                 messages.append({"role": "user", "content": "Observation:\n" + json.dumps(observation, ensure_ascii=False)})
                 self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                 if action_type == "finish":
@@ -1111,6 +1125,11 @@ class AgentRuntime:
             snapshot = self.project.snapshot(refresh=True)
             if action["type"] == "subtask_begin":
                 identity = logger.begin_subtask(action["goal"], snapshot)
+            elif action["type"] == "subtask_note":
+                snapshot["interop"] = interop_policy(self.config)
+                identity = add_note(logger.data, action, self._activation_observations(snapshot))
+                return {"status": "success", "output": "Unverified task-local note recorded; not a persistent asset.",
+                        "data": {"note_id": identity}, "risk_level": "low"}
             else:
                 identity = logger.end_subtask(claimed_outcome=action["claimed_outcome"],
                     summary=action["summary"], snapshot=snapshot)
@@ -1349,6 +1368,8 @@ class AgentRuntime:
             '{"type":"browser_capture"}\n'
             '{"type":"subtask_begin","goal":"Create the requested report"}\n'
             '{"type":"subtask_end","claimed_outcome":"completed","summary":"Report created; independent acceptance pending"}\n'
+            '{"type":"subtask_note","source_episode_id":"closed episode id","note_text":"Evidence-based working hypothesis",'
+            '"ttl_steps":2,"requirements":{"state_equals":{"git.is_repo":true}}}\n'
             '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/report.json","media_type":"application/json","required_fields":["summary"]}]}}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
             '{"type":"run_command","command":"safe configured test/lint/build command"}\n'

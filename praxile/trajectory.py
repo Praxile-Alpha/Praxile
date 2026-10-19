@@ -150,6 +150,7 @@ class TrajectoryLogger:
         if action_type not in {
             "subtask_begin",
             "subtask_end",
+            "subtask_note",
             "architecture_gate",
             "dry_run_skip_tests",
             "run_test",

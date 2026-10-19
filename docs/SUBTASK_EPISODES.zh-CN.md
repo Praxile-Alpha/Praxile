@@ -56,4 +56,24 @@ R2 增量：`praxile.subtask_episode.v1` 记录本次运行内明确声明的子
 
 此增补只覆盖会话存活和 origin，不断言 DOM、登录状态或远端业务状态；也没有实现子任务中途重新检索/注入。22 项针对性测试通过，真实 Chromium 测试已增加对应断言，但本轮执行被沙箱 localhost 绑定权限阻止，沙箱外审批服务不可用，不能记为实测通过。完整应用状态门控仍待后续验收。
 
+## 任务内临时笔记
+
+`subtask_note` 是 runtime 管理的有界假设，不是长期 memory，也不是独立验证过的结论：
+
+```json
+{
+  "type": "subtask_note",
+  "source_episode_id": "本任务已关闭且有动作证据的 episode_id",
+  "note_text": "本次观察支持的工作假设或重规划建议",
+  "ttl_steps": 2,
+  "requirements": {"state_equals": {"git.is_repo": true}}
+}
+```
+
+必须通过工具策略、来源检查和当前状态条件。每任务最多 16 条，每条 1..2000 字符，TTL 为 1..20 个已记录动作（不是墙钟时间，恢复执行不重置）。来源自动引用子任务中的动作证据；无证据、跨任务或未关闭子任务不能创建笔记。模型声明仍标记 independently_verified=false。
+
+账本保存在原 trajectory/checkpoint 的 task_notes 中，沿用原持久化。每次请求重新检查状态和 TTL，只将活动笔记作为低信任数据临时附加；消息历史不保存 subtask_note 正文。过期标 expired，条件未知或失配标 invalidated，二者不自动复活。task_note_usage 记录实际请求采用的 note IDs；内部登记不计作工具调用，但占 action-loop 步数。
+
+不会直接写长期 memory/skill，不赋予权限，也不改变 Architecture Gate。TTL 只控制后续主动注入，无法保证模型不在其他动作中复述此前见过的信息；不能把它当安全擦除。当前尚无独立反思模型、自动重规划执行或长期资产晋升。8 项测试包含真实 action-loop 的一次注入/过期、状态失效、来源与边界拒绝以及 checkpoint 数据恢复。
+
 验证：日志复制/序列化恢复、失败观察与成功声明并存、未关闭状态、实际 action-loop 边界/工具分发/checkpoint 测试通过。完整 R2-A 总项尚未完成，不提前勾选。
