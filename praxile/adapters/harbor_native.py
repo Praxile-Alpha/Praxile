@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import asyncio
 import json
+import re
 import shlex
 import tempfile
 import time
@@ -28,7 +29,8 @@ class PraxileAgent(BaseAgent):
                  task_body_file: str | None = None, task_body_sha256: str | None = None,
                  inherit_task_packages: bool = False, model_timeout_seconds: int = 30,
                  output_directory: str | None = None, renderer_executable: str = "",
-                 deliverable_contract: dict | None = None, **kwargs):
+                 deliverable_contract: dict | None = None,
+                 dependency_wheels: list[dict] | None = None, **kwargs):
         from ..services.run_service import normalize_deliverable_contract
         public_contract = normalize_deliverable_contract(deliverable_contract)
         self._public_contract_json = (json.dumps(public_contract, sort_keys=True, separators=(",", ":"))
@@ -62,6 +64,30 @@ class PraxileAgent(BaseAgent):
         self.wheel = Path(wheel_path).resolve(strict=True)
         if not self.wheel.name.endswith(".whl") or hashlib.sha256(self.wheel.read_bytes()).hexdigest() != wheel_sha256:
             raise ValueError("Praxile wheel digest mismatch")
+        if dependency_wheels is not None and not isinstance(dependency_wheels, list):
+            raise ValueError("dependency_wheels must be a list of path/sha256 records")
+        self._dependency_wheels = []
+        names = {self.wheel.name}
+        for item in dependency_wheels or []:
+            if (not isinstance(item, dict) or set(item) != {"path", "sha256"}
+                    or not isinstance(item["path"], str) or not isinstance(item["sha256"], str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])):
+                raise ValueError("invalid dependency wheel record")
+            dependency = Path(item["path"]).resolve(strict=True)
+            if (not dependency.is_file() or not re.fullmatch(r"[A-Za-z0-9_.+!-]+\.whl", dependency.name)
+                    or dependency.name in names
+                    or hashlib.sha256(dependency.read_bytes()).hexdigest() != item["sha256"]):
+                raise ValueError("dependency wheel digest or filename mismatch")
+            names.add(dependency.name)
+            self._dependency_wheels.append((dependency, item["sha256"]))
+        self._dependency_wheels.sort(key=lambda item: item[0].name)
+        self.worker_environment = {"schema_version": "praxile.worker_environment.v1",
+            "praxile_wheel_sha256": wheel_sha256, "inherit_task_packages": inherit_task_packages,
+            "dependencies": [{"filename": path.name, "sha256": digest}
+                             for path, digest in self._dependency_wheels],
+            "installation": "offline_no_dependency_resolution"}
+        self.worker_environment_sha256 = hashlib.sha256(json.dumps(
+            self.worker_environment, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         path = PurePosixPath(workspace)
         if not path.is_absolute() or ".." in path.parts or str(path) != workspace or workspace == "/":
             raise ValueError("explicit absolute task workspace required")
@@ -74,6 +100,8 @@ class PraxileAgent(BaseAgent):
         if self.credential_file and timeout_seconds > 3540:
             raise ValueError("broker-backed execution requires timeout_seconds <= 3540")
         self.remote_root = "/tmp/praxile-native-" + wheel_sha256[:16]
+        if self._dependency_wheels:
+            self.remote_root += "-" + self.worker_environment_sha256[:16]
         super().__init__(*args, **kwargs)
         if not self.model_name:
             raise ValueError("model_name is required")
@@ -85,9 +113,15 @@ class PraxileAgent(BaseAgent):
         return "praxile-native"
 
     def version(self) -> str:
+        if self._dependency_wheels:
+            return "sha256:" + self.wheel_sha256 + "+worker:" + self.worker_environment_sha256
         return "sha256:" + self.wheel_sha256
 
     async def setup(self, environment) -> None:
+        # Recheck sources before transferring anything; constructor checks may be stale.
+        for path, digest in [(self.wheel, self.wheel_sha256), *self._dependency_wheels]:
+            if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ValueError("worker wheel changed before setup")
         remote_wheel = self.remote_root + "/" + self.wheel.name
         await self._exec(environment, shlex.join(["mkdir", "-p", self.remote_root]))
         await environment.upload_file(self.wheel, remote_wheel)
@@ -99,8 +133,24 @@ class PraxileAgent(BaseAgent):
         if self.inherit_task_packages:
             venv.append("--system-site-packages")
         await self._exec(environment, shlex.join([*venv, self.remote_root + "/venv"]))
+        dependencies = []
+        for path, digest in self._dependency_wheels:
+            remote = self.remote_root + "/" + path.name
+            await environment.upload_file(path, remote)
+            verify_dependency = ("import hashlib,pathlib; "
+                f"assert hashlib.sha256(pathlib.Path({remote!r}).read_bytes()).hexdigest()=={digest!r}")
+            await self._exec(environment, shlex.join(["python3", "-c", verify_dependency]))
+            dependencies.append(remote)
         await self._exec(environment, shlex.join([self.remote_root + "/venv/bin/python", "-m", "pip",
-                                                "install", "--no-index", "--no-deps", remote_wheel]))
+                                                "install", "--no-index", "--no-deps", remote_wheel, *dependencies]))
+        if dependencies:
+            await self._exec(environment, shlex.join([
+                self.remote_root + "/venv/bin/python", "-m", "pip", "check"]))
+        write_json(self.logs_dir / "praxile-worker-environment.json", {
+            **self.worker_environment, "digest": self.worker_environment_sha256,
+            "status": "installed", "task_image_modified": False,
+            "extra_dependency_environment": bool(dependencies),
+            "strict_environment_equivalence_verified": False})
         if self.renderer_executable:
             # Probe the worker interpreter, not the image's system Python.
             probe = ("import os,sys; from defusedxml.ElementTree import fromstring; "
@@ -197,6 +247,8 @@ class PraxileAgent(BaseAgent):
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
                   "wheel_sha256": self.wheel_sha256, "result_available": False,
                   "inherit_task_packages": self.inherit_task_packages,
+                  "worker_environment": self.worker_environment,
+                  "worker_environment_sha256": self.worker_environment_sha256,
                   "output_directory": self.output_directory,
                   "renderer_executable": self.renderer_executable,
                   "public_contract_sha256": self.public_contract_sha256,
@@ -323,6 +375,8 @@ class PraxileAgent(BaseAgent):
         context.n_output_tokens = evidence["complete_tokens"]["completion_tokens"]
         context.metadata = {**(context.metadata or {}), "praxile": {
             "wheel_sha256": self.wheel_sha256, "trajectory_task_id": trajectory.get("task_id"),
+            "worker_environment": self.worker_environment,
+            "worker_environment_sha256": self.worker_environment_sha256,
             "result": trajectory.get("result"), "official_evaluation": "external",
             "experience_mode": result["experience_mode"],
             "usage_evidence": evidence,

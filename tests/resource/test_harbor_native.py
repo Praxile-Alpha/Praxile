@@ -17,6 +17,70 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+def test_worker_dependencies_are_verified_offline_and_versioned(tmp_path):
+    import shlex
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    dependency = tmp_path / "pypdf-6.21.1-py3-none-any.whl"
+    dependency.write_bytes(b"dependency-fixture")
+    kwargs = dict(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture")
+    spec = [{"path": str(dependency), "sha256": hashlib.sha256(dependency.read_bytes()).hexdigest()}]
+    plain = PraxileAgent(**kwargs)
+    agent = PraxileAgent(**kwargs, dependency_wheels=spec)
+    assert agent.version() != plain.version() and agent.remote_root != plain.remote_root
+    spec[0]["sha256"] = "0" * 64
+    commands, uploads = [], []
+    class Environment:
+        async def exec(self, command, **kwargs):
+            commands.append(shlex.split(command))
+            return SimpleNamespace(return_code=0)
+        async def upload_file(self, path, remote):
+            uploads.append((path.name, remote))
+    asyncio.run(agent.setup(Environment()))
+    install = next(command for command in commands if "install" in command)
+    assert "--no-index" in install and "--no-deps" in install
+    assert install[-1].endswith(dependency.name)
+    assert any(command[-2:] == ["pip", "check"] for command in commands)
+    assert len(uploads) == 2
+    record = json.loads((tmp_path / "praxile-worker-environment.json").read_text())
+    assert record["extra_dependency_environment"] is True
+    assert record["strict_environment_equivalence_verified"] is False
+    assert str(tmp_path) not in json.dumps(record)
+    dependency.write_bytes(b"changed")
+    commands.clear()
+    with pytest.raises(ValueError, match="changed before setup"):
+        asyncio.run(agent.setup(Environment()))
+    assert not commands
+    with pytest.raises(ValueError, match="digest"):
+        PraxileAgent(**kwargs, dependency_wheels=spec)
+
+
+def test_worker_dependency_failure_stops_setup(tmp_path):
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    dependency = tmp_path / "pypdf-6.21.1-py3-none-any.whl"
+    dependency.write_bytes(b"fixture-dep")
+    kwargs = dict(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture")
+    spec = {"path": str(dependency), "sha256": hashlib.sha256(dependency.read_bytes()).hexdigest()}
+    with pytest.raises(ValueError, match="filename"):
+        PraxileAgent(**kwargs, dependency_wheels=[spec, spec])
+    agent = PraxileAgent(**kwargs, dependency_wheels=[spec])
+    class Environment:
+        async def exec(self, command, **kwargs):
+            return SimpleNamespace(return_code=1 if "pip check" in command else 0)
+        async def upload_file(self, *args):
+            pass
+    with pytest.raises(RuntimeError, match="exit=1"):
+        asyncio.run(agent.setup(Environment()))
+    assert not (tmp_path / "praxile-worker-environment.json").exists()
+
+
 @pytest.mark.parametrize("cancel", [False, True])
 def test_broker_is_revoked_when_run_fails(tmp_path, monkeypatch, cancel):
     from types import SimpleNamespace

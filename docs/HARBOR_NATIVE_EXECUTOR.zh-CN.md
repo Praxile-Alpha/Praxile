@@ -4,6 +4,28 @@
 
 ## 边界
 
+### 固定 worker 依赖
+
+适配器接受可选 `dependency_wheels`，每项严格为本机 `path` 和完整 `sha256`：
+
+```json
+{"dependency_wheels":[{"path":"/absolute/wheels/pypdf-6.21.1-py3-none-any.whl","sha256":"<replace-with-verified-64-character-sha256>"}]}
+```
+
+调用者准备受信任且适用于任务容器 Python/平台的完整 wheel 集合；这里不联网
+解析或安装间接依赖。宿主初始化、上传前以及容器端分别校验摘要，拒绝重复文件名。
+安装只在 worker venv 中执行 `pip install --no-index --no-deps`，之后 `pip check`；
+缺失或冲突依赖阻止 setup，不启动模型任务。摘要校验是完整性检查，不是软件来源信任认证。
+
+清单的文件名和摘要进入 worker environment digest、适配器 version、独立安装目录、
+`praxile-worker-environment.json` 和执行记录，不公开宿主文件路径。无依赖清单保持
+原 version 兼容；指定额外依赖须按不同环境报告，不能直接声称与原环境严格 A/B。
+`inherit_task_packages` 默认仍关闭；启用后清单摘要并不代表继承包已经完整锁定。
+
+Harbor 0.18 / 0.22 的适配器回归各 30 passed、8 skipped，覆盖离线安装命令、
+摘要变更、失败阻断和版本区分；本轮未启动真实 Docker 安装验收，不能以 fixture
+通过替代真实环境证明。原始任务镜像、材料和评分器不由此接口修改。
+
 ### 容器内执行期限
 
 原生 worker 现在通过 `praxile.eval.process_supervisor` 在独立 POSIX 进程组中启动。
