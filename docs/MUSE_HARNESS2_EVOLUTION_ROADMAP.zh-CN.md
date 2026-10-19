@@ -123,6 +123,8 @@ R0-A worktree 后端增补：新增 WorktreeLease，复用既有 preparer，生�
 
 取消握手增补：run 取消通过专属标记请求容器内 supervisor 停止，再限时确认终态；请求成功与停止确认独立记录，失败保留原取消异常。6 项本地进程测试、两个 Harbor 版本各 11 项契约/各 2 项 Docker 测试通过。真实 Docker 验证 helper 到进程组回收；Harbor 顶层取消、daemon 失联、强杀恢复和完整租约统一接入仍未验收，总项保持未完成。
 
+Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过。等待 worker 已向阻塞 fixture 模型发起请求后取消 Agent.run，验证取消传播、进程组回收、终态确认及结果缺失的正确记录；普通/dev 用户均覆盖。完整 Harbor Trial 生命周期、daemon 失联和强杀恢复仍缺，未把 Agent 入口验收扩大为完整租约验收。
+
 结果导入增补：新增官方 score/reward/trial 的一致性校验与规范化，保留逐项判断，区分有效零分和 judge/build 错误，缺 usage 不补零，执行与评分状态分开。16 项导入测试及其余相关测试合计 47 项通过（含上游 ArtifactWriter 兼容）；真实任务评分与可信隔离尚未完成。
 
 自检增补：`doctor --benchmark workbuddy|jobbench [--online]` 不初始化项目，检查固定 Harbor 版本/插件/Docker；online 仅检查 daemon，不调用模型。基础设施可用与真实执行验证分开，模型/judge/镜像架构未知时明确显示。5 项测试及真实 WorkBuddy 基础设施查询通过；完整能力矩阵与各任务族验收仍未完成。

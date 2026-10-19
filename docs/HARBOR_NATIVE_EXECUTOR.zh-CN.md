@@ -53,6 +53,23 @@ trial 顶层取消、Docker daemon 失联或宿主进程强杀，不能把它算
 本次 wheel SHA-256：`01a076ca0221f530a5bdab8a9165e68985d3c773c0631d6cd0f305a9ba78ac0b`，
 环境/镜像同上，两个真实容器测试耗时分别为 23.19s / 23.30s。
 
+### Agent 入口取消验收
+
+后续增加真正的 `PraxileAgent.run()` 取消测试，不再只调用取消 helper。
+容器内 fixture 模型收到请求后写入观察标记并阻塞；宿主观察到标记后才取消
+正在运行的 Agent coroutine，确保 worker 已经开始实际模型调用。验证原
+CancelledError 传播、取消日志中的 requested/termination_confirmed 为 true、
+supervisor 返回 cancelled/143，以及未生成的结果不被报告为可用。
+
+Harbor 0.18 和 0.22 各 **4 passed / 11 deselected**，耗时分别 44.26s / 44.08s。
+每个版本覆盖正常执行与 Agent 取消，且分别运行普通容器用户和 WorkBuddy dev 用户。
+沿用上一节取消版本 wheel 和镜像，所有测试 finally 委托 Harbor 删除容器。
+这轮只修改测试，未产生新的运行时 wheel。
+
+该证据闭合 Agent.run -> 取消请求 -> 容器进程回收 -> 终态日志链路。
+没有启动完整 Harbor Trial、调用官方 verifier 或付费模型，也没有注入 daemon
+失联和宿主 SIGKILL；这些仍属于未完成的容器租约/灾备验收。
+
 - 基础 Praxile 不依赖 Harbor。WorkBuddy 的 Harbor 0.18.0 与 JobBench 的 0.22.0 必须使用独立 Python 环境，不能在同一环境互相升级。
 - 环境必须提供 Python >=3.11、venv 和任务工具。宿主 Harbor 环境要求 Python >=3.12。
 - `workspace` 必须是明确存在的绝对路径。执行前存在 `.praxile`（含符号链接）会被拒绝，防止跨 arm 经验、规则或配置污染。

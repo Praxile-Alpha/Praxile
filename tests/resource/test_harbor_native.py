@@ -177,7 +177,8 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
 @pytest.mark.timeout(300)
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
 @pytest.mark.parametrize("workbuddy", [False, True])
-def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy):
+@pytest.mark.parametrize("cancel_run", [False, True])
+def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run):
     from harbor.environments.docker.docker import DockerEnvironment
     from harbor.models.task.config import EnvironmentConfig
     from harbor.models.trial.paths import TrialPaths
@@ -195,10 +196,14 @@ def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy):
     )
     server = tmp_path / "model.py"
     server.write_text('''from http.server import HTTPServer, BaseHTTPRequestHandler
-import json
+import json, time
+from pathlib import Path
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.rfile.read(int(self.headers['Content-Length']))
+        if self.path.startswith('/block/'):
+            Path('/tmp/model-request-started').touch()
+            time.sleep(120)
         body = json.dumps({'choices':[{'message':{'content':json.dumps({'type':'finish','summary':'fixture completed','status':'completed'})}}], 'usage':{'prompt_tokens':12,'completion_tokens':7}}).encode()
         self.send_response(200)
         self.send_header('Content-Length', str(len(body)))
@@ -218,13 +223,39 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 environment.default_user = "dev"
             agent = agent_type(logs_dir=paths.agent_dir, wheel_path=str(wheel),
                 wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
-                workspace="/workspace", base_url="http://127.0.0.1:18888/v1",
+                workspace="/workspace", base_url="http://127.0.0.1:18888" + ("/block/v1" if cancel_run else "/v1"),
                 model_name="fixture", max_steps=2, timeout_seconds=90)
             await agent.setup(environment)
             if workbuddy:
                 identity = await environment.exec("id -un", timeout_sec=10)
                 assert identity.stdout.strip() == "dev"
             context = AgentContext()
+            if cancel_run:
+                running_agent = asyncio.create_task(agent.run("Summarize the available project.", environment, context))
+                try:
+                    async with asyncio.timeout(20):
+                        while True:
+                            observed = await environment.exec("test -f /tmp/model-request-started", timeout_sec=5)
+                            if observed.return_code == 0:
+                                break
+                            if running_agent.done():
+                                await running_agent
+                                pytest.fail("worker ended before the model request")
+                            await asyncio.sleep(.1)
+                    running_agent.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await asyncio.wait_for(running_agent, timeout=25)
+                    execution = json.loads((paths.agent_dir / "praxile-execution.json").read_text())
+                    assert execution["status"] == "cancelled"
+                    assert execution["worker_cancel"] == {"requested": True, "termination_confirmed": True}
+                    assert execution["worker_supervision"] == {"status": "cancelled", "returncode": 143}
+                    assert not execution["result_available"]
+                    assert not (paths.agent_dir / "praxile-result.json").exists()
+                finally:
+                    if not running_agent.done():
+                        running_agent.cancel()
+                    await asyncio.gather(running_agent, return_exceptions=True)
+                return
             await agent.run("Summarize the available project.", environment, context)
             assert context.n_input_tokens == 12
             assert context.metadata["praxile"]["result"]["status"] == "completed"
