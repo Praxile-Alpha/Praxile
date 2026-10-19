@@ -27,3 +27,4 @@ coverage.xml
 logs/
 .env
 .env.*
+API-key/

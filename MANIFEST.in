@@ -9,6 +9,7 @@ recursive-include examples *.md *.json *.html *.jsx *.mjs *.go *.toml *.rs *.yml
 recursive-include web *.md *.json *.html *.js *.jsx *.css
 prune .git
 prune .praxile
+prune API-key
 prune web/node_modules
 prune web/dist
 prune __MACOSX

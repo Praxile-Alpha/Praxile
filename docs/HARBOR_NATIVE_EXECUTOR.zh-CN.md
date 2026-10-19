@@ -82,6 +82,20 @@ Harbor 0.18 和 0.22 各 **4 passed / 11 deselected**，耗时分别 44.26s / 44
 
 ## 安装与验证
 
+### MiniMax 凭据预检（2026-10-19）
+
+用户授权的本地凭据文件已设为 0600；仓库的 `API-key/` 目录同时被 Git 和
+源码发布清单排除。不要把密钥放进 agent JSON、容器环境、命令行或运行报告。
+预检直接向中国区官方端点 `https://api.minimaxi.com/v1/chat/completions`
+发送一次 MiniMax-M3 请求：HTTP 200、provider status 0，输入 167 token、
+输出 2 token（其中缓存输入 128 token）。请求关闭 thinking、限制输出 32 token；
+这只验证凭据与模型可调用，不是 benchmark、AgentRuntime 或 judge 验收。
+
+该记录不包含凭据内容或摘要，不确认密钥是否已轮换。后续真实任务仍需要宿主侧
+有范围、期限和调用上限的凭据代理，不能让任务 shell 继承订阅 Key。
+当前 native adapter 只有 endpoint 接口和直接环境变量模式；代理尚未实现，
+因此没有因预检成功而勾选最小权限凭据或真实任务验收。
+
 在 Praxile 仓库中构建 wheel，再在单独环境安装测试依赖：
 
 ```sh
