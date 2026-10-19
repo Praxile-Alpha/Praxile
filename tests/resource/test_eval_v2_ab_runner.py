@@ -119,6 +119,13 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     )
 
     assert report["invariant_check"]["valid"] is True
+    episode = report["improvement_episodes"][0]
+    assert episode["schema_version"] == "praxile.improvement_episode.v1"
+    assert episode["candidate"]["digest"] == candidate.digest
+    assert episode["baseline"]["trace_id"]
+    assert episode["candidate"]["trace_id"]
+    assert not episode["promotion_eligible"]
+    assert episode["experience_entry"] == "NO_ENTRY"
     assert report["comparison"]["decision"] == "inconclusive"
     assert report["capability"]["terminal_selection"]["decision"] == "inconclusive"
     assert report["capability"]["information_boundary"]["os_sandbox"] is False
@@ -137,6 +144,7 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     root = state / "eval" / "v2" / "experiments" / "p0-c-fixture"
     assert (root / "manifest.json").is_file()
     assert (root / "report.json").is_file()
+    assert read_json(root / "report.json", {})["improvement_episodes"] == report["improvement_episodes"]
     assert (root / "diagnoses" / "baseline" / "owner__repo-1.json").is_file()
 
     reanalyzed = experiment.analyze("p0-c-fixture")

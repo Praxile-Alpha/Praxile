@@ -24,6 +24,8 @@ def _task(task_id: str, resolved: bool, *, tokens: int, tools: int) -> dict:
 def test_comparison_reports_category_gain_and_regression_first_decision(tmp_path) -> None:
     baseline = {"tasks": [_task("a", False, tokens=10, tools=2), _task("b", True, tokens=10, tools=2)]}
     candidate = {"tasks": [_task("a", True, tokens=8, tools=1), _task("b", False, tokens=8, tools=1)]}
+    candidate["tasks"][0]["metrics"]["progress"] = {"patch_created": True, "environment_probe_count": 2}
+    candidate["tasks"][1]["metrics"]["progress"] = {"patch_created": False, "environment_probe_count": 5}
     diagnoses = {
         "baseline": [
             {"task_id": "a", "attribution": {"category": "CONTEXT"}},
@@ -43,6 +45,10 @@ def test_comparison_reports_category_gain_and_regression_first_decision(tmp_path
     assert result["decision"] == "regress"
     assert result["by_failure_category"]["CONTEXT"]["gains"] == 1
     assert result["by_failure_category"]["UNKNOWN"]["regressions"] == 1
+    assert result["by_failure_category"]["CONTEXT"]["progress"]["candidate_patches_created"] == 1
+    assert result["by_failure_category"]["UNKNOWN"]["progress"]["candidate_patches_created"] == 0
+    assert result["by_failure_category"]["CONTEXT"]["progress"]["environment_probe_delta"] == 2
+    assert result["by_failure_category"]["UNKNOWN"]["progress"]["environment_probe_delta"] == 5
 
 
 def test_comparison_accepts_strict_efficiency_improvement_without_success_change(tmp_path) -> None:

@@ -13,6 +13,7 @@ from .activation import ContextActivationGate
 from .candidate import ContextCandidate
 from .capability import CapabilityProtocol
 from .heldout import HeldoutUseLedger
+from .improvement import improvement_episodes
 from .representation import ExperienceRepresentationRouter
 from .proxy import ProxyEvalRegistry
 from .diagnosis import FailureDiagnoser
@@ -230,6 +231,8 @@ class ControlledABExperiment:
             "candidate": _arm_summary(candidate_report),
             "diagnoses": diagnoses,
             "comparison": comparison,
+            "improvement_episodes": improvement_episodes(experiment_id, candidate, baseline_report,
+                candidate_report, comparison, invariant_check),
         }
         if capability_protocol is not None:
             proxy_result = None
@@ -407,16 +410,16 @@ def compare_ab_reports(
             ),
             "progress": {
                 "baseline_patches_created": sum(
-                    bool(item["progress"]["baseline"].get("patch_created")) for item in task_rows
+                    bool(item["progress"]["baseline"].get("patch_created")) for item in rows
                 ),
                 "candidate_patches_created": sum(
-                    bool(item["progress"]["candidate"].get("patch_created")) for item in task_rows
+                    bool(item["progress"]["candidate"].get("patch_created")) for item in rows
                 ),
                 "environment_probe_delta": sum(
-                    int(item["progress"]["environment_probe_delta"]) for item in task_rows
+                    int(item["progress"]["environment_probe_delta"]) for item in rows
                 ),
                 "repeated_command_delta": sum(
-                    int(item["progress"]["repeated_command_delta"]) for item in task_rows
+                    int(item["progress"]["repeated_command_delta"]) for item in rows
                 ),
             },
         }

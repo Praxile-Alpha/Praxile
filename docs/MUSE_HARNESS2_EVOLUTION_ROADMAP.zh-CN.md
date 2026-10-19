@@ -190,6 +190,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ### R2-B 改进实验记录
 
+受控 Context A/B 已增加逐任务 ImprovementEpisode V1，保留冻结预测、候选 digest、配对 trace、观察差异和混杂因素；verdict 限定单对任务结果，不能推断因果，默认 NO_ENTRY、不授予 promotion。缺失数据保留未知。已接实际 A/B analyze/report 持久化，修复分类 progress 误用全任务汇总。可执行 diff、独立行为 verifier、语义对齐及中性 benchmark 接入尚未完成，总项不勾选。详见 `IMPROVEMENT_EPISODES.zh-CN.md`。
+
 - [ ] `ImprovementEpisode` 记录基线、候选、组件 diff、行为预测、probe、观察差异、混杂因素与后续决定。
 - [ ] 每项修改 verdict 支持 helped/hurt/no_observed_effect/confounded；区分行为改善与最终任务成功。
 - [ ] 不同轨迹按子任务/语义事件对齐，不能把不同执行的第 N 步当作同一状态。
