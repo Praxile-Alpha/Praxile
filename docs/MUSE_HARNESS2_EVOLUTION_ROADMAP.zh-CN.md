@@ -333,6 +333,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   JobBench/WorkBuddy 导入器核对摘要、轨迹身份和重算事件，输出可关联 EventStore
   收据的 native_trace_binding。旧 Trial 明确 unbound，评分不可用不补零。
   本地一致性不是来源认证，真实完整 Trial 与双 arm 编排仍未完成，总项不勾选。
+  双臂准备增补：native_pair 从一份基础 Harbor job 生成 baseline/candidate 配置及
+  私有候选快照，固定单并发/单次尝试/零自动重试，记录配置摘要，拒绝覆盖已有
+  实验。8 项测试通过，两个 Harbor 版本均通过配置解析；不启动模型，不声称
+  外部环境已冻结。真实执行/恢复/官方评分编排仍未完成，总项保持未勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

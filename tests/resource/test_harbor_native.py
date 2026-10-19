@@ -316,6 +316,29 @@ def test_host_cancellation_requests_worker_stop_without_replacing_primary_error(
     assert record["status"] == "cancelled"
 
 
+def test_native_pair_configs_validate_with_installed_harbor(tmp_path):
+    from harbor.models.job.config import JobConfig
+    from praxile.eval.native_pair import prepare_pair
+    from praxile.eval.v2.candidate import ContextCandidate
+
+    candidate = ContextCandidate(candidate_id="pair", version="1", title="Focused check",
+        candidate_type="context_policy", context_item={"content": "Check document page count."},
+        confidence=0, evidence_refs=("event:source",), expected_effect={"hypothesis": "Avoid invalid output"},
+        applies_to={"repositories": ["docs"], "task_signals": ["one-page"],
+                    "does_not_apply_when": ["multi-page"]}).to_dict()
+    job = {"job_name": "paired", "jobs_dir": str(tmp_path / "jobs"),
+        "tasks": [{"path": str(tmp_path / "task")}], "datasets": [],
+        "agents": [{"import_path": "praxile.adapters.harbor_native:PraxileAgent", "model_name": "fixture",
+                    "kwargs": {"max_steps": 20, "timeout_seconds": 60}}]}
+    _, arms = prepare_pair(job, candidate, repository="docs", output_dir=tmp_path / "pair")
+    for config in arms.values():
+        parsed = JobConfig.model_validate(config)
+        assert parsed.n_concurrent_trials == 1
+        assert parsed.n_attempts == 1
+        assert parsed.retry.max_retries == 0
+        assert parsed.tasks[0].path == tmp_path / "task"
+
+
 def test_harbor_agent_usage_and_integrity(tmp_path):
     wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"fixture")

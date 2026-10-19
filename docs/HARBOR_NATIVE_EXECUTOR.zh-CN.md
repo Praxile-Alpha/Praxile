@@ -606,6 +606,32 @@ python -m praxile.eval.workbuddy_results \
 
 验证：16 项结果导入测试（含上游 ArtifactWriter 输出兼容），与清单/准备/job 测试合计 47 项通过；没有把 fixture 结果冒充真实 benchmark 成绩。
 
+## 生成原生开发实验的双臂配置
+
+先通过对应 benchmark 的生成器准备一个经过校验的基础 Harbor job，显式填写
+执行模型、worker `max_steps`/`timeout_seconds`、绝对 `jobs_dir` 和任务路径。
+在包含 Praxile 的环境中执行：
+
+```sh
+python -m praxile.eval.native_pair \
+  --job /absolute/private/base-job.json \
+  --candidate /absolute/private/development-candidate.json \
+  --candidate-sha256 CANDIDATE_FILE_SHA256 \
+  --repository EXACT_SCOPE_REPOSITORY \
+  --output-dir /absolute/private/new-pair
+```
+
+新目录包含 `baseline.json`、`candidate.json`、`candidate-asset.json` 和最后写入的
+`manifest.json`。目录/文件权限分别为 0700/0600；已有目录不覆盖，中断留下的
+不完整目录不视为可执行计划。候选文件核验原始摘要后另存规范化快照，配置引用
+快照摘要；manifest 分别保留候选逻辑 digest、快照及两臂配置摘要。
+
+两臂固定单并发、单次尝试和零自动重试，其余共用原配置，只改变 job 名称与
+候选注入参数。此命令不启动 Harbor、不调用模型，也不自动评分或批准经验。
+正式执行前应在对应的隔离 Harbor 环境校验配置与材料；冻结镜像、模型端点、
+judge、外部文件和运行顺序仍需进一步验证，当前 manifest 不宣称受控实验通过。
+真实双臂执行、结果收集和恢复编排仍待完成。
+
 ## 官方 Trial 与 Native Trace 的绑定
 
 新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。
