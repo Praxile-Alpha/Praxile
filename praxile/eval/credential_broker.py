@@ -1,0 +1,228 @@
+"""Bounded, host-owned chat capability; never an arbitrary forwarding proxy."""
+from __future__ import annotations
+
+import hmac
+import json
+import math
+import secrets
+import stat
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+
+
+class BrokerDenied(ValueError):
+    pass
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def read_private_key(path: Path) -> str:
+    # O_NOFOLLOW closes the final-component symlink race on supported hosts.
+    import os
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("private credential loading requires a POSIX host")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "r", encoding="utf-8") as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_size > 8192:
+            raise ValueError("credential must be a private regular file of at most 8192 bytes")
+        key = handle.read(8193).strip()
+    if not key or len(key) > 4096 or any(c.isspace() or ord(c) < 33 for c in key):
+        raise ValueError("credential file must contain one raw key")
+    return key
+
+
+class ChatCredentialBroker:
+    """Single-flight, expiring chat endpoint. Issued capabilities are still secrets.
+
+    Reservation accounting bounds requested output, not dollars or input tokens.
+    Revocation prevents new calls; it cannot undo an admitted provider request.
+    """
+
+    def __init__(self, *, key: str, endpoint: str, model: str, max_calls: int,
+                 output_budget: int, max_output: int = 4096, ttl_seconds: int = 900,
+                 request_timeout: int = 60):
+        url = urlsplit(endpoint)
+        if (url.scheme != "https" or not url.hostname or url.username or url.password
+                or url.query or url.fragment or not url.path.endswith("/chat/completions")):
+            raise ValueError("broker requires a fixed HTTPS chat endpoint")
+        limits = [(max_calls, 1, 1000), (output_budget, 1, 10_000_000),
+                  (max_output, 1, 131072), (ttl_seconds, 1, 3600), (request_timeout, 1, 120)]
+        if any(type(v) is not int or not lo <= v <= hi for v, lo, hi in limits):
+            raise ValueError("invalid broker budget")
+        if not key or any(c.isspace() for c in key) or not model.strip():
+            raise ValueError("key and model are required")
+        self._key, self.endpoint, self.model = key, endpoint, model
+        self._capability = secrets.token_urlsafe(32)
+        self._deadline = time.monotonic() + ttl_seconds
+        self._remaining_calls, self._remaining_output = max_calls, output_budget
+        self.max_output, self.request_timeout = max_output, request_timeout
+        self._revoked = False
+        self._lock = threading.Lock()
+        self._flight = threading.Lock()
+        self._server = self._thread = None
+
+    @property
+    def capability(self) -> str:
+        return self._capability
+
+    def revoke(self) -> None:
+        with self._lock:
+            self._revoked = True
+
+    def status(self) -> dict:
+        with self._lock:
+            return {"revoked": self._revoked, "expired": time.monotonic() >= self._deadline,
+                    "remaining_calls": self._remaining_calls, "remaining_output": self._remaining_output}
+
+    def _authorize(self, authorization: str) -> None:
+        if not hmac.compare_digest(authorization.encode(), ("Bearer " + self._capability).encode()):
+            raise BrokerDenied("invalid capability")
+        with self._lock:
+            if self._revoked or time.monotonic() >= self._deadline:
+                raise BrokerDenied("capability expired or revoked")
+
+    def chat(self, authorization: str, payload: dict) -> dict:
+        self._authorize(authorization)
+        allowed = {"model", "messages", "max_tokens", "temperature", "stream"}
+        if not isinstance(payload, dict) or set(payload) - allowed or payload.get("model") != self.model:
+            raise BrokerDenied("request outside model capability")
+        if payload.get("stream", False) is not False:
+            raise BrokerDenied("streaming is not supported")
+        messages = payload.get("messages")
+        if not isinstance(messages, list) or not 1 <= len(messages) <= 256:
+            raise BrokerDenied("invalid messages")
+        for message in messages:
+            if (not isinstance(message, dict) or set(message) != {"role", "content"}
+                    or not isinstance(message["role"], str)
+                    or message["role"] not in {"system", "user", "assistant"}
+                    or not isinstance(message["content"], str)):
+                raise BrokerDenied("only text chat messages are permitted")
+        maximum = payload.get("max_tokens", self.max_output)
+        if type(maximum) is not int or not 1 <= maximum <= self.max_output:
+            raise BrokerDenied("invalid output limit")
+        temperature = payload.get("temperature", 1)
+        if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:
+            raise BrokerDenied("invalid temperature")
+        body = json.dumps({**payload, "max_tokens": maximum}, allow_nan=False).encode()
+        if len(body) > 1024 * 1024:
+            raise BrokerDenied("request too large")
+        if not self._flight.acquire(blocking=False):
+            raise BrokerDenied("another request is active")
+        try:
+            self._authorize(authorization)
+            with self._lock:
+                if self._revoked or time.monotonic() >= self._deadline:
+                    raise BrokerDenied("capability expired or revoked")
+                if self._remaining_calls < 1 or self._remaining_output < maximum:
+                    raise BrokerDenied("capability budget exhausted")
+                self._remaining_calls -= 1
+                self._remaining_output -= maximum
+            # Failed requests consume reservations: no retry-driven quota bypass.
+            result = self._forward(body)
+            if self._key.encode() in json.dumps(result).encode():
+                raise RuntimeError("provider response rejected")
+            return result
+        finally:
+            self._flight.release()
+
+    def _forward(self, body: bytes) -> dict:
+        request = Request(self.endpoint, data=body, headers={
+            "Content-Type": "application/json", "Authorization": "Bearer " + self._key})
+        with build_opener(ProxyHandler({}), _NoRedirect()).open(request, timeout=self.request_timeout) as response:
+            deadline = time.monotonic() + self.request_timeout
+            chunks, size = [], 0
+            while size <= 8 * 1024 * 1024:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("provider response deadline")
+                chunk = response.read1(min(65536, 8 * 1024 * 1024 + 1 - size))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+            raw = b"".join(chunks)
+        if len(raw) > 8 * 1024 * 1024:
+            raise RuntimeError("provider response too large")
+        result = json.loads(raw)
+        if not isinstance(result, dict) or not isinstance(result.get("choices"), list):
+            raise RuntimeError("invalid provider response")
+        return result
+
+    def start(self, host: str = "127.0.0.1", port: int = 0) -> tuple[str, int]:
+        if host != "127.0.0.1":
+            raise ValueError("broker currently supports loopback IPv4 only")
+        if self._server is not None:
+            raise RuntimeError("broker already started")
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def setup(self):
+                super().setup()
+                self.connection.settimeout(5)
+
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                code, result = 403, {"error": "request denied"}
+                try:
+                    if self.path != "/v1/chat/completions" or self.headers.get("Transfer-Encoding"):
+                        raise BrokerDenied("invalid route")
+                    owner._authorize(self.headers.get("Authorization", ""))
+                    lengths = self.headers.get_all("Content-Length", [])
+                    if len(lengths) != 1 or not lengths[0].isdigit() or not 0 < int(lengths[0]) <= 1024 * 1024:
+                        raise BrokerDenied("invalid body length")
+                    size, chunks, deadline = int(lengths[0]), [], time.monotonic() + 5
+                    while size:
+                        if time.monotonic() >= deadline:
+                            raise BrokerDenied("body deadline exceeded")
+                        chunk = self.rfile.read1(min(size, 65536))
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        size -= len(chunk)
+                    raw = b"".join(chunks)
+                    if len(raw) != int(lengths[0]):
+                        raise BrokerDenied("incomplete body")
+                    payload = json.loads(raw)
+                    result = owner.chat(self.headers.get("Authorization", ""), payload)
+                    code = 200
+                except (BrokerDenied, ValueError):
+                    pass
+                except Exception:
+                    code, result = 502, {"error": "upstream request failed"}
+                data = json.dumps(result).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                try:
+                    self.wfile.write(data)
+                except OSError:
+                    pass
+
+        self._server = HTTPServer((host, port), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, kwargs={"poll_interval": 0.1}, daemon=True)
+        self._thread.start()
+        return self._server.server_address
+
+    def close(self) -> None:
+        self.revoke()
+        if self._server is not None:
+            self._server.shutdown()
+            self._server.server_close()
+            self._thread.join()
+            self._server = self._thread = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
