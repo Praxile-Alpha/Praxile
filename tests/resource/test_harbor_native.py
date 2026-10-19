@@ -84,6 +84,39 @@ def test_successful_process_with_invalid_result_is_collection_failure(tmp_path):
     assert not (tmp_path / "praxile-result.partial.json").exists()
 
 
+def test_native_worker_is_supervised_and_deadline_evidence_is_retained(tmp_path):
+    from types import SimpleNamespace
+    import shlex
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        base_url="http://localhost/v1", model_name="fixture", timeout_seconds=30,
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
+    class Environment:
+        async def upload_file(self, *args):
+            pass
+        async def exec(self, command, **kwargs):
+            argv = shlex.split(command)
+            assert argv[2] == "praxile.eval.process_supervisor"
+            assert argv[argv.index("--timeout") + 1] == "30"
+            assert "praxile.eval.native_worker" in argv
+            assert kwargs["timeout_sec"] == 40
+            return SimpleNamespace(return_code=124)
+        async def download_file(self, source, target):
+            if source.endswith("/supervision.json"):
+                target.write_text(json.dumps({"schema_version": "praxile.worker_supervision.v1",
+                    "status": "timed_out", "returncode": 124, "untrusted_extra": "secret"}))
+            else:
+                raise FileNotFoundError()
+    with pytest.raises(RuntimeError):
+        asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["worker_supervision"] == {"status": "timed_out", "returncode": 124}
+    assert not record["result_available"]
+    assert "secret" not in json.dumps(record)
+    assert not (tmp_path / "praxile-supervision.partial.json").exists()
+
+
 def test_harbor_agent_usage_and_integrity(tmp_path):
     wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"fixture")

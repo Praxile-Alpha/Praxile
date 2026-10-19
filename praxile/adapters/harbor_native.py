@@ -61,8 +61,8 @@ class PraxileAgent(BaseAgent):
         await self._exec(environment, shlex.join([self.remote_root + "/venv/bin/python", "-m", "pip",
                                                 "install", "--no-index", "--no-deps", remote_wheel]))
 
-    async def _exec(self, environment, command: str):
-        result = await environment.exec(command, timeout_sec=self.timeout_seconds)
+    async def _exec(self, environment, command: str, *, timeout_seconds: int | None = None):
+        result = await environment.exec(command, timeout_sec=timeout_seconds or self.timeout_seconds)
         if result.return_code != 0:
             # Do not echo process output that may contain task credentials.
             raise RuntimeError(f"native executor command failed: exit={result.return_code}")
@@ -75,6 +75,8 @@ class PraxileAgent(BaseAgent):
             public.write_text(instruction, encoding="utf-8")
             await environment.upload_file(public, self.remote_root + "/instruction.txt")
         command = shlex.join([
+            self.remote_root + "/venv/bin/python", "-m", "praxile.eval.process_supervisor",
+            "--timeout", str(self.timeout_seconds), "--status", self.remote_root + "/supervision.json", "--",
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.native_worker",
             "--workspace", self.workspace, "--instruction", self.remote_root + "/instruction.txt",
             "--result", self.remote_root + "/result.json", "--model", self.model_name,
@@ -85,7 +87,7 @@ class PraxileAgent(BaseAgent):
                   "wheel_sha256": self.wheel_sha256, "result_available": False}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:
-            await self._exec(environment, command)
+            await self._exec(environment, command, timeout_seconds=self.timeout_seconds + 10)
         except BaseException as error:
             record.update(status="cancelled" if isinstance(error, asyncio.CancelledError) else "failed",
                           error_type=type(error).__name__)
@@ -95,6 +97,7 @@ class PraxileAgent(BaseAgent):
                 record["result_available"] = True
             except (Exception, asyncio.CancelledError) as collection_error:
                 record["collection_error_type"] = type(collection_error).__name__
+            await self._record_supervision(environment, record)
             record["elapsed_seconds"] = time.monotonic() - started
             try:
                 write_json(self.logs_dir / "praxile-execution.json", record)
@@ -108,12 +111,33 @@ class PraxileAgent(BaseAgent):
             record.update(status="collection_failed", error_type=type(error).__name__)
             raise
         finally:
+            await self._record_supervision(environment, record)
             record["elapsed_seconds"] = time.monotonic() - started
             try:
                 write_json(self.logs_dir / "praxile-execution.json", record)
             except OSError:
                 if record["status"] == "completed":
                     raise
+
+    async def _record_supervision(self, environment, record) -> None:
+        temporary = self.logs_dir / "praxile-supervision.partial.json"
+        try:
+            await asyncio.wait_for(environment.download_file(
+                self.remote_root + "/supervision.json", temporary), timeout=5)
+            supervision = json.loads(temporary.read_text(encoding="utf-8"))
+            if (not isinstance(supervision, dict)
+                    or supervision.get("schema_version") != "praxile.worker_supervision.v1"
+                    or supervision.get("status") not in {
+                        "starting", "running", "completed", "failed", "timed_out", "cancelled", "supervisor_error"}):
+                raise ValueError("invalid worker supervision report")
+            record["worker_supervision"] = {
+                "status": supervision["status"],
+                "returncode": supervision.get("returncode") if type(supervision.get("returncode")) is int else None,
+            }
+        except (Exception, asyncio.CancelledError) as error:
+            record["supervision_collection_error_type"] = type(error).__name__
+        finally:
+            temporary.unlink(missing_ok=True)
 
     async def _collect_result(self, environment, context) -> None:
         # Never leave a truncated download at the canonical evidence path.

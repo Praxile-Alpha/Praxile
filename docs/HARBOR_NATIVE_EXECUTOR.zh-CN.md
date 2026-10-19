@@ -4,6 +4,21 @@
 
 ## 边界
 
+### 容器内执行期限
+
+原生 worker 现在通过 `praxile.eval.process_supervisor` 在独立 POSIX 进程组中启动。
+supervisor 以内层 wall timeout 控制 worker，宿主 Harbor exec 留出额外 10 秒用于退出收尾。
+超时返回 124；收到 SIGTERM/SIGINT 时回收进程组；正常退出也回收仍留在同组的后代。
+宿主日志尽力收集 supervision.json 的白名单状态，区分 worker timed_out 与宿主 exec 失败，
+收集不可用不补成成功；原始异常保留。部署需要重新构建包含 supervisor 的 wheel。
+
+4 项本地真实进程测试通过，覆盖退出码、超时后代管道和终止信号回收；
+Harbor 0.18/0.22 独立环境各 9 项适配器测试通过，包含 supervisor 命令与状态收集。
+这些不是新一轮 Docker/真实模型验收，完整容器取消仍未完成：
+宿主协程取消不保证立即向容器传递信号，内层期限提供后续停止上限；
+SIGKILL 杀死 supervisor 或主动脱离进程组的后代仍需 Harbor 容器级销毁兜底。
+supervisor 不是恶意代码沙箱，不改变容器所有权，也不授予 Agent 额外权限。
+
 - 基础 Praxile 不依赖 Harbor。WorkBuddy 的 Harbor 0.18.0 与 JobBench 的 0.22.0 必须使用独立 Python 环境，不能在同一环境互相升级。
 - 环境必须提供 Python >=3.11、venv 和任务工具。宿主 Harbor 环境要求 Python >=3.12。
 - `workspace` 必须是明确存在的绝对路径。执行前存在 `.praxile`（含符号链接）会被拒绝，防止跨 arm 经验、规则或配置污染。

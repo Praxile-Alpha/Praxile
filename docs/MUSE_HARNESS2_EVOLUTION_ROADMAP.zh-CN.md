@@ -117,6 +117,8 @@ R0-A worktree 后端增补：新增 WorktreeLease，复用既有 preparer，生�
 
 异常路径增补：原生执行器记录独立 execution status，超时/取消/非零退出后限时回收已存在的结果，损坏下载不发布，保留主异常。尚未实现容器强杀后的完整 checkpoint 恢复，因此不据此勾选恢复验收。
 
+容器内期限增补：native worker 由 POSIX supervisor 执行并管理进程组，超时/终止回收，宿主记录白名单监督状态。4 项真实本地进程测试及 Harbor 0.18/0.22 各 9 项适配器测试通过。宿主取消即时传递、容器级强杀恢复和新版 wheel 的真实 Docker 验收仍缺，未勾选完整生命周期能力。
+
 结果导入增补：新增官方 score/reward/trial 的一致性校验与规范化，保留逐项判断，区分有效零分和 judge/build 错误，缺 usage 不补零，执行与评分状态分开。16 项导入测试及其余相关测试合计 47 项通过（含上游 ArtifactWriter 兼容）；真实任务评分与可信隔离尚未完成。
 
 自检增补：`doctor --benchmark workbuddy|jobbench [--online]` 不初始化项目，检查固定 Harbor 版本/插件/Docker；online 仅检查 daemon，不调用模型。基础设施可用与真实执行验证分开，模型/judge/镜像架构未知时明确显示。5 项测试及真实 WorkBuddy 基础设施查询通过；完整能力矩阵与各任务族验收仍未完成。
