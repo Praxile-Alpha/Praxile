@@ -157,6 +157,7 @@ class PraxileAgent(BaseAgent):
                 await asyncio.wait_for(environment.exec(shlex.join(["rm", "-f", remote]), timeout_sec=5), timeout=6)
             except (Exception, asyncio.CancelledError):
                 pass
+            write_json(self.logs_dir / "praxile-broker-usage.json", broker.status())
 
     async def _run_with_endpoint(self, instruction, environment, context, *, endpoint=None, capability_file=None) -> None:
         self.logs_dir.mkdir(parents=True, exist_ok=True)

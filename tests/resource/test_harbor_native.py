@@ -37,6 +37,8 @@ def test_broker_is_revoked_when_run_fails(tmp_path, monkeypatch, cancel):
             states.append("revoked")
         def close(self):
             states.append("closed")
+        def status(self):
+            return {"revoked": True, "usage": {"cost_usd": None}}
     monkeypatch.setattr(module, "ChatCredentialBroker", Broker)
     agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
         base_url="https://provider.invalid/v1", model_name="fixture", credential_file=str(key),
@@ -54,6 +56,9 @@ def test_broker_is_revoked_when_run_fails(tmp_path, monkeypatch, cancel):
     with pytest.raises(asyncio.CancelledError if cancel else RuntimeError):
         asyncio.run(agent.run("public task", Environment(), AgentContext()))
     assert states == ["revoked", "closed"]
+    usage = json.loads((tmp_path / 'praxile-broker-usage.json').read_text())
+    assert usage['revoked'] is True
+    assert usage['usage']['cost_usd'] is None
 
 
 @pytest.mark.parametrize("failure", ["timeout", "cancelled", "exit"])

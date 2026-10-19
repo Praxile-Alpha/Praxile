@@ -28,6 +28,55 @@ def test_scoped_calls_and_output_reservations(broker):
     assert "secret" not in json.dumps(broker.status())
 
 
+def test_usage_coverage_does_not_turn_missing_values_into_zero(broker):
+    broker._forward = lambda body: {'choices': [], 'usage': {'prompt_tokens': 12, 'completion_tokens': 3}}
+    request(broker)
+    usage = broker.status()['usage']
+    assert usage['total_tokens'] == {'input': 12, 'output': 3}
+    broker._forward = lambda body: {'choices': []}
+    request(broker)
+    usage = broker.status()['usage']
+    assert usage['known_tokens'] == {'input': 12, 'output': 3}
+    assert usage['total_tokens'] == {'input': None, 'output': None}
+    assert usage['reported_calls'] == {'input': 1, 'output': 1}
+    assert usage['admitted_calls'] == usage['responses'] == 2
+    assert usage['inflight_calls'] == 0
+    assert usage['cost_usd'] is None
+
+
+@pytest.mark.parametrize('value', [True, -1, '12', 1.5, 10**13])
+def test_malformed_usage_is_unknown(broker, value):
+    broker._forward = lambda body: {'choices': [], 'usage': {'prompt_tokens': value, 'completion_tokens': 0}}
+    request(broker)
+    assert broker.status()['usage']['total_tokens'] == {'input': None, 'output': 0}
+
+
+def test_failed_provider_call_and_denial_are_separate(broker):
+    def fail(body):
+        raise TimeoutError('fixture')
+    broker._forward = fail
+    with pytest.raises(TimeoutError):
+        request(broker)
+    with pytest.raises(BrokerDenied):
+        request(broker, model='wrong')
+    usage = broker.status()['usage']
+    assert usage['admitted_calls'] == usage['failed_calls'] == 1
+    assert usage['responses'] == usage['inflight_calls'] == 0
+    assert usage['total_tokens'] == {'input': None, 'output': None}
+    assert usage['latency_seconds'] >= 0
+
+
+def test_inflight_usage_is_unknown_until_response(broker):
+    def forward(body):
+        usage = broker.status()['usage']
+        assert usage['inflight_calls'] == 1
+        assert usage['total_tokens'] == {'input': None, 'output': None}
+        return {'choices': [], 'usage': {'prompt_tokens': 0, 'completion_tokens': 0}}
+    broker._forward = forward
+    request(broker)
+    assert broker.status()['usage']['total_tokens'] == {'input': 0, 'output': 0}
+
+
 @pytest.mark.parametrize("changes", [{"model": "other"}, {"stream": True}, {"tools": []},
     {"max_tokens": True}, {"max_tokens": 11}, {"temperature": float("nan")},
     {"messages": [{"role": "user", "content": [{"image_url": "https://private"}]}]},

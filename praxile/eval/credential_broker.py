@@ -68,6 +68,10 @@ class ChatCredentialBroker:
         self._lock = threading.Lock()
         self._flight = threading.Lock()
         self._server = self._thread = None
+        self._admitted = self._responses = self._failed = 0
+        self._latency_seconds = 0.0
+        self._tokens = {"input": 0, "output": 0}
+        self._usage_reports = {"input": 0, "output": 0}
 
     @property
     def capability(self) -> str:
@@ -80,7 +84,19 @@ class ChatCredentialBroker:
     def status(self) -> dict:
         with self._lock:
             return {"revoked": self._revoked, "expired": time.monotonic() >= self._deadline,
-                    "remaining_calls": self._remaining_calls, "remaining_output": self._remaining_output}
+                    "remaining_calls": self._remaining_calls, "remaining_output": self._remaining_output,
+                    "usage": {
+                        "schema_version": "praxile.broker_usage.v1",
+                        "admitted_calls": self._admitted, "responses": self._responses,
+                        "failed_calls": self._failed,
+                        "inflight_calls": self._admitted - self._responses - self._failed,
+                        "latency_seconds": round(self._latency_seconds, 6),
+                        "known_tokens": dict(self._tokens),
+                        "reported_calls": dict(self._usage_reports),
+                        "total_tokens": {key: self._tokens[key] if self._usage_reports[key] == self._admitted else None
+                                         for key in self._tokens},
+                        "cost_usd": None, "source": "provider_response",
+                    }}
 
     def _authorize(self, authorization: str) -> None:
         if not hmac.compare_digest(authorization.encode(), ("Bearer " + self._capability).encode()):
@@ -119,6 +135,8 @@ class ChatCredentialBroker:
             raise BrokerDenied("request too large")
         if not self._flight.acquire(blocking=False):
             raise BrokerDenied("another request is active")
+        started = None
+        returned = False
         try:
             self._authorize(authorization)
             with self._lock:
@@ -128,12 +146,29 @@ class ChatCredentialBroker:
                     raise BrokerDenied("capability budget exhausted")
                 self._remaining_calls -= 1
                 self._remaining_output -= maximum
+                self._admitted += 1
+                started = time.monotonic()
             # Failed requests consume reservations: no retry-driven quota bypass.
             result = self._forward(body)
             if self._key.encode() in json.dumps(result).encode():
                 raise RuntimeError("provider response rejected")
+            usage = result.get("usage")
+            usage = usage if isinstance(usage, dict) else {}
+            with self._lock:
+                for key, field in (("input", "prompt_tokens"), ("output", "completion_tokens")):
+                    value = usage.get(field)
+                    if type(value) is int and 0 <= value <= 10**12:
+                        self._tokens[key] += value
+                        self._usage_reports[key] += 1
+                self._responses += 1
+                returned = True
             return result
         finally:
+            if started is not None:
+                with self._lock:
+                    self._latency_seconds += time.monotonic() - started
+                    if not returned:
+                        self._failed += 1
             self._flight.release()
 
     def _forward(self, body: bytes) -> dict:

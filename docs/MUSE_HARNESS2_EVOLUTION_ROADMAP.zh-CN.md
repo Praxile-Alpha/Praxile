@@ -294,6 +294,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   compact 固定版式；同内容离线渲染为一页并检查截图，606 项快速测试及
   8 项修订/版式资源测试通过。模型自主选择版式、内容保持及完整原任务验收仍缺，
   不把离线排版修正记为自主修复成功。见 `results/jobbench-seeded-repair-20261019.json`。
+  compact 真实复验已确认模型自主选择版式并成功修订四次，但页数一直为 2，最终
+  needs_human；无解析失败也没有满足一页要求，不能把接口接通当作任务成功。
+  见 `results/jobbench-compact-repair-20261019.json`。另外宿主凭据代理新增不含正文
+  的用量账本与 Harbor 落盘，缺失 token 和金额保持 unknown，不追溯补造旧实验用量。
 - [ ] 浏览器具备 click/fill/navigation/download、页面状态断言、截图和错误记录；截图存在不能充当视觉质量通过。
 - [ ] 任务状态机：queued/running/waiting_approval/paused/completed/failed/cancelled；子任务边界 checkpoint，恢复前重新确认环境与产物状态。
 - [ ] 本地自检检查“产物存在、能打开、结构符合请求”；与官方评分器物理分离。
