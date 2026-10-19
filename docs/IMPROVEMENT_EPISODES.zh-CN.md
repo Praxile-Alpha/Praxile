@@ -117,6 +117,13 @@ renderer 路径。结果的路径、上限、布尔值、状态须与调用及�
 该引用表示相同字节版本，不证明因果收益、语义保持或视觉质量。对上述冻结轨迹
 离线回放，4/4 布局检查可关联唯一修订，0 因果效果声明，未调用模型。
 
+前后比较增补：只有修订前已检查的 before_sha256 与修订后已检查的 after_sha256
+可配对，且页数上限和记录中的 renderer 路径一致、前置检查唯一，才给出 page_delta
+（after minus before）。缺失、重复或不一致保留 null；不会选最近一条无关检查。
+真实 compact repair 离线回放的四次结果为 null、0、0、0：首次缺少前置检查，
+随后三次未见页数减少。这是局部布局结果，不是内容保持、任务成功或因果收益。
+renderer 路径相同不证明二进制/字体环境相同，完整环境等价仍由实验 manifest 验证。
+
 真实 profile 生成复验仍失败：MiniMax-M3 在 4000 输出 token 内只返回推理块，
 finish_reason=length，没有最终 JSON，未产生候选。见
 results/jobbench-candidate-profile-20261019.json。缺少输出不等于能力约束已有效。

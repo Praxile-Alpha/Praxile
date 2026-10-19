@@ -48,6 +48,50 @@ def test_layout_link_requires_unique_prior_matching_version():
     assert revision_layout_links([revision_call, revision_result, duplicate, call, result])[result.event_id]["revision_event_id"] is None
 
 
+def layout_events(prefix, digest, pages, limit=1, renderer="/usr/bin/soffice"):
+    call, result = pair()
+    call.payload["action"]["max_pages"] = limit
+    data = result.payload["observation"]["data"]
+    data.update(source_sha256=digest, pages=pages, max_pages=limit,
+                page_limit_met=pages <= limit, renderer_executable=renderer)
+    result.payload["status"] = "success" if pages <= limit else "failure"
+    for event, kind in [(call, "TOOL_CALL"), (result, "TOOL_RESULT")]:
+        event.type, event.tool_call_id, event.event_id = kind, prefix, prefix + kind
+    return call, result
+
+
+def test_before_after_page_comparison_uses_versions_not_nearest_step():
+    before = layout_events("before", "a" * 64, 3)
+    revision = revision_events()
+    after = layout_events("after", "b" * 64, 2)
+    unrelated = layout_events("unrelated", "c" * 64, 20)
+    events = [*before, *unrelated, *revision, *after]
+    link = revision_layout_links(events)[after[1].event_id]
+    assert link["page_delta"] == -1
+    assert link["before_layout_event_id"] == before[1].event_id
+    assert link["causal_effect_verified"] is False
+    assert "soffice" not in str(link)
+    assert revision_layout_links([*revision, *before, *after])[after[1].event_id]["page_delta"] is None
+
+
+@pytest.mark.parametrize("kind", ["renderer", "limit", "duplicate", "missing"])
+def test_page_comparison_abstains_for_noncomparable_evidence(kind):
+    before = layout_events("before", "a" * 64, 3)
+    revision = revision_events()
+    after = layout_events("after", "b" * 64, 2)
+    if kind == "renderer":
+        after[1].payload["observation"]["data"]["renderer_executable"] = "/different/soffice"
+    if kind == "limit":
+        before = layout_events("before", "a" * 64, 3, limit=2)
+    earlier = list(before)
+    if kind == "duplicate":
+        earlier.extend(layout_events("repeat", "a" * 64, 3))
+    if kind == "missing":
+        earlier = []
+    link = revision_layout_links([*earlier, *revision, *after])[after[1].event_id]
+    assert link["page_delta"] is None and link["page_comparison_status"] == "unknown"
+
+
 def pair():
     call = SimpleNamespace(payload={"action": {
         "type": "check_document_layout", "path": "private.docx", "max_pages": 1}})

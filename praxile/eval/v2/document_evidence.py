@@ -50,7 +50,7 @@ def project_revision(call, result):
 
 def revision_layout_links(events):
     """Link a checked byte version only when one earlier revision produced it."""
-    calls, revisions, links = {}, {}, {}
+    calls, revisions, layouts, links = {}, {}, {}, {}
     for event in events:
         if event.type == "TOOL_CALL" and event.tool_call_id:
             calls[event.tool_call_id] = event
@@ -60,17 +60,36 @@ def revision_layout_links(events):
         revision = project_revision(call, event)
         if revision is not None:
             data = _data(event)
-            revisions.setdefault((data["path"], data["sha256"]), []).append(event.event_id)
+            prior_layouts = layouts.get((data["path"], data["before_sha256"]), [])
+            revisions.setdefault((data["path"], data["sha256"]), []).append(
+                (event.event_id, list(prior_layouts)))
         if project_layout(call, event) is None:
             continue
         data = _data(event)
         digest = data.get("source_sha256")
         matches = revisions.get((data.get("path"), digest), []) if _sha(digest) else []
         links[event.event_id] = {
-            "revision_event_id": matches[0] if len(matches) == 1 else None,
+            "revision_event_id": matches[0][0] if len(matches) == 1 else None,
             "revision_link_status": "unique_content_digest" if len(matches) == 1 else "unknown",
+            "before_layout_event_id": None,
+            "page_delta": None,
+            "page_comparison_status": "unknown",
             "causal_effect_verified": False,
         }
+        renderer = data.get("renderer_executable")
+        if len(matches) == 1 and isinstance(renderer, str) and renderer:
+            comparable = [(event_id, before) for event_id, before in matches[0][1]
+                          if before.get("max_pages") == data.get("max_pages")
+                          and before.get("renderer_executable") == renderer]
+            if len(comparable) == 1:
+                before_id, before = comparable[0]
+                links[event.event_id].update(
+                    before_layout_event_id=before_id,
+                    page_delta=data["pages"] - before["pages"],
+                    page_comparison_status="matched_recorded_versions_and_renderer",
+                )
+        if _sha(digest):
+            layouts.setdefault((data["path"], digest), []).append((event.event_id, data))
     return links
 
 

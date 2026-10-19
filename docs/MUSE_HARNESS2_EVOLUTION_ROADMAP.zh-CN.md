@@ -294,6 +294,9 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   相同路径和唯一先前版本摘要引用修订事件，歧义/不匹配保持 unknown，不按
   时间邻近猜测因果。真实 compact repair 轨迹离线回放 4/4 可关联，不包含
   正文/评分材料，不表示候选收益已验证。
+  前后布局比较增补：按修订 before/after 摘要匹配唯一先前检查，核对相同页数
+  上限和 renderer 路径，输出 page_delta 或 unknown。冻结 compact repair
+  回放为 null/0/0/0，未见后三次页数改善；不证明内容质量或环境二进制等价。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
