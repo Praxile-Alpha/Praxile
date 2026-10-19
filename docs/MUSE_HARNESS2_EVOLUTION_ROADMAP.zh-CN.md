@@ -286,6 +286,9 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   needs_human（30 步上限）。后续修订输出解析失败，没有成功 revise_docx，不能
   勾选自主修复闭环。无官方复评分、无严格 A/B 或性能提升声明；证据摘要见
   `results/jobbench-public-contract-smoke-20261019.json`。
+  修订失败可观测性增补：动作解码保留完整响应摘要/长度、reasoning 边界原因及
+  JSON 解析错误偏移，修复提示明确“未执行，不应假设产物已改变”。不放宽解析
+  或安全规则；旧失败只有截断预览，精确原因仍未知，自主修订总项继续未完成。
 - [ ] 浏览器具备 click/fill/navigation/download、页面状态断言、截图和错误记录；截图存在不能充当视觉质量通过。
 - [ ] 任务状态机：queued/running/waiting_approval/paused/completed/failed/cancelled；子任务边界 checkpoint，恢复前重新确认环境与产物状态。
 - [ ] 本地自检检查“产物存在、能打开、结构符合请求”；与官方评分器物理分离。

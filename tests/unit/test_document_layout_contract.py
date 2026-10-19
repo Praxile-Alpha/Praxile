@@ -53,3 +53,16 @@ def test_layout_timeout_reaps_group_and_does_not_forward_keys(tmp_path, monkeypa
     assert child.wait.call_count == 2
     kill.assert_called_once()
     assert "PRAXILE_BENCHMARK_API_KEY" not in popen.call_args.kwargs["env"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group worker")
+def test_missing_docx_is_not_reported_as_renderer_failure(tmp_path, monkeypatch):
+    from praxile import document_layout
+    config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
+    config.data['documents']['renderer_executable'] = '/trusted/soffice'
+    popen = Mock()
+    monkeypatch.setattr(document_layout.subprocess, 'Popen', popen)
+    result = check_layout(config, SafetyPolicy(config), 'missing.docx', max_pages=1)
+    assert result.status == 'failure'
+    assert result.data == {'reason': 'input_missing', 'rendered': False}
+    popen.assert_not_called()

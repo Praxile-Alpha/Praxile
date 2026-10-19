@@ -25,7 +25,12 @@ def check_layout(config, safety, path, *, max_pages=None):
     try:
         root = config.paths.root.resolve(strict=True)
         target = root / path
-        if (target.resolve(strict=True) != target or not target.is_relative_to(root)
+        try:
+            resolved_target = target.resolve(strict=True)
+        except FileNotFoundError:
+            return Observation("failure", "DOCX input does not exist; create the document before checking layout",
+                               {"reason": "input_missing", "rendered": False})
+        if (resolved_target != target or not target.is_relative_to(root)
                 or target.suffix.lower() != ".docx" or not target.is_file()):
             return Observation("blocked", "Layout inspection requires a project DOCX without symlink components")
         with target.open("rb") as source:

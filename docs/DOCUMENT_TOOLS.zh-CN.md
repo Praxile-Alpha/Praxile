@@ -231,3 +231,20 @@ OpenAI-compatible 的 `finish_reason` 与 Anthropic 的 `stop_reason` 统一保�
 
 缺少终止元数据不推断为截断；此前真实实验未保留该字段，不能追溯断言它们
 就是 token 上限导致的失败。此修改不自动提高预算，也不代表产物质量已通过。
+
+### 动作解码失败的证据
+
+非截断响应解析失败时，轨迹现在保存 `decode_evidence`（版本
+`praxile.action_decode.v1`）：完整响应 SHA-256、字符数、已移除 reasoning 块数、
+最终段字符数及失败原因。JSON 语法错误保留解析器消息和偏移量，偏移相对于
+该解析候选的修复后文本，不是原始含 reasoning 响应的位置。
+原因区分 `unclosed_reasoning`、`nested_reasoning`、`missing_final_action` 和
+`invalid_json_object`；证据不包含完整正文。既有 4000 字符预览新增
+`content_preview_truncated` 标记，不能用该预览重新构造完整失败响应。
+
+修复提示明确说明动作没有执行、不得假设文件已改变，并附解码诊断。
+解析边界和重试预算不放宽，成功解码后仍经过 Action Schema 与安全策略。
+60 KB 的合法 DOCX 修订 JSON 测试可解析；这仅排除了固定小长度上限的假设，
+不能追溯证明上一轮真实 MiniMax 无效 JSON 的具体原因，也不是成功修订验收。
+输入 DOCX 尚未创建时，分页工具返回 `input_missing` 且不启动渲染进程，避免
+把缺文件误报为依赖故障。此处检查仍先经过路径安全策略。

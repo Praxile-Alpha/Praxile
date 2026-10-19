@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .action_schema import ActionSchemaRegistry
+from .action_protocol import decode_action
 from .config import Config
 from .environment import FileSystemEnv, GitEnv, ProjectEnv, ShellEnv, TestEnv
 from .evolution import EvolutionEngine
@@ -941,7 +942,10 @@ class AgentRuntime:
                 content = response.get("content")
                 content = content if isinstance(content, str) else ""
                 truncated = response.get("finish_reason") in {"length", "max_tokens"}
-                action = None if truncated else self._parse_action(content)
+                if truncated:
+                    action, decode_evidence = None, {"reason": "output_truncated"}
+                else:
+                    action, decode_evidence = decode_action(content)
                 if action is None:
                     invalid_action_count += 1
                     observation = {
@@ -950,6 +954,8 @@ class AgentRuntime:
                                    if truncated else "Model did not return a valid JSON action."),
                         "data": {
                             "content": shorten(content, 4000),
+                            "content_preview_truncated": len(content) > 4000,
+                            "decode_evidence": decode_evidence,
                             "finish_reason": response.get("finish_reason"),
                             "failure_kind": "output_truncated" if truncated else "invalid_json_action",
                             "parse_retry": invalid_action_count,
@@ -983,7 +989,10 @@ class AgentRuntime:
                     messages.append({"role": "user", "content": (
                         "Your response hit the output token limit and was not executed. Return a shorter complete action; "
                         "do not continue a JSON suffix and do not assume the previous action happened. "
-                        if truncated else "") + "Return only the final JSON action object; no prose, markdown, or <think> blocks."})
+                        if truncated else
+                        "Your response was rejected and NO action was executed. Do not assume any file changed. "
+                        "Decoder diagnostics: " + json.dumps(decode_evidence) + ". "
+                        ) + "Return only the final JSON action object; no prose, markdown, or <think> blocks."})
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     continue
 
@@ -1475,18 +1484,7 @@ class AgentRuntime:
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def _parse_action(self, content: str) -> dict[str, Any] | None:
-        # Some compatible providers put reasoning in content. Never execute a
-        # JSON example from that region; only parse the answer after its close.
-        content = content.lstrip()
-        while content.startswith("<think>"):
-            reasoning, separator, final = content[len("<think>"):].partition("</think>")
-            if not separator or "<think>" in reasoning:
-                return None
-            content = final.lstrip()
-        try:
-            return parse_json_object(content)
-        except RobustJSONError:
-            return None
+        return decode_action(content)[0]
 
 
 def _score(value: Any, *, default: float) -> float:
