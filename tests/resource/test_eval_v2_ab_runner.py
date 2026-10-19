@@ -62,7 +62,7 @@ def _repo(path: Path) -> str:
     ).stdout.strip()
 
 
-def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path):
+def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monkeypatch, capsys):
     from praxile.eval.v2.development_cycle import DevelopmentContextCycle
     source = tmp_path / "source"
     commit = _repo(source)
@@ -98,6 +98,38 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path):
         cycle.run(tasks, **kwargs)
     with pytest.raises(EvalSchemaError, match="development split"):
         cycle.run(tasks, **{**kwargs, "heldout_task_ids": [task.task_id]})
+    # Exercise the real CLI dispatch and six-arm runner without network/model calls.
+    import json
+    from types import SimpleNamespace
+    from praxile.cli_parser import build_parser
+    from praxile.cli_commands import evals
+    class CLIAdapter(FixtureAgentAdapter):
+        def __init__(self, **kwargs):
+            super().__init__(artifacts=adapter._artifact_specs)
+        def availability(self):
+            return True, "fixture"
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+    evaluator = PassingEvaluator()
+    evaluator.availability = lambda: (True, "fixture")
+    monkeypatch.setattr(evals, "MiniSweAgentAdapter", CLIAdapter)
+    monkeypatch.setattr(evals, "OfficialSWEbenchEvaluator", lambda **kwargs: evaluator)
+    monkeypatch.setattr(evals, "SWEbenchTaskLoader", lambda **kwargs: SimpleNamespace(load_huggingface=lambda **kwargs: tasks))
+    monkeypatch.setattr(evals, "load", lambda root: (config, SimpleNamespace(initialize=lambda config: None)))
+    for index, candidate in enumerate(candidates):
+        (tmp_path / f"candidate-{index}.json").write_text(json.dumps(candidate.to_dict()))
+    args = build_parser().parse_args(["eval", "ab", str(tmp_path / "candidate-0.json"),
+        "--second-candidate", str(tmp_path / "candidate-1.json"),
+        "--composed-candidate", str(tmp_path / "candidate-2.json"), "--development-only",
+        "--development-task-id", task.task_id, "--heldout-task-id", "heldout",
+        "--experiment-id", "cli-cycle", "--model", "fixture", "--timeout", "30",
+        "--source", f"owner/repo={source}"])
+    assert evals.cmd_eval_ab(args, tmp_path) == 0
+    assert "KEEP_BASE" in capsys.readouterr().out
+    cli_report = read_json(config.paths.state / "eval/v2/development_cycles/cli-cycle/report.json", {})
+    assert len(cli_report["experiments"]) == 3 and cli_report["track"] == "development"
 
 
 def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tmp_path: Path) -> None:

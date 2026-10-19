@@ -372,7 +372,10 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   新增 DevelopmentContextCycle Python API：显式开发/held-out 名单、两个有假设的
   候选及预先提供的组合候选被冻结，三个版本分别执行独立隔离 A/B；可断点恢复，
   变更计划拒绝恢复。开发轨道允许本任务来源证据，clean 轨道继续禁止重叠。
-  自动生成/组合、CLI 和真实模型验收尚未完成，完整项不勾选。
+  CLI `eval ab` 已增加 second-candidate/composed-candidate 和显式开发/held-out
+  名单参数，要求 development-only，拒绝混用 held-out capability/proxy 协议；
+  fixture 验证真实 CLI 调度、三组独立 A/B 与报告落盘。自动生成/组合和真实
+  模型验收尚未完成，完整项不勾选。
 - [ ] 支持过程型与领域型候选；KEEP_BASE 是正常结果，组合版本重新验证，不能继承单个候选的通过状态。
   工作流已按组合自己的客观任务提升、无回归/无混杂证据给出任务内试用建议，
   否则 KEEP_BASE；不因单项通过继承成绩，不自动 adopted/promoted，不改生产资产。

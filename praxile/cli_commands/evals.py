@@ -231,7 +231,26 @@ def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
     return 0
 
 
+def _development_cycle_inputs(args):
+    second = getattr(args, "second_candidate", None)
+    composed = getattr(args, "composed_candidate", None)
+    development = getattr(args, "development_task_id", [])
+    heldout = getattr(args, "heldout_task_id", [])
+    if not any((second, composed, development, heldout)):
+        return None
+    if not all((second, composed, development, heldout)):
+        raise ValueError("composition requires --second-candidate, --composed-candidate, --development-task-id and --heldout-task-id")
+    if not args.development_only or args.capability_protocol or args.proxy_eval:
+        raise ValueError("composition requires --development-only without --capability-protocol or --proxy-eval")
+    if set(development) & set(heldout):
+        raise ValueError("development and held-out task IDs must not overlap")
+    return {"second": ContextCandidate.load(Path(second).expanduser().resolve()),
+            "composed": ContextCandidate.load(Path(composed).expanduser().resolve()),
+            "development_task_ids": development, "heldout_task_ids": heldout}
+
+
 def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
+    cycle = _development_cycle_inputs(args)
     config, store = load(project_root)
     store.initialize(config)
     candidate = ContextCandidate.load(Path(args.candidate).expanduser().resolve())
@@ -310,12 +329,10 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
             else {"spec": spec}
         )
     with adapter:
-        report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).run(
-            task_set,
+        common = dict(
             adapter=adapter,
             evaluator=evaluator,
             baseline_policy=baseline_policy,
-            candidate=candidate,
             model={
                 "model_name_or_path": args.model,
                 "provider": args.model.partition("/")[0] if "/" in args.model else None,
@@ -323,16 +340,28 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
                 "cost_tracking": args.cost_tracking,
                 "adapter_config": adapter_config_identity,
             },
-            experiment_id=args.experiment_id,
             resume=args.resume,
             keep_workspaces=args.keep_workspaces,
             source_overrides=source_overrides,
-            capability_protocol=capability_protocol,
-            proxy_eval_ref=proxy_ref,
-            development_only=args.development_only,
         )
+        if cycle is not None:
+            from ..eval.v2.development_cycle import DevelopmentContextCycle
+            report = DevelopmentContextCycle(config.paths.state, EventStore(config.paths)).run(
+                task_set, candidates=[candidate, cycle["second"]], composed_candidate=cycle["composed"],
+                development_task_ids=cycle["development_task_ids"], heldout_task_ids=cycle["heldout_task_ids"],
+                cycle_id=args.experiment_id, **common)
+        else:
+            report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).run(
+                task_set, candidate=candidate, experiment_id=args.experiment_id,
+                capability_protocol=capability_protocol, proxy_eval_ref=proxy_ref,
+                development_only=args.development_only, **common)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
+    elif cycle is not None:
+        print(f"Development composition cycle: {report['cycle_id']}")
+        print(f"Decision: {report['decision']} (not adopted or promoted)")
+        print("Three independent A/B experiments; six execution arms.")
+        print(f"Report: {config.paths.state / 'eval/v2/development_cycles' / args.experiment_id / 'report.json'}")
     else:
         comparison = report["comparison"]
         print(f"A/B experiment: {report['experiment_id']}")
@@ -343,6 +372,8 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
             terminal = report["capability"]["terminal_selection"]
             print(f"Capability terminal: {terminal['decision']} - {terminal['reason']}")
         print(f"Report: {config.paths.state / 'eval' / 'v2' / 'experiments' / args.experiment_id / 'report.json'}")
+    if cycle is not None:
+        return 0
     return 1 if report["comparison"]["decision"] == "regress" else 0
 
 

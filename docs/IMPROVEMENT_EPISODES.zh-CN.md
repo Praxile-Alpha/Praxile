@@ -22,7 +22,26 @@ progress 和 report；三个实际实验仍存入现有 experiments/runs/trace �
 返回 `TASK_LOCAL_TRIAL_RECOMMENDED`；其他情况返回 `KEEP_BASE`。单项结果再好
 也不会替组合授予资格。始终 `adopted=false`、`promotion_eligible=false`、
 `experience_entry=NO_ENTRY`，不改生产策略或长期资产。当前尚无自动 proposer/
-composer 或 CLI，真实模型质量、可迁移收益和完整 R2-C 验收均未完成。
+composer，真实模型质量、可迁移收益和完整 R2-C 验收均未完成。
+
+CLI 沿用 `eval ab`，同时提供以下参数启用组合流程：
+
+```sh
+praxile eval ab first.json development-tasks.jsonl \
+  --second-candidate second.json --composed-candidate composed.json \
+  --development-only --development-task-id owner__repo-dev \
+  --heldout-task-id owner__repo-heldout --instance-id owner__repo-dev \
+  --experiment-id development-cycle-001 --model openai/MiniMax-M3 \
+  --timeout 900 --step-limit 50 --cost-tracking ignore_errors
+```
+
+替换示例任务 ID、候选文件与本地官方数据导出；模型及凭据配置沿用普通 A/B。
+名单参数可重复，选中的任务集必须与 development-task-id 精确一致。不能同时
+使用 capability-protocol/proxy-eval，避免把开发组合混入 held-out 协议。
+普通 A/B 不提供这些新参数时行为不变。`--resume` 恢复整个 cycle；
+`--json` 输出其完整报告。timeout/step-limit/max-cost 均为每个 arm 的限制，
+不是六个 arm 的总预算；ignore_errors 不意味着零费用。该示例会执行真实模型，
+请先准备候选及任务清单并确认费用。
 
 受控 Context A/B 的分析报告新增 `improvement_episodes`，逐 task 保存 `praxile.improvement_episode.v1`。沿用原 report.json，不新增第二套数据库，也不改变既有 promotion/terminal-selection 门禁。
 

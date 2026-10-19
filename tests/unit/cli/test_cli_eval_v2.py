@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from praxile.cli_parser import build_parser
+import pytest
+from praxile.cli_commands.evals import _development_cycle_inputs
 
 
 def test_eval_benchmark_parser_exposes_reproducibility_controls() -> None:
@@ -75,3 +77,26 @@ def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
     assert experiment.experiment_id == "p0-c-1"
     assert experiment.step_limit == 150
     assert experiment.resume is True
+
+
+@pytest.mark.parametrize("extra", [
+    ["--second-candidate", "missing.json"],
+    ["--second-candidate", "a.json", "--composed-candidate", "b.json",
+     "--development-task-id", "dev", "--heldout-task-id", "test"],
+    ["--second-candidate", "a.json", "--composed-candidate", "b.json",
+     "--development-task-id", "same", "--heldout-task-id", "same", "--development-only"],
+    ["--second-candidate", "a.json", "--composed-candidate", "b.json",
+     "--development-task-id", "dev", "--heldout-task-id", "test", "--development-only",
+     "--capability-protocol", "sealed.json"],
+])
+def test_composition_invalid_flags_fail_before_candidate_files_or_network(extra):
+    args = build_parser().parse_args(["eval", "ab", "first.json", "--model", "fixture",
+                                      "--experiment-id", "dev-cycle", *extra])
+    with pytest.raises(ValueError):
+        _development_cycle_inputs(args)
+
+
+def test_ordinary_ab_does_not_enable_composition():
+    args = build_parser().parse_args(["eval", "ab", "first.json", "--model", "fixture",
+                                      "--experiment-id", "ordinary"])
+    assert _development_cycle_inputs(args) is None
