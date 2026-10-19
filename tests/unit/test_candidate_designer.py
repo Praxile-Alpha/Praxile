@@ -74,6 +74,27 @@ def test_invalid_output_budget_rejected_before_model(budget):
     assert calls == []
 
 
+def test_failed_transport_evidence_survives_wrapped_model_error():
+    from praxile.http_transport import HTTPTransportUnavailable
+    kwargs, _ = inputs({})
+    evidence = {"schema_version": "praxile.http_attempts.v1", "attempt_count": 2,
+                "failed_attempt_usage_unknown": True}
+    def fail(*args, **options):
+        error = HTTPTransportUnavailable("private error body")
+        error.transport_evidence = evidence
+        try:
+            raise error
+        except HTTPTransportUnavailable as source:
+            raise RuntimeError("wrapped") from source
+    kwargs["router"].chat = fail
+    with pytest.raises(RuntimeError):
+        design_development_candidates(**kwargs)
+    record = kwargs["logger"].data["development_candidate_designs"][0]
+    assert record["transport_evidence"] == evidence
+    assert record["transport_evidence_scope"] == "last_provider_exception_chain"
+    assert "private error body" not in json.dumps(record)
+
+
 def test_bounded_abstention_diagnostics_are_unverified_and_durable(tmp_path):
     from praxile.eval.v2.candidate_design_run import _finish
     kwargs, calls = inputs({"content": json.dumps({"decision": "abstain",

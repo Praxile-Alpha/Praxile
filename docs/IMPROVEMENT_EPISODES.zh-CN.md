@@ -174,6 +174,18 @@ API 只被调用一次或最终供应商只计费一次。
 不能宣称 60 秒总截止或严格单请求。未继续扩大预算；后续须明确冻结传输策略并
 记录尝试次数，再评估 provider 支持的推理控制，而非将超时当作模型弃权。
 
+非流式传输观测增补：urllib/httpx 的 `post_json` 返回值以不改变 JSON 正文的属性
+携带 `praxile.http_attempts.v1`，失败异常也携带该记录。字段包括配置重试上限、
+尝试次数、每次 success/timeout/http_error/unavailable/decode_error、HTTP 状态码
+及耗时；不记录 URL、headers、请求正文、异常正文或密钥。两种 provider 将记录
+传到候选设计轨迹；失败时保存最后 provider 的异常链，不把它称为全部 fallback
+路由的汇总。重试后成功也保留 `failed_attempt_usage_unknown=true`，最终响应的
+usage 不能覆盖先前失败尝试可能产生的供应商消耗。
+
+此观测暂不覆盖流式请求和取消期间的完整证据，不能恢复历史请求的尝试明细。
+单次 socket 超时和 retry backoff 语义未改，尚未实现总墙钟硬截止或远端计费取消。
+验证使用可控传输替身，无新增模型调用；真实超时实验不能追溯补填成已完整观测。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

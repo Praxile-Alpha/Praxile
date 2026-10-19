@@ -83,6 +83,7 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             max_tokens=max_output_tokens, timeout=60, temperature=0, cancel_requested=cancel_requested)
         logger.add_model_cost(response.get("usage", {}), route={**response.get("route", {}),
             "purpose": "proposal_composer", "latency_ms": response.get("latency_ms")})
+        record["transport_evidence"] = response.get("transport_evidence")
         stage = "response_decode"
         result, decoding = decode_action(response.get("content", ""))
         record["response_decode"] = decoding
@@ -160,6 +161,15 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 "limitations": ["Caller supplies public development evidence; provenance is not independently attested.",
                                 "Draft quality and composition compatibility require independent execution."]}
     except Exception as error:
+        cause, seen = error, set()
+        while cause is not None and id(cause) not in seen:
+            seen.add(id(cause))
+            evidence = getattr(cause, "transport_evidence", None)
+            if evidence is not None:
+                record["transport_evidence"] = evidence
+                record["transport_evidence_scope"] = "last_provider_exception_chain"
+                break
+            cause = cause.__cause__
         record.update(status="failed", error_type=type(error).__name__, failure_stage=stage,
                       candidate_position=candidate_position)
         raise

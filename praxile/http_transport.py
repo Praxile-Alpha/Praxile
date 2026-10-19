@@ -12,6 +12,29 @@ class HTTPTransportError(RuntimeError):
         super().__init__(message)
         self.status_code = status_code
         self.retryable = retryable
+        self.transport_evidence = None
+
+
+class HTTPJSONResponse(dict):
+    """JSON-compatible payload with host-owned, non-serialized request evidence."""
+
+    def __init__(self, payload, evidence):
+        super().__init__(payload)
+        self.transport_evidence = evidence
+
+
+def _request_evidence(name, attempts, max_retries):
+    return {"schema_version": "praxile.http_attempts.v1", "transport": name,
+            "max_retries": max_retries, "attempt_count": len(attempts),
+            "attempts": [dict(item) for item in attempts],
+            "scope": "non_streaming_transport_call",
+            "failed_attempt_usage_unknown": any(item["status"] != "success" for item in attempts)}
+
+
+def _attempt_record(attempts, started, status, status_code=None):
+    attempts.append({"attempt": len(attempts) + 1, "status": status,
+                     "status_code": status_code,
+                     "elapsed_ms": max(0, int((time.monotonic() - started) * 1000))})
 
 
 class HTTPTransportUnavailable(HTTPTransportError):
@@ -73,11 +96,16 @@ class SimpleHTTPTransport:
         request = urllib.request.Request(url, data=body, headers=headers or {}, method="POST")
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
+        attempts = []
         for attempt in range(self.max_retries + 1):
             _raise_if_cancelled(cancel_requested)
+            started = time.monotonic()
+            failure_kind = "unavailable"
             try:
                 with urllib.request.urlopen(request, timeout=effective_timeout) as response:
-                    return _decode_json_response(response.read())
+                    decoded = _decode_json_response(response.read())
+                _attempt_record(attempts, started, "success")
+                return HTTPJSONResponse(decoded, _request_evidence(self.name, attempts, self.max_retries))
             except urllib.error.HTTPError as exc:
                 detail = _safe_error_body(exc)
                 retryable = exc.code >= 500
@@ -89,9 +117,19 @@ class SimpleHTTPTransport:
             except urllib.error.URLError as exc:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except TimeoutError as exc:
+                failure_kind = "timeout"
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except json.JSONDecodeError as exc:
-                raise HTTPResponseDecodeError(f"Invalid JSON response: {exc}") from exc
+                error = HTTPResponseDecodeError(f"Invalid JSON response: {exc}")
+                _attempt_record(attempts, started, "decode_error")
+                error.transport_evidence = _request_evidence(self.name, attempts, self.max_retries)
+                raise error from exc
+            except HTTPResponseDecodeError as exc:
+                _attempt_record(attempts, started, "decode_error")
+                exc.transport_evidence = _request_evidence(self.name, attempts, self.max_retries)
+                raise
+            _attempt_record(attempts, started, "http_error" if last_error.status_code else failure_kind, last_error.status_code)
+            last_error.transport_evidence = _request_evidence(self.name, attempts, self.max_retries)
             if not last_error.retryable or attempt >= self.max_retries:
                 break
             _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
@@ -180,8 +218,11 @@ class HttpxTransport:
     ) -> dict[str, Any]:
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
+        attempts = []
         for attempt in range(self.max_retries + 1):
             _raise_if_cancelled(cancel_requested)
+            started = time.monotonic()
+            failure_kind = "unavailable"
             try:
                 response = self._get_client().post(
                     url,
@@ -190,7 +231,11 @@ class HttpxTransport:
                     timeout=effective_timeout,
                 )
                 response.raise_for_status()
-                return response.json()
+                decoded = response.json()
+                if not isinstance(decoded, dict):
+                    raise ValueError("JSON response must be an object")
+                _attempt_record(attempts, started, "success")
+                return HTTPJSONResponse(decoded, _request_evidence(self.name, attempts, self.max_retries))
             except self.httpx.HTTPStatusError as exc:
                 retryable = exc.response.status_code >= 500
                 last_error = HTTPTransportError(
@@ -199,11 +244,17 @@ class HttpxTransport:
                     retryable=retryable,
                 )
             except self.httpx.TimeoutException as exc:
+                failure_kind = "timeout"
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except self.httpx.HTTPError as exc:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except ValueError as exc:
-                raise HTTPResponseDecodeError(f"Invalid JSON response: {exc}") from exc
+                error = HTTPResponseDecodeError(f"Invalid JSON response: {exc}")
+                _attempt_record(attempts, started, "decode_error")
+                error.transport_evidence = _request_evidence(self.name, attempts, self.max_retries)
+                raise error from exc
+            _attempt_record(attempts, started, "http_error" if last_error.status_code else failure_kind, last_error.status_code)
+            last_error.transport_evidence = _request_evidence(self.name, attempts, self.max_retries)
             if not last_error.retryable or attempt >= self.max_retries:
                 break
             _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
