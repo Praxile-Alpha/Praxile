@@ -2,6 +2,18 @@
 import json
 
 
+def docx_spec_prompt():
+    return (
+        'create_docx.document must contain ONLY {"blocks":[...]}. No title, metadata, '
+        'styles, header, footer, or page settings outside blocks. Supported blocks: '
+        '{"type":"paragraph","text":"..."}, {"type":"heading","text":"...","level":1}, '
+        '{"type":"bullet","text":"..."}, {"type":"table","rows":[["cell","cell"]]}, '
+        '{"type":"page_break"}. Heading level is 1..3; tables must be rectangular strings '
+        '(1..100 rows, 1..12 columns). Maximum 200 blocks / 256 KiB spec. '
+        'Use an existing parent directory and a new .docx path; existing files are never overwritten.'
+    )
+
+
 def validate_docx_spec(spec):
     if not isinstance(spec, dict) or set(spec) != {"blocks"}:
         raise ValueError("document spec requires only blocks")

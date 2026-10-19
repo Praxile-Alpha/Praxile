@@ -973,7 +973,7 @@ class AgentRuntime:
                             f"Stopped after {invalid_action_count} consecutive invalid JSON action response(s); review model output.",
                         )
                     messages.append({"role": "assistant", "content": content})
-                    messages.append({"role": "user", "content": "Return only a JSON object with an action."})
+                    messages.append({"role": "user", "content": "Return only the final JSON action object; no prose, markdown, or <think> blocks."})
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     continue
 
@@ -1452,6 +1452,14 @@ class AgentRuntime:
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def _parse_action(self, content: str) -> dict[str, Any] | None:
+        # Some compatible providers put reasoning in content. Never execute a
+        # JSON example from that region; only parse the answer after its close.
+        content = content.lstrip()
+        while content.startswith("<think>"):
+            reasoning, separator, final = content[len("<think>"):].partition("</think>")
+            if not separator or "<think>" in reasoning:
+                return None
+            content = final.lstrip()
         try:
             return parse_json_object(content)
         except RobustJSONError:

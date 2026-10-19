@@ -95,19 +95,26 @@ class ActionSchemaRegistry:
         return not errors, errors
 
     def repair_prompt(self, errors: list[str]) -> str:
+        from .document_spec import docx_spec_prompt
         allowed = ", ".join(sorted(self.schemas))
         return (
             "Your previous response was parsed as JSON but failed the Praxile Action Schema.\n"
             f"Errors:\n{chr(10).join(f'- {error}' for error in errors)}\n\n"
             f"Allowed action types: {allowed}.\n"
+            f"{docx_spec_prompt()}\n"
+            "read_document: start=1..100000, limit=1..20, char_offset=0..10000000; sheet is optional.\n"
             "Return exactly one JSON object. Do not include prose or markdown."
         )
 
     def prompt_summary(self) -> str:
+        from .document_spec import docx_spec_prompt
         lines = ["Action Schema Registry:"]
         for action_type in sorted(self.schemas):
             schema = self.schemas[action_type]
             required = ", ".join(schema["required"].keys()) or "(none)"
             optional = ", ".join(schema["optional"].keys()) or "(none)"
             lines.append(f"- {action_type}: required={required}; optional={optional}")
+        lines.append(docx_spec_prompt())
+        lines.append("read_document pagination: start is 1-based; limit is 1..20 (default 5); "
+                     "char_offset resumes truncated unit text; optional sheet selects an XLSX sheet.")
         return "\n".join(lines)

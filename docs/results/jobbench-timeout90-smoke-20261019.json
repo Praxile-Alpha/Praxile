@@ -1,0 +1,31 @@
+{
+  "schema_version": "praxile.integration_observation.v1",
+  "scope": "single_task_native_executor_not_official_trial",
+  "task_id": "easy--technical_writers--task1",
+  "code_commit": "77625c8",
+  "model": "MiniMax-M3",
+  "experience_mode": "fresh_disabled",
+  "environment_variant": "authorized_debian_https_overlay",
+  "inherit_task_packages": true,
+  "wheel_sha256": "197da12df8cf13d9e3bd472d80cea760d90bc3fa80fc2c0a1007de9213a7cc2b",
+  "result_sha256": "64b8b308557a6e7ce28be4d15e6d342338c78efa79fb4a769b7c853e038a4557",
+  "max_steps": 30,
+  "timeout_seconds": 900,
+  "model_timeout_seconds": 90,
+  "task_status": "needs_human",
+  "termination_reason": "three_consecutive_invalid_actions",
+  "usage": {"model_calls": 10, "prompt_tokens": 149009, "completion_tokens": 7054, "tool_calls": 6},
+  "cost_usd": null,
+  "output_file_count": 0,
+  "environment_cleaned": true,
+  "official_evaluation": "not_run",
+  "official_score": null,
+  "performance_improvement_claim": false,
+  "limitations": [
+    "No timeout observed, but generation failed action parsing/schema checks.",
+    "DOCX spec contained unsupported non-block fields; initial protocol did not fully describe nested schema.",
+    "Reasoning mixed into content can misdirect first-balanced-JSON extraction.",
+    "Single stochastic integration run, not repeated evidence of a timeout-policy effect.",
+    "Raw evidence remains in a local temporary directory."
+  ]
+}
