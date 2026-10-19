@@ -14,10 +14,25 @@ supervisor 以内层 wall timeout 控制 worker，宿主 Harbor exec 留出额�
 
 4 项本地真实进程测试通过，覆盖退出码、超时后代管道和终止信号回收；
 Harbor 0.18/0.22 独立环境各 9 项适配器测试通过，包含 supervisor 命令与状态收集。
-这些不是新一轮 Docker/真实模型验收，完整容器取消仍未完成：
+以上单元/契约测试不等于真实模型验收，完整容器取消仍未完成：
 宿主协程取消不保证立即向容器传递信号，内层期限提供后续停止上限；
 SIGKILL 杀死 supervisor 或主动脱离进程组的后代仍需 Harbor 容器级销毁兜底。
 supervisor 不是恶意代码沙箱，不改变容器所有权，也不授予 Agent 额外权限。
+
+2026-10-19 容器复验：Harbor 0.18 与 0.22 分别运行真实 Docker 测试，各
+2 passed / 9 deselected（22.17s / 22.20s）。两种普通/WorkBuddy dev 用户模式均验证
+native worker 正常完成、supervision 状态回收，以及独立超时任务返回 124、
+同组后代输出管道关闭。测试 finally 调用 Harbor stop(delete=True)。
+模型为容器内 HTTP fixture，不使用 MiniMax、不消费 API、不构成官方 benchmark 成绩。
+
+- 执行环境：Docker Desktop 4.91.0，Engine 29.8.0，Linux ARM64。
+- wheel SHA-256：`3c1b2677098e286ed3bd66dba0bc91c15f8cb307e75d79b0f458ef3eb4139058`。
+- 基础镜像：`python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1`。
+- 本机镜像 ID：`sha256:ce9a404c2c0138e747a43e6ea022d2f7e670ed868df35d627a663ba7fb940ea9`。
+
+复验使用新构建 wheel；源码包含 b7c793f 的 supervisor，额外未提交的 README
+编辑未作为源码功能证据。上述摘要标识实际构建产物，不承诺从同一 commit 重建字节一致。
+Linux 原生宿主、官方任务镜像、真实模型、即时取消及强杀恢复仍需单独验收。
 
 - 基础 Praxile 不依赖 Harbor。WorkBuddy 的 Harbor 0.18.0 与 JobBench 的 0.22.0 必须使用独立 Python 环境，不能在同一环境互相升级。
 - 环境必须提供 Python >=3.11、venv 和任务工具。宿主 Harbor 环境要求 Python >=3.12。

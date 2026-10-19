@@ -119,6 +119,8 @@ R0-A worktree 后端增补：新增 WorktreeLease，复用既有 preparer，生�
 
 容器内期限增补：native worker 由 POSIX supervisor 执行并管理进程组，超时/终止回收，宿主记录白名单监督状态。4 项真实本地进程测试及 Harbor 0.18/0.22 各 9 项适配器测试通过。宿主取消即时传递、容器级强杀恢复和新版 wheel 的真实 Docker 验收仍缺，未勾选完整生命周期能力。
 
+容器复验更新：新版 wheel 已在 Mac Docker Desktop Linux ARM64 上，通过 Harbor 0.18 与 0.22 各 2 项真实容器测试，覆盖普通/dev 用户、fixture 模型运行及进程组超时回收。镜像与 wheel 摘要见执行器文档；此次补齐新版 wheel Docker 验证，不包含官方任务/真实模型分数。即时取消与强杀恢复仍未完成，因此总项不勾选。
+
 结果导入增补：新增官方 score/reward/trial 的一致性校验与规范化，保留逐项判断，区分有效零分和 judge/build 错误，缺 usage 不补零，执行与评分状态分开。16 项导入测试及其余相关测试合计 47 项通过（含上游 ArtifactWriter 兼容）；真实任务评分与可信隔离尚未完成。
 
 自检增补：`doctor --benchmark workbuddy|jobbench [--online]` 不初始化项目，检查固定 Harbor 版本/插件/Docker；online 仅检查 daemon，不调用模型。基础设施可用与真实执行验证分开，模型/judge/镜像架构未知时明确显示。5 项测试及真实 WorkBuddy 基础设施查询通过；完整能力矩阵与各任务族验收仍未完成。

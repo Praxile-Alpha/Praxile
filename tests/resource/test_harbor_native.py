@@ -197,6 +197,23 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
             assert context.n_input_tokens == 12
             assert context.metadata["praxile"]["result"]["status"] == "completed"
             assert (paths.agent_dir / "praxile-result.json").is_file()
+            execution = json.loads((paths.agent_dir / "praxile-execution.json").read_text())
+            assert execution["worker_supervision"] == {"status": "completed", "returncode": 0}
+            # Exercise the shipped supervisor inside the container, including
+            # a descendant retaining the Docker exec output pipe.
+            import shlex
+            python = agent.remote_root + "/venv/bin/python"
+            status_path = agent.remote_root + "/timeout-smoke.json"
+            program = ("import subprocess,sys,time; "
+                       "subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
+                       "time.sleep(60)")
+            timeout_result = await environment.exec(shlex.join([
+                python, "-m", "praxile.eval.process_supervisor", "--timeout", "0.5",
+                "--status", status_path, "--", python, "-c", program]), timeout_sec=10)
+            assert timeout_result.return_code == 124
+            local_status = paths.agent_dir / "timeout-smoke.json"
+            await environment.download_file(status_path, local_status)
+            assert json.loads(local_status.read_text())["status"] == "timed_out"
         finally:
             await environment.stop(delete=True)
 
