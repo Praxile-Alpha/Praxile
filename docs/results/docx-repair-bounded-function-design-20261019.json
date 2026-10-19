@@ -1,0 +1,36 @@
+{
+  "schema_version": "praxile.public_experiment_receipt.v1",
+  "design_id": "docx-repair-bounded-function-001",
+  "scope": "seeded_docx_development_candidate_design_only",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "response_mode": "function",
+  "max_output_tokens": 8000,
+  "request_timeout_seconds": 120,
+  "attempt_count": 1,
+  "max_retries": 0,
+  "input_sha256": "7bdb95a92fcbd5955c9fd4d775fda6c22ab2f956fae4abcb0f51d1cb4ee1efc9",
+  "contract_sha256": "a7c8c055ea9b48db9ab6d4fd9c588de9351c99ab9b6c190bbb086273f0e6eb83",
+  "response_sha256": "96f68b362cb33905c8d40b51efe78fb8eff0d758562f4e645b10ca15ec8c4bd0",
+  "transport_elapsed_ms": 25475,
+  "finish_reason": "tool_calls",
+  "response_decode": "parsed",
+  "status": "failed",
+  "failure_stage": "proposal_schema",
+  "candidate_position": null,
+  "usage": {
+    "input_tokens": 5910,
+    "output_tokens": 4731,
+    "reasoning_tokens_included_in_output": 550,
+    "model_calls": 1,
+    "cost_usd": null
+  },
+  "candidate_published": false,
+  "probe_executed": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Top-level proposal shape rejected before action example validation.",
+    "Exact shape violation was not recorded; shape diagnostics added after this run cannot reconstruct it.",
+    "No retry, task execution, held-out evaluation or performance improvement claim."
+  ]
+}

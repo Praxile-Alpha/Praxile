@@ -145,6 +145,14 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
         stage = "proposal_schema"
         if (set(result) != {"decision", "candidates", "composition"} or result["decision"] != "propose"
                 or not isinstance(result["candidates"], list) or len(result["candidates"]) != 2):
+            record["proposal_validation_diagnostic"] = {
+                "schema_version": "praxile.proposal_validation.v1",
+                "missing_fields": sorted({"decision", "candidates", "composition"} - set(result)),
+                "unknown_field_count": len(set(result) - {"decision", "candidates", "composition"}),
+                "decision_is_propose": result.get("decision") == "propose",
+                "candidates_is_list": isinstance(result.get("candidates"), list),
+                "candidate_count": len(result["candidates"]) if isinstance(result.get("candidates"), list) else None,
+            }
             raise EvalSchemaError("design must propose exactly two candidates and one composition")
         candidates = []
         for name, draft in zip(("first", "second", "composition"), [*result["candidates"], result["composition"]]):

@@ -454,6 +454,13 @@ trajectory 保存合同摘要；resume 不允许改变模式或合同。提交�
 仅含已知字段名的 field_error_counts，避免诊断泄漏字段值。旧记录没有这些字段，
 不能推断当时具体哪几个参数出错，也未用新 schema 追加模型调用。函数 schema
 不涵盖全部文档语义，不能替代本地校验；合同变化需新的 design ID。
+
+随后对新增范围合同做了一次独立实测（bounded-function-001）：输入 5910、输出
+4731 tokens，传输 25.475 秒。函数参数 JSON 可解析，但在顶层 proposal_schema
+被拒绝，未进入动作示例校验，不能认为参数问题已解决。记录见
+`results/docx-repair-bounded-function-design-20261019.json`。没有重试或执行候选。
+此后增加 proposal_validation_diagnostic，仅保存已知缺失字段、未知字段数量、
+decision 是否合法及候选数量，不保存未知字段名或字段内容。旧结果无法回填。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

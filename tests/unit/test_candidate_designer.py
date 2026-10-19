@@ -70,6 +70,23 @@ def test_function_action_contract_declares_discriminator_and_parameters():
     assert action["additionalProperties"] is False
 
 
+@pytest.mark.parametrize("result", [
+    {"decision": "PRIVATE", "candidates": [], "composition": {}},
+    {"decision": "propose", "PRIVATE": "PRIVATE"},
+    {"decision": "propose", "candidates": "PRIVATE", "composition": {}},
+])
+def test_proposal_shape_diagnostics_do_not_record_unknown_names_or_values(result):
+    kwargs, _ = inputs({"content": json.dumps(result), "finish_reason": "tool_calls"})
+    with pytest.raises(EvalSchemaError, match="exactly two"):
+        design_development_candidates(**kwargs, response_mode="function")
+    record = kwargs["logger"].data["development_candidate_designs"][0]
+    diagnostic = record["proposal_validation_diagnostic"]
+    assert "PRIVATE" not in json.dumps(diagnostic)
+    assert diagnostic["missing_fields"] == sorted({"decision", "candidates", "composition"} - set(result))
+    assert record["failure_stage"] == "proposal_schema"
+    assert record["promotion_eligible"] is False
+
+
 @pytest.mark.parametrize("value", [True, 0, 301, "120"])
 def test_invalid_request_timeout_never_calls_router(value):
     kwargs, calls = inputs({})
