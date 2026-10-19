@@ -154,6 +154,9 @@ sys.exit(0 if passed else 1)
         assert all(outcome["status"] == "completed" for outcome in report["official_outcomes"])
         assert all(outcome["scores"][0]["value"] == float(deliver_correct) for outcome in report["official_outcomes"])
         assert not report["promotion_eligible"]
+        assert len(report["output_retention"]) == 2
+        assert all(item["status"] == "retained" and item["file_count"] == 1
+                   and not item["content_verified"] for item in report["output_retention"])
 
 
 @pytest.mark.timeout(300)

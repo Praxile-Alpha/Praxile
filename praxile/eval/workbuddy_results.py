@@ -95,6 +95,8 @@ def import_trial(task_id: str, trial_dir: Path, *, expected_task_checksum: str) 
         report["judge_issues"] = [item for item in details["judges"]
                                   if item.get("status") in {"judge_error", "build_error", "abstain", "review"}]
     report["native_trace_binding"] = bind_native_trace(trial, read, evidence)
+    from .native_artifacts import audit_output
+    report["output_retention"] = audit_output(root, trial)
     report["outcome"] = BenchmarkOutcome(task_id, status, scores, tuple(evidence)).to_dict()
     report["evidence_digests"] = evidence
     return report

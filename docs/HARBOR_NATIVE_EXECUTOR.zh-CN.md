@@ -812,3 +812,11 @@ docker build --platform linux/amd64 \
 该 Trial 也暴露出一个真实缺陷：`output_directory` 当时只传给 worker，Job 未声明 Harbor artifacts；因此官方读取了容器内 `output/result.xlsx`，但删除容器后宿主只有空产物 manifest，文件没有保留。不能回填或重造该次交付物。修复后 `WorkBuddyDataset.job_config()` 将显式的工作区相对 `output_directory` 转成 Job artifacts，由 Harbor 在清理前收集，排除 Python 缓存；未配置时不隐式收集整个 workspace。非法路径在生成 job 时拒绝。已有 job JSON 不会自动迁移，需重新生成；成功及失败产物都应保留，以支持审计。
 
 这是单任务真实基线，不是候选提升结果；完整交付验收、更多任务覆盖和开发/held-out 实验仍未完成。后续实验不得把本次私有失败细节注入执行器或经验候选。
+
+### 真实产物留存与独立审计
+
+同日第二次独立验收保持公开任务、MiniMax M3、20 步/600 秒上限、不注入经验、不使用私有失败细节，只采用修复后的 artifacts 声明。官方 reward 仍为 **0.8667**；这次宿主实际保留 `result.xlsx`（26412 字节），52 个事件绑定成功，输入快照一致，代理撤销与容器删除已核对。两次均保留，不选择性报告较好的结果；它们不是 baseline/candidate A/B。详见 [留存验收证据](results/workbuddy-inventory-retention-20261019.json)。
+
+`workbuddy_results.import_trial()` 新增独立 `output_retention`：读取原生执行器显式的 `output_directory`，校验 Harbor manifest 的 source/destination/service、宿主文件类型和路径，并计算文件摘要。状态包括 `not_requested`、`missing_manifest`、`not_collected`、`missing_files`、`empty`、`retained`。扫描最多 10000 条、256 MiB，拒绝符号链接和特殊文件。非法证据拒绝导入，缺失证据不伪造零分；官方分数原样保存。
+
+Pair report 只导出留存状态、文件数量及摘要，不导出文件名和正文。`content_verified=false` 明确表示“保留了这些字节”不是“内容正确”；post-verifier 文件也不证明执行器结束瞬间的内容或来源可信。候选晋升仍需独立门禁，该审计不自动授权 promotion。

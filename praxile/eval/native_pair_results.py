@@ -36,7 +36,7 @@ def collect_pair(root):
         if path.name in tasks:
             raise ValueError("duplicate task identity in pair")
         tasks[path.name] = (path, task_checksum(path))
-    records, bindings, inputs, outcomes = {}, [], [], []
+    records, bindings, inputs, outcomes, retention = {}, [], [], [], []
     for arm, config in arms.items():
         job_dir = Path(config["jobs_dir"]) / config["job_name"]
         found = {}
@@ -61,6 +61,11 @@ def collect_pair(root):
                 report = import_jobbench(task_id, trial_path.parent, expected_task_checksum=checksum,
                     expected_rubric_weights=tuple(item["weight"] for item in rubric["rubrics"]))
             binding = report["native_trace_binding"]
+            output = report.get("output_retention")
+            if output is not None:
+                retention.append({"arm": arm, "task_id": task_id, "status": output["status"],
+                    "file_count": len(output["files"]), "files_sha256": output.get("files_sha256"),
+                    "manifest_sha256": output.get("manifest_sha256"), "content_verified": False})
             expected_mode = "fresh_disabled" if arm == "baseline" else "development_candidate"
             outcomes.append({"arm": arm, **report["outcome"]})
             if binding.get("status") == "bound" and binding.get("experience_mode") != expected_mode:
@@ -83,6 +88,7 @@ def collect_pair(root):
     return {"schema_version": "praxile.native_pair_report.v1", "plan_sha256": snapshots["manifest.json"],
         "execution_sha256": state_digest, "benchmark": benchmark, "bindings": bindings, "inputs": inputs,
         "comparison": comparison, "official_outcomes": outcomes,
+        "output_retention": retention,
         "promotion_eligible": False, "controlled_experiment_verified": False,
         "limitations": ["Local file consistency is not source attestation or immutable runtime isolation.",
                         "Official rubric details remain in private trial files, not this report.",

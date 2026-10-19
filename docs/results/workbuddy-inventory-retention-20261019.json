@@ -1,0 +1,45 @@
+{
+  "schema_version": "praxile.public_benchmark_evidence.v1",
+  "date": "2026-10-19",
+  "task_id": "drug-inventory-split-L2-006",
+  "experiment": "independent_output_retention_acceptance_not_ab",
+  "executor_model": "MiniMax-M3",
+  "experience_mode": "fresh_disabled",
+  "max_steps": 20,
+  "timeout_seconds": 600,
+  "automatic_retries": 0,
+  "official_reward": 0.8667,
+  "native_status": "completed",
+  "inputs_unchanged": true,
+  "trace_event_count": 52,
+  "trace_binding": "bound",
+  "source_result_sha256": "351865f7c0cf274d95d72ad526e4f877d1d0388331e42a97f84d8641be248ad6",
+  "output_retention": {
+    "status": "retained",
+    "file": "result.xlsx",
+    "size": 26412,
+    "sha256": "94911d5edd297419c5eb81c642f03630ceeaa99d6f8f62083f99ac4275cad3fc",
+    "manifest_sha256": "14f971ebda9b81f5fe9048fbe214b5ef294d259b97e4f3817673c68bba580a20",
+    "files_sha256": "029c8dd8778387cd8d3b52253bc5905c8c87145bc3cbf859944381b90522a383",
+    "content_verified_by_retention_audit": false
+  },
+  "usage": {
+    "calls": 16,
+    "failed_calls": 0,
+    "input_tokens": 161995,
+    "output_tokens": 7653,
+    "provider_latency_seconds": 93.388671,
+    "cost_usd": null,
+    "source": "host_credential_broker_provider_responses"
+  },
+  "credential_revoked": true,
+  "container_cleanup_verified": true,
+  "promotion_eligible": false,
+  "limitations": [
+    "Same public task as earlier baseline; no candidate, no A/B improvement claim",
+    "Task correctness remains partial despite successful artifact retention",
+    "Artifact hashes observe post-verifier local files, not trusted build/source attestation",
+    "No private judge feedback was supplied to the executor",
+    "Full artifact and private grader materials remain local"
+  ]
+}
