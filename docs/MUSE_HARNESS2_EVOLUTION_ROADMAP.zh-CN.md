@@ -109,6 +109,8 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 ### R0-B WorkBuddy Adapter
 
+原生经验入口进展：新增 `native_development_evidence`，从带 SHA256 的原生执行结果按显式开发任务名单生成白名单证据，可显式转交既有 CandidateDesigner；CLI 不调用模型、不自动写入长期经验。真实 Office 轨迹投影出 3 条工具状态证据，未据此生成候选或宣称收益。开发归属仍为调用方声明，缺少独立来源认证和更丰富的公开语义证据，因此不勾选完整经验闭环。后续真实调用按用户要求使用 `MiniMax-M3.1-Flash`，既有 M3 结果不改写或混成同模型 A/B。
+
 真实 Office Trial 阶段进展（2026-10-19）：固定 amd64 镜像通过 Harbor 0.18 完整运行 `drug-inventory-split-L2-006`，MiniMax M3 新鲜基线无经验注入；官方 CompositeVerifier 13/15、reward 0.8667（partial_pass），48 个原生事件绑定成功，输入快照一致、凭据撤销和容器清理已验证。并发现原 Job 未收集 output 产物，故本次不能算完整交付验收；已修复生成器声明 artifacts，4 个 fixture Trial 验证成功/失败产物在清理后均保留。这不是 A/B 收益证明，也不满足全部 WorkBuddy 类别覆盖；总项保持未完成。详见 `HARBOR_NATIVE_EXECUTOR.zh-CN.md` 与 `results/workbuddy-inventory-baseline-20261019.json`。
 
 R0-A worktree 后端增补：新增 WorktreeLease，复用既有 preparer，生成独立租约身份并固定初次解析的 commit；支持真实 reset、执行取消、创建取消后的回收及幂等 cleanup。重置失败后禁止继续执行。11 项 Git/租约/旧 runner 资源测试通过；旧 runner 未迁移，Harbor 生命周期统一接入、只读挂载和跨进程恢复仍缺，完整租约项保持未勾选。见 `WORKTREE_LEASE.zh-CN.md`。

@@ -100,6 +100,38 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 
 ### 从轨迹生成文件
 
+#### 原生 Harbor 开发证据入口
+
+`praxile.eval.v2.native_development_evidence` 支持直接从原生 worker 的
+`praxile-result.json` 提取开发证据，不需要伪造旧版 A/B manifest。
+
+```sh
+python -m praxile.eval.v2.native_development_evidence \
+  --result /absolute/trial/agent/praxile-result.json \
+  --sha256 SOURCE_RESULT_SHA256 \
+  --development-task-id NATIVE_TRAJECTORY_TASK_ID \
+  --heldout-task-id EXCLUDED_NATIVE_TASK_ID \
+  --track development \
+  --output /absolute/new-development-evidence.json
+```
+
+任务 ID 是 trajectory 的原生 `task_id`，不是 benchmark 名称；调用方必须先建立
+开发/held-out 划分，不能将看过评分的 held-out 任务改名后作为开发来源。
+当前划分由调用方显式声明，并非来自独立签名或不可变 registry，因此输出始终
+标记 `provenance_attested=false`。不要将该入口描述为物理隔离或来源认证。
+
+入口校验原始字节 SHA256、稳定 task/start_time、任务归属及原生事件身份。
+复用操作 identity、文档修订/布局白名单和依赖闭包选择，最多输出 20 条证据；
+只传递结构化工具状态、退出码、参数摘要和允许的文档指标，不读取相邻 verifier
+文件，不导出原始命令、输出正文、官方分数或 rubric。CLI 不调用模型，不写经验库，
+输出为 0600 文件且拒绝覆盖。`design_from_native(...)` 可显式调用既有候选设计器；
+无可用证据时直接 NO_ENTRY，不发起模型请求。设计调用的持久化与模型配置仍由调用方负责。
+
+真实 Office 留存验收轨迹离线投影得到 3 条证据（2 次命令 blocked、1 次 success），
+源摘要 `351865f7c0cf274d95d72ad526e4f877d1d0388331e42a97f84d8641be248ad6`。
+没有调用模型，未读取私有失败细节，也未生成或晋升候选。它们不足以证明错误根因、
+修复有效性或跨任务迁移。下一阶段仍需更细的公开工具证据和独立受控实验。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
