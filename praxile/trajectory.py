@@ -151,6 +151,7 @@ class TrajectoryLogger:
             "subtask_begin",
             "subtask_end",
             "subtask_note",
+            "subtask_reflect",
             "architecture_gate",
             "dry_run_skip_tests",
             "run_test",

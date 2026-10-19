@@ -74,6 +74,14 @@ R2 增量：`praxile.subtask_episode.v1` 记录本次运行内明确声明的子
 
 账本保存在原 trajectory/checkpoint 的 task_notes 中，沿用原持久化。每次请求重新检查状态和 TTL，只将活动笔记作为低信任数据临时附加；消息历史不保存 subtask_note 正文。过期标 expired，条件未知或失配标 invalidated，二者不自动复活。task_note_usage 记录实际请求采用的 note IDs；内部登记不计作工具调用，但占 action-loop 步数。
 
-不会直接写长期 memory/skill，不赋予权限，也不改变 Architecture Gate。TTL 只控制后续主动注入，无法保证模型不在其他动作中复述此前见过的信息；不能把它当安全擦除。当前尚无独立反思模型、自动重规划执行或长期资产晋升。8 项测试包含真实 action-loop 的一次注入/过期、状态失效、来源与边界拒绝以及 checkpoint 数据恢复。
+不会直接写长期 memory/skill，不赋予权限，也不改变 Architecture Gate。TTL 只控制后续主动注入，无法保证模型不在其他动作中复述此前见过的信息；不能把它当安全擦除。自动重规划执行或长期资产晋升未实现。笔记测试包含真实 action-loop 的一次注入/过期、状态失效、来源与边界拒绝以及 checkpoint 数据恢复。
+
+## 显式反思调用
+
+新增 `subtask_reflect`，字段与 subtask_note 相同但不传 note_text：它调用可配置的 `experience_reflection` 模型角色，沿用 private/high_risk 路由和取消信号。不是每个子任务自动调用；单个子任务最多尝试一次，每任务最多 16 次，固定本次调用上限 1200 output tokens/30 秒。模型可建议下一步调查或重规划，也可 abstain。
+
+输入只包含该子任务目标、明确标注的 claimed_outcome、末尾最多 8 个动作的 ID/类型/状态及各最多 1200 字符观察。返回 note 时必须引用提供的动作 ID；未知引用或无效 JSON 拒绝，abstain 不创建笔记。有效结果进入同一任务内 TTL 账本，不更新活动 plan，不直接运行建议，也不影响最终 evaluator。模型调用 usage/route 进入原成本账本，解析失败也保留已返回的消耗，反思尝试状态存于 subtask_reflections。
+
+独立调用不等于跨模型独立验证，同一模型可承担执行和反思，证据引用有效也不能证明推理正确。这里实现的是建议生成，不是自动重规划或因果评审。12 项测试通过（含真实 action-loop 分发、假模型输出、证据拒绝、abstain、TTL 和成本）；尚无本轮付费模型效果验收。
 
 验证：日志复制/序列化恢复、失败观察与成功声明并存、未关闭状态、实际 action-loop 边界/工具分发/checkpoint 测试通过。完整 R2-A 总项尚未完成，不提前勾选。

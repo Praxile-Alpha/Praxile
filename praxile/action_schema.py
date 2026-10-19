@@ -31,6 +31,8 @@ class ActionSchemaRegistry:
             "subtask_end": {"required": {"claimed_outcome": str, "summary": str}, "optional": {}},
             "subtask_note": {"required": {"note_text": str, "source_episode_id": str,
                 "ttl_steps": int, "requirements": dict}, "optional": {}},
+            "subtask_reflect": {"required": {"source_episode_id": str,
+                "ttl_steps": int, "requirements": dict}, "optional": {}},
             "edit_file": {"required": {"path": str, "content": str}, "optional": {}},
             "run_command": {"required": {"command": str}, "optional": {}},
             "finish": {"required": {"summary": str}, "optional": {"status": str}},

@@ -8,6 +8,7 @@ from praxile.action_schema import ActionSchemaRegistry
 from praxile.config import Config, ProjectPaths, default_config
 from praxile.runtime import AgentRuntime
 from praxile.task_notes import add_note, select_notes
+from praxile.subtask_reflection import reflect_subtask
 from praxile.trajectory import TrajectoryLogger
 
 
@@ -38,7 +39,8 @@ def test_note_unknown_state_invalidates_permanently():
     assert not select_notes(logger.data, {"state": {"git": {"is_repo": True}}})
 
 
-def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch):
+@pytest.mark.parametrize("use_reflector", [False, True])
+def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch, use_reflector):
     logger, note_action = source()
     runtime = AgentRuntime.__new__(AgentRuntime)
     runtime.config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
@@ -48,9 +50,15 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     runtime.tools = SimpleNamespace(
         safety=SimpleNamespace(check_tool_call=lambda *args, **kwargs: SimpleNamespace(allowed=True)),
         execute=Mock(return_value={"status": "success", "output": "observed", "data": {}}))
+    if use_reflector:
+        note_action = {key: value for key, value in note_action.items() if key != "note_text"}
+        note_action["type"] = "subtask_reflect"
     responses = iter([note_action, {"type": "read_file", "path": "a.py"}, {"type": "finish", "summary": "done"}])
     prompts = []
     def chat(messages, **kwargs):
+        if kwargs["purpose"] == "experience_reflection":
+            return {"content": json.dumps({"decision": "note", "note_text": "UNIQUE_HYPOTHESIS",
+                "evidence_refs": [logger.data["actions"][0]["action_id"]]}), "usage": {"input_tokens": 12}}
         prompts.append(json.dumps(messages))
         return {"content": json.dumps(next(responses)), "usage": {}}
     runtime.router = SimpleNamespace(chat=chat)
@@ -72,3 +80,25 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     assert logger.data["cost"]["tool_calls"] == 2
     restored = TrajectoryLogger.from_data(json.loads(json.dumps(logger.data)))
     assert restored.data["task_notes"] == logger.data["task_notes"]
+    assert logger.data["cost"]["model_calls"] == (4 if use_reflector else 3)
+
+
+@pytest.mark.parametrize("decision", ["abstain", "bad_reference", "bad_json"])
+def test_reflector_abstention_and_invalid_output_do_not_create_notes(decision):
+    logger, action = source()
+    content = json.dumps({"decision": "abstain"}) if decision == "abstain" else (
+        "not json" if decision == "bad_json" else json.dumps({"decision": "note",
+            "note_text": "unsupported", "evidence_refs": ["invented"]}))
+    router = SimpleNamespace(chat=Mock(return_value={"content": content, "usage": {"input_tokens": 12}}))
+    if decision == "abstain":
+        result = reflect_subtask(logger, action, {"state": {"git": {"is_repo": True}}}, router, private=True)
+        assert result["data"]["decision"] == "abstain"
+    else:
+        with pytest.raises(ValueError):
+            reflect_subtask(logger, action, {"state": {"git": {"is_repo": True}}}, router, private=True)
+    assert not logger.data.get("task_notes")
+    assert logger.data["cost"]["prompt_tokens"] == 12
+    assert router.chat.call_args.kwargs["private"] is True
+    with pytest.raises(ValueError, match="attempt limit"):
+        reflect_subtask(logger, action, {"state": {"git": {"is_repo": True}}}, router)
+    assert router.chat.call_count == 1

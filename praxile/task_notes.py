@@ -22,7 +22,7 @@ def add_note(trajectory: dict, action: dict, observations: dict) -> str:
         raise ValueError("note requires a closed episode from this task")
     evidence = [item["action_id"] for item in trajectory.get("actions", [])
         if item.get("action_id") in episode.get("action_refs", [])
-        and item.get("action_type") not in {"subtask_note", "subtask_begin", "subtask_end", "finish"}]
+        and item.get("action_type") not in {"subtask_note", "subtask_reflect", "subtask_begin", "subtask_end", "finish"}]
     if not evidence:
         raise ValueError("source episode has no observed action evidence")
     notes = trajectory.setdefault("task_notes", [])

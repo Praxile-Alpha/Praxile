@@ -13,6 +13,7 @@ from .evolution import EvolutionEngine
 from .experience_context import RuntimeExperienceContext
 from .experience_conditions import check_conditions, observe_tool_versions
 from .task_notes import add_note, select_notes
+from .subtask_reflection import reflect_subtask
 from .interop import interop_policy
 from .judge_governance import JudgeGovernance
 from .json_utils import RobustJSONError, parse_json_object
@@ -999,7 +1000,20 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
-                if action_type in {"subtask_begin", "subtask_end", "subtask_note"}:
+                if action_type == "subtask_reflect":
+                    decision = self.tools.safety.check_tool_call(action_type, action,
+                        context={"task_id": logger.task_id, "step": len(logger.data["actions"]) + 1})
+                    if not decision.allowed:
+                        observation = {"status": "blocked", "output": decision.reason, "data": {}}
+                    else:
+                        snapshot = self.project.snapshot(refresh=True)
+                        snapshot["interop"] = interop_policy(self.config)
+                        try:
+                            observation = reflect_subtask(logger, action, self._activation_observations(snapshot),
+                                self.router, private=private, high_risk=high_risk, cancel_requested=cancel_requested)
+                        except (ValueError, RobustJSONError) as exc:
+                            observation = {"status": "failure", "output": "Reflection rejected: " + type(exc).__name__, "data": {}}
+                elif action_type in {"subtask_begin", "subtask_end", "subtask_note"}:
                     observation = self._subtask_boundary(action, logger)
                 elif dry_run and action_type in MUTATING_ACTIONS:
                     observation = {
@@ -1369,6 +1383,8 @@ class AgentRuntime:
             '{"type":"subtask_begin","goal":"Create the requested report"}\n'
             '{"type":"subtask_end","claimed_outcome":"completed","summary":"Report created; independent acceptance pending"}\n'
             '{"type":"subtask_note","source_episode_id":"closed episode id","note_text":"Evidence-based working hypothesis",'
+            '"ttl_steps":2,"requirements":{"state_equals":{"git.is_repo":true}}}\n'
+            '{"type":"subtask_reflect","source_episode_id":"closed episode id",'
             '"ttl_steps":2,"requirements":{"state_equals":{"git.is_repo":true}}}\n'
             '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/report.json","media_type":"application/json","required_fields":["summary"]}]}}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
