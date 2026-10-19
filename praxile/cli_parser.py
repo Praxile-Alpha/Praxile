@@ -533,7 +533,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_gateway_serve.set_defaults(func=cmd_gateway_serve)
 
     p_doctor = sub.add_parser("doctor", help="Check harness configuration")
-    p_doctor.add_argument("--online", action="store_true", help="Run fast model endpoint reachability checks")
+    p_doctor.add_argument("--online", action="store_true", help="Probe model endpoints, or only Docker when --benchmark is set")
+    p_doctor.add_argument("--benchmark", choices=["workbuddy", "jobbench"],
+                          help="Inspect isolated benchmark prerequisites without initializing a project")
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_interop = sub.add_parser("interop", help="Explain optional framework adapter boundaries")

@@ -115,6 +115,8 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 结果导入增补：新增官方 score/reward/trial 的一致性校验与规范化，保留逐项判断，区分有效零分和 judge/build 错误，缺 usage 不补零，执行与评分状态分开。16 项导入测试及其余相关测试合计 47 项通过（含上游 ArtifactWriter 兼容）；真实任务评分与可信隔离尚未完成。
 
+自检增补：`doctor --benchmark workbuddy|jobbench [--online]` 不初始化项目，检查固定 Harbor 版本/插件/Docker；online 仅检查 daemon，不调用模型。基础设施可用与真实执行验证分开，模型/judge/镜像架构未知时明确显示。5 项测试及真实 WorkBuddy 基础设施查询通过；完整能力矩阵与各任务族验收仍未完成。
+
 阶段实现记录（2026-10-19）：新增 `praxile.adapters.harbor_native:PraxileAgent` 和 `praxile.eval.native_worker`，固定 wheel 双端 SHA-256 校验、容器离线安装、调用真实 AgentRuntime、原始轨迹下载和 token 统计回填已实现。Harbor 0.18.0 / 0.22.0 分别在独立环境通过真实 Docker + 模拟模型测试，各 2 项；基础回归 34 项通过。复现与边界见 `HARBOR_NATIVE_EXECUTOR.zh-CN.md`。这是执行通道验收，不是官方 benchmark 成绩；任务发现、正式评分、私有材料隔离、断点恢复和真实任务验收仍未完成，以下总项保持未勾选。
 
 官方 [WorkBuddy-Bench](https://github.com/Tencent/workbuddy-bench) 当前基于 Harbor/Docker，含 Code/Web/Office/Security 子集。实现时固定仓库提交、数据修订、镜像摘要和评分配置，不能把 Harness² 的论文子集当成官方全量任务集。
