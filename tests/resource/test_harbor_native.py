@@ -61,6 +61,19 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
     assert record["development_context_identity"]["candidate_digest"] == ContextCandidate.from_dict(candidate.to_dict()).digest
     assert record["development_context_identity"]["source_file_sha256"] == original_digest
     assert str(path) not in json.dumps(record)
+    class ResultEnvironment:
+        async def download_file(self, remote, local):
+            local.write_text(json.dumps(result))
+    valid_context = {"schema_version": "praxile.native_development_context.v1", "track": "development",
+        "candidate_digest": agent.development_context_identity["candidate_digest"],
+        "activation": {"repository": "public/docs", "activated": False}, "injected": False,
+        "promotion_eligible": False, "permission_granted": False}
+    for change in ({"candidate_digest": "forged"}, {"injected": True}, {"promotion_eligible": True}):
+        result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": {},
+            "experience_mode": "development_candidate", "development_context": {**valid_context, **change}}
+        with pytest.raises(ValueError, match="identity or activation"):
+            asyncio.run(PraxileAgent._collect_result(agent, ResultEnvironment(), AgentContext()))
+        assert not (tmp_path / "praxile-result.json").exists()
 
 
 def test_worker_dependencies_are_verified_offline_and_versioned(tmp_path):
@@ -513,12 +526,25 @@ def test_offline_dependency_installs_only_in_worker_venv(tmp_path):
 @pytest.mark.parametrize("workbuddy", [False, True])
 @pytest.mark.parametrize("cancel_run", [False, True])
 def test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, cancel_run, monkeypatch, broker_mode=False,
-                                                      bound_contract=False):
+                                                      bound_contract=False, development_mode=None):
     from harbor.environments.docker.docker import DockerEnvironment
     from harbor.models.task.config import EnvironmentConfig
     from harbor.models.trial.paths import TrialPaths
 
     wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
+    development_options = {}
+    if development_mode is not None:
+        from praxile.eval.v2.candidate import ContextCandidate
+        candidate = ContextCandidate(candidate_id="native-dev", version="1", title="Fixture suggestion",
+            candidate_type="context_policy", context_item={"content": "NATIVE_CONTEXT_SENTINEL: inspect available files."},
+            confidence=0.0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "transport only"},
+            applies_to={"repositories": ["fixture/repo"], "task_signals": ["available project"],
+                        "does_not_apply_when": ["unrelated task"]})
+        candidate_file = tmp_path / "candidate.json"
+        candidate_file.write_text(json.dumps(candidate.to_dict()))
+        development_options = {"development_candidate_file": str(candidate_file),
+            "development_candidate_sha256": hashlib.sha256(candidate_file.read_bytes()).hexdigest(),
+            "development_only": True, "repository": "fixture/repo" if development_mode == "active" else "other/repo"}
     credential = tmp_path / "host-key"
     broker_instances = []
     if broker_mode:
@@ -547,7 +573,8 @@ import json, time
 from pathlib import Path
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        self.rfile.read(int(self.headers['Content-Length']))
+        request = self.rfile.read(int(self.headers['Content-Length']))
+        Path('/tmp/context-observed.json').write_text(json.dumps({'sentinel': b'NATIVE_CONTEXT_SENTINEL' in request}))
         if self.path.startswith('/block/'):
             Path('/tmp/model-request-started').touch()
             time.sleep(120)
@@ -573,6 +600,7 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 workspace="/workspace", base_url=("https://provider.invalid/v1" if broker_mode else
                     "http://127.0.0.1:18888" + ("/block/v1" if cancel_run else "/v1")),
                 credential_file=str(credential) if broker_mode else None,
+                **development_options,
                 model_name="fixture", max_steps=2, timeout_seconds=90,
                 deliverable_contract=({"schema_version": "praxile.deliverable_contract.v1", "source": "user_request",
                     "outputs": [{"path": "report.json", "media_type": "application/json"}]} if bound_contract else None))
@@ -618,12 +646,24 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
             assert context.n_input_tokens == (24 if bound_contract else 12)
             assert context.metadata["praxile"]["result"]["status"] == ("needs_human" if bound_contract else "completed")
             assert (paths.agent_dir / "praxile-result.json").is_file()
+            if development_mode is not None:
+                actual = json.loads((paths.agent_dir / "praxile-result.json").read_text())
+                expected = development_mode == "active"
+                assert actual["development_context"]["activation"]["activated"] is expected
+                assert actual["development_context"]["injected"] is expected
+                assert context.metadata["praxile"]["development_context"] == actual["development_context"]
+                observed = paths.agent_dir / "context-observed.json"
+                await environment.download_file("/tmp/context-observed.json", observed)
+                assert json.loads(observed.read_text())["sentinel"] is expected
             if bound_contract:
                 trajectory = json.loads((paths.agent_dir / "praxile-result.json").read_text())["trajectory"]
                 assert trajectory["deliverable_verification"]["status"] == "failure"
                 assert trajectory["deliverable_contract_sha256"] == agent.public_contract_sha256
             execution = json.loads((paths.agent_dir / "praxile-execution.json").read_text())
             assert execution["worker_supervision"] == {"status": "completed", "returncode": 0}
+            if development_mode is not None:
+                assert execution["development_context_identity"]["candidate_digest"] == candidate.digest
+                return
             # Exercise the shipped supervisor inside the container, including
             # a descendant retaining the Docker exec output pipe.
             import shlex
@@ -680,3 +720,12 @@ def test_harbor_broker_native_worker(tmp_path, workbuddy, monkeypatch):
 @pytest.mark.parametrize("workbuddy", [False, True])
 def test_harbor_public_contract_rejects_false_completion(tmp_path, workbuddy, monkeypatch):
     test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, False, monkeypatch, bound_contract=True)
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(300)
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL"), reason="explicit built wheel and Docker required")
+@pytest.mark.parametrize("workbuddy", [False, True])
+@pytest.mark.parametrize("mode", ["active", "abstain"])
+def test_harbor_development_context_in_real_container(tmp_path, workbuddy, mode, monkeypatch):
+    test_harbor_owned_container_executes_native_worker(tmp_path, workbuddy, False, monkeypatch, development_mode=mode)

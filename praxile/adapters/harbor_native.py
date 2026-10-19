@@ -373,8 +373,23 @@ class PraxileAgent(BaseAgent):
             result = json.loads(temporary.read_text(encoding="utf-8"))
             if (not isinstance(result, dict) or result.get("schema_version") != "praxile.native_benchmark_run.v1"
                     or not isinstance(result.get("trajectory"), dict)
-                    or result.get("experience_mode") != "fresh_disabled"):
+                    or result.get("experience_mode") != ("development_candidate"
+                        if self.development_context_identity is not None else "fresh_disabled")):
                 raise ValueError("invalid native worker result")
+            if self.development_context_identity is not None:
+                development = result.get("development_context")
+                activation = development.get("activation") if isinstance(development, dict) else None
+                if (not isinstance(development, dict) or not isinstance(activation, dict)
+                        or development.get("schema_version") != "praxile.native_development_context.v1"
+                        or development.get("track") != "development"
+                        or development.get("candidate_digest") != self.development_context_identity["candidate_digest"]
+                        or activation.get("repository") != self.development_context_identity["repository"]
+                        or type(activation.get("activated")) is not bool
+                        or type(development.get("injected")) is not bool
+                        or (development["injected"] and not activation["activated"])
+                        or development.get("promotion_eligible") is not False
+                        or development.get("permission_granted") is not False):
+                    raise ValueError("native development result identity or activation mismatch")
             temporary.replace(self.logs_dir / "praxile-result.json")
             self.populate_context_post_run(context)
         finally:

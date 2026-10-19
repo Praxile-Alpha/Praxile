@@ -1,0 +1,19 @@
+{
+  "schema_version": "praxile.native_candidate_acceptance.v1",
+  "date": "2026-10-19",
+  "implementation_base": "4578727",
+  "host_patch": "Validate expected development result mode and candidate identity during result collection",
+  "worker_wheel_sha256": "c349f27a120626f6460e22828d7a1247db68c454ba71d4ce5d8ab8ebfbfe3424",
+  "build_note": "Local checkout wheel, including existing README metadata edits; not published",
+  "image_id": "sha256:ce9a404c2c0138e747a43e6ea022d2f7e670ed868df35d627a663ba7fb940ea9",
+  "architecture": "arm64",
+  "test": "tests/resource/test_harbor_native.py::test_harbor_development_context_in_real_container",
+  "results": [{"harbor": "0.18", "passed": 4, "seconds": 43.14}, {"harbor": "0.22", "passed": 4, "seconds": 43.61}],
+  "cases": ["active/root", "active/dev", "abstain/root", "abstain/dev"],
+  "initial_failure": "Four 0.18 cases completed worker execution but host collection rejected development_candidate mode. Host validation was fixed without changing the worker wheel.",
+  "verified": ["Frozen candidate transferred through Harbor to native worker", "Matching suggestion observed in actual fixture model request", "Out-of-scope suggestion absent from actual fixture model request", "Activation and injection propagated into Harbor metadata", "Execution record bound to candidate digest"],
+  "paid_model_calls": 0,
+  "official_evaluation": false,
+  "promotion_eligible": false,
+  "limitations": ["Fixture model returns finish; no coding or document task utility demonstrated", "Not a paired benchmark A/B result", "No normalized context events asserted", "No independent provenance attestation"]
+}

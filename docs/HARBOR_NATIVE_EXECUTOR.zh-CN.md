@@ -43,6 +43,14 @@ Harbor 插件现在支持同名构造参数 `development_candidate_file`、
 Harbor 0.18/0.22 各 31 passed、9 skipped，包括冻结与参数转发；本阶段尚未
 执行真实 Docker 候选注入，完整 A/B 收益仍未验收。
 
+后续真实验收补充：Harbor 0.18 / 0.22 各 4 passed，覆盖普通/dev 用户与激活/弃权。
+测试直接检查模拟模型收到的请求，而不只检查配置或 injected 标记。首轮发现宿主
+回收器仍仅接受 baseline 模式，已按配置校验 development 模式及候选摘要、repository、
+激活/注入布尔一致性、权限/晋升否定标记；错误身份的结果不发布到正式文件。
+宿主修复后复用相同 worker wheel 重跑通过；完整本地适配器回归各 31 passed、13 skipped。
+证据见 `results/native-candidate-docker-20261019.json`。该测试不证明模型任务能力、
+候选收益或完整 benchmark 双臂实验已完成。
+
 ### 固定 worker 依赖
 
 适配器接受可选 `dependency_wheels`，每项严格为本机 `path` 和完整 `sha256`：
