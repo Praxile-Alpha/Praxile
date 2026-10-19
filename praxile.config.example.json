@@ -32,6 +32,7 @@
     "compression_enabled": true,
     "experience_representation_enabled": true,
     "experience_representation_budget_units": 600,
+    "experience_layer_budget_units": {"strategic": 150, "procedural": 300, "tool": 150},
     "max_prompt_chars": 120000,
     "compression_threshold": 0.8,
     "observation_keep_chars": 1600,

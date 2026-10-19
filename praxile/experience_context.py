@@ -54,6 +54,8 @@ class RuntimeExperienceContext:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         enabled = bool(self.config.get("context", "experience_representation_enabled", default=True))
         remaining = int(self.config.get("context", "experience_representation_budget_units", default=600))
+        layer_remaining = dict(self.config.get("context", "experience_layer_budget_units",
+                              default={"strategic": 150, "procedural": 300, "tool": 150}))
         task_type = str(analysis.get("task_type") or "feature")
         metadata = {
             "context_state_dependency": _STATE_DEPENDENCY.get(task_type, 0.5),
@@ -82,6 +84,16 @@ class RuntimeExperienceContext:
                 selected.append(dict(item))
                 decisions.append({"path": path, "activation": "activated", "representation": "legacy",
                                   "reason": "mandatory control rule" if asset_type in _MANDATORY_TYPES else "representation routing disabled"})
+                continue
+            layer = asset.get("experience_layer")
+            if layer is not None and (not isinstance(layer, str) or layer not in layer_remaining):
+                decisions.append({"path": path, "activation": "abstained", "representation": "none",
+                                  "reason": "invalid experience layer metadata"})
+                continue
+            budget = min(remaining, layer_remaining[layer]) if layer else remaining
+            if budget <= 0:
+                decisions.append({"path": path, "activation": "abstained", "representation": "none",
+                                  "experience_layer": layer, "reason": "experience layer or total budget exhausted"})
                 continue
             scope = asset.get("applies_to")
             if not isinstance(scope, Mapping):
@@ -113,7 +125,7 @@ class RuntimeExperienceContext:
             candidate = _Candidate(path, dict(scope), options, {
                 "compressibility": compressibility,
                 "evidence_density": density,
-                "token_budget": remaining,
+                "token_budget": budget,
             })
             try:
                 activation = self.activation_gate.plan(candidate, [view])
@@ -133,12 +145,17 @@ class RuntimeExperienceContext:
                 "features": representation["features"],
                 "estimated_context_units": representation["estimated_context_units"],
                 "eligible": representation["eligible"],
+                "experience_layer": layer,
+                "layer_budget_before": layer_remaining.get(layer) if layer else None,
             })
             if kind == "none":
                 continue
-            chosen = {**item, "snippet": options[kind], "representation_kind": kind}
+            chosen = {**item, "snippet": options[kind], "representation_kind": kind,
+                      "experience_layer": layer}
             selected.append(chosen)
             remaining -= int(representation["estimated_context_units"])
+            if layer:
+                layer_remaining[layer] = max(0, layer_remaining[layer] - int(representation["estimated_context_units"]))
             if remaining <= 0:
                 remaining = 0
         return selected, decisions

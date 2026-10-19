@@ -24,6 +24,27 @@ def _asset(store: ExperienceStore, root, relative: str, content: str, *, confide
     return path.relative_to(root).as_posix()
 
 
+def test_layers_use_existing_assets_without_bypassing_semantic_gate(tmp_path):
+    config = Config.load(tmp_path)
+    config.data["context"]["experience_layer_budget_units"] = {"strategic": 0, "procedural": 300, "tool": 150}
+    store = ExperienceStore(config.paths)
+    store.initialize(config)
+    retrieved = []
+    for layer in ("strategic", "procedural", "tool", "invalid"):
+        path = _asset(store, tmp_path, f"memory/{layer}.md", "# Parser\nRun parser tests before edits.\n")
+        asset = tmp_path / path
+        asset.with_name(asset.name + ".meta.json").write_text(json.dumps({
+            "experience_layer": layer, "applies_to": {"task_signals": ["parser"]}}))
+        retrieved.append({"path": path, "type": "memory", "kind": "memory", "matched_terms": ["parser"],
+                          "snippet": "Run parser tests before edits."})
+    selected, decisions = RuntimeExperienceContext(config, store).plan("Fix parser", "task", {}, retrieved)
+    assert {item["experience_layer"] for item in selected} == {"procedural", "tool"}, decisions
+    assert any("budget exhausted" in item["reason"] for item in decisions)
+    assert any("invalid experience layer" in item["reason"] for item in decisions)
+    selected, _ = RuntimeExperienceContext(config, store).plan("Adjust calendar", "other", {}, retrieved)
+    assert not selected
+
+
 def test_normal_run_routes_approved_assets_and_records_actual_injection(tmp_path, monkeypatch) -> None:
     config = Config.load(tmp_path)
     store = ExperienceStore(config.paths)

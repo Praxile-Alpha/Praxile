@@ -53,6 +53,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "compression_enabled": True,
             "experience_representation_enabled": True,
             "experience_representation_budget_units": 600,
+            "experience_layer_budget_units": {"strategic": 150, "procedural": 300, "tool": 150},
             "max_prompt_chars": 120000,
             "compression_threshold": 0.8,
             "observation_keep_chars": 1600,
@@ -874,6 +875,10 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
             errors.append(f"{path}: must be >= 0")
     if type(value_at("context.experience_representation_budget_units")) is not int:
         errors.append("context.experience_representation_budget_units: expected int")
+    layer_budgets = value_at("context.experience_layer_budget_units")
+    if (not isinstance(layer_budgets, dict) or set(layer_budgets) != {"strategic", "procedural", "tool"}
+            or any(type(value) is not int or value < 0 for value in layer_budgets.values())):
+        errors.append("context.experience_layer_budget_units: expected nonnegative integer budgets for strategic, procedural, tool")
     min_experience = value_at("reward.min_experience_value_for_proposals")
     if isinstance(min_experience, (int, float)) and float(min_experience) < 0:
         errors.append("reward.min_experience_value_for_proposals: must be non-negative")

@@ -175,6 +175,8 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 增量进展：新增 SubtaskEpisode V1 与 subtask_begin/end runtime actions，刷新前后项目快照、稳定动作引用、产物引用、观察状态计数、模型声明及不确定性分离，沿用原轨迹/checkpoint。3 项专门测试通过（含实际 action loop）。未结束子任务标 interrupted。尚无完整失败原因归因、临时经验 TTL、分层消费与重规划，总项不勾选；详见 `SUBTASK_EPISODES.zh-CN.md`。
 
+分层消费增补：原资产侧车元数据支持显式 experience_layer，现有正常运行的激活/表示路径增加 strategic/procedural/tool 独立预算及实际提示词/轨迹标签，强制控制规则不削弱，未标记旧资产兼容。7 项表示资源测试通过。尚无自动分层提案、按层 SQL 预过滤、TTL/状态/工具版本门控，不勾选完整子任务经验能力。
+
 - [ ] `SubtaskEpisode` 记录目标、状态前后摘要、关键 event IDs、产物、结果、失败原因与不确定性。
 - [ ] 经验按战略/程序/工具使用分层；沿用既有资产存储，增加类型和索引，不复制第二套长期 memory。
 - [ ] 子任务反思可建议重规划；本次任务内的临时经验带 TTL、来源和状态约束，不绕过安全或架构门禁。

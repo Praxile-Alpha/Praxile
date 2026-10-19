@@ -121,6 +121,7 @@ class AgentRuntime:
                 if decision:
                     item["representation_kind"] = decision["representation"]
                     item["activation_status"] = decision["activation"]
+                    item["experience_layer"] = decision.get("experience_layer")
             self._emit_progress(progress_callback, "plan", "Recording initial plan.", {"plan": analysis.get("plan")})
             logger.set_plan(analysis["plan"])
             if self._parallel_readonly_enabled(parallel_readonly_explore):
@@ -1263,7 +1264,7 @@ class AgentRuntime:
     ) -> list[dict[str, str]]:
         tree = "\n".join(logger.data["environment_snapshot"].get("filesystem", {}).get("files", [])[:160])
         context = "\n\n".join(
-            f"[{item['kind']} representation={item.get('representation_kind', 'legacy')} priority={item.get('load_priority')} scope={item.get('scope')}] {item['path']}\n"
+            f"[{item['kind']} representation={item.get('representation_kind', 'legacy')} layer={item.get('experience_layer') or 'unspecified'} priority={item.get('load_priority')} scope={item.get('scope')}] {item['path']}\n"
             f"{shorten(item['snippet'], 1000)}"
             for item in retrieved
         )
