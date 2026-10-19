@@ -132,6 +132,19 @@ python -m praxile.eval.v2.native_development_evidence \
 没有调用模型，未读取私有失败细节，也未生成或晋升候选。它们不足以证明错误根因、
 修复有效性或跨任务迁移。下一阶段仍需更细的公开工具证据和独立受控实验。
 
+投影 v2 增补：原生与既有 A/B 入口共享 `read_document` 和 `check_deliverables`
+结构化投影。文档读取仅输出 source SHA256、单位类型、总量、读取起点/数量及下一页，
+不输出文件名、sheet 名或单元格/段落内容。公开交付检查记录 contract digest、
+`run_argument`/`model_proposed` 绑定和 passed/failed/unsupported/optional_missing 数量；
+`user_acceptance_verified` 与 `semantic_quality_verified` 始终为 false。
+Shell 的 `returncode` 与旧适配器 `exit_code` 均可读取；冲突或类型错误保留未知。
+
+同一真实 Office 轨迹重新离线投影得到 7 条证据：3 次文档读取、3 次命令结果、
+1 次公开交付检查。该公开检查使用模型提出的契约，返回一个 unsupported 输出，
+不能称为内容错误、用户拒绝或官方失败；Shell 成功项退出码为 0。未重新执行任务，
+未调用模型，未修改原轨迹或历史评分，也未生成候选。新 bundle 标记
+`projection_version=2`，旧 bundle 不覆盖。证据覆盖增加不等于经验有效性提升。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

@@ -23,6 +23,61 @@ def _sha(value):
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def project_exit_code(data):
+    """Normalize supported executors without inventing or resolving conflicting codes."""
+    if not isinstance(data, dict):
+        return None
+    values = [data[name] for name in ("exit_code", "returncode") if name in data]
+    if not values or any(type(value) is not int for value in values) or len(set(values)) != 1:
+        return None
+    return values[0]
+
+
+def project_document_read(call, result):
+    action, data = _action(call, "read_document"), _data(result)
+    if (action is None or result.payload.get("status") != "success"
+            or not isinstance(action.get("path"), str) or data.get("path") != action["path"]
+            or not _sha(data.get("source_sha256")) or data.get("unit_kind") not in {"row", "page", "block"}):
+        return None
+    total, units, start = data.get("total_units"), data.get("units"), action.get("start", 1)
+    if (type(total) is not int or not 0 <= total <= 100_000_000 or not isinstance(units, list)
+            or len(units) > 1000 or type(start) is not int or start < 1):
+        return None
+    facts = {"source_sha256": data["source_sha256"], "unit_kind": data["unit_kind"],
+        "total_units": total, "returned_units": len(units), "start_unit": start,
+        "semantic_quality_verified": False, "official_evaluation": False}
+    for key in ("columns", "next_start"):
+        value = data.get(key)
+        if type(value) is int and 0 <= value <= 100_000_000:
+            facts[key] = value
+    if type(data.get("columns_truncated")) is bool:
+        facts["columns_truncated"] = data["columns_truncated"]
+    # Hash the selection, never export file/sheet names or extracted text.
+    selected = {key: action[key] for key in ("path", "start", "limit", "sheet") if key in action}
+    digest = hashlib.sha256(canonical_json(selected).encode()).hexdigest()
+    return ("read_document", digest), facts
+
+
+def project_deliverable_check(call, result):
+    action, data = _action(call, "check_deliverables"), _data(result)
+    if (action is None or data.get("schema_version") != "praxile.deliverable_check.v1"
+            or data.get("official_evaluation") is not False or data.get("semantic_quality_verified") is not False
+            or not _sha(data.get("contract_sha256")) or type(data.get("passed")) is not bool
+            or data.get("contract_binding") not in {"run_argument", "model_proposed"}):
+        return None
+    outputs = data.get("outputs")
+    allowed = {"passed", "failed", "unsupported", "optional_missing"}
+    if (not isinstance(outputs, list) or len(outputs) > 1000
+            or any(not isinstance(item, dict) or item.get("status") not in allowed for item in outputs)):
+        return None
+    facts = {"contract_sha256": data["contract_sha256"], "contract_binding": data["contract_binding"],
+        "public_check_passed": data["passed"], "output_count": len(outputs),
+        "output_status_counts": {status: sum(item["status"] == status for item in outputs) for status in sorted(allowed)},
+        "semantic_quality_verified": False, "official_evaluation": False,
+        "user_acceptance_verified": False}
+    return ("check_deliverables", data["contract_sha256"]), facts
+
+
 def project_revision(call, result):
     """Expose version transitions, not replacement text or quality assertions."""
     action, data = _action(call, "revise_docx"), _data(result)

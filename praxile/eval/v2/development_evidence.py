@@ -6,7 +6,8 @@ import re
 
 from ...utils import read_json
 from .alignment import _identity
-from .document_evidence import project_layout, project_revision, revision_layout_links
+from .document_evidence import (project_layout, project_revision, revision_layout_links,
+                                project_document_read, project_deliverable_check, project_exit_code)
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
 
@@ -105,7 +106,8 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             call = calls[event.tool_call_id]
             identity = _identity(call)
             layout = project_layout(call, event)
-            document = layout or project_revision(call, event)
+            document = (layout or project_revision(call, event) or project_document_read(call, event)
+                        or project_deliverable_check(call, event))
             if document is not None:
                 identity = document[0]
             if identity is None:
@@ -116,7 +118,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             counts[identity] += 1
             observation = event.payload.get("observation")
             data = observation.get("data") if isinstance(observation, dict) else None
-            exit_code = data.get("exit_code") if isinstance(data, dict) else None
+            exit_code = project_exit_code(data)
             projected = {"operation": identity[0], "parameter_sha256": identity[1],
                          "status": status, "same_parameter_occurrence": counts[identity],
                          "exit_code": exit_code if type(exit_code) is int else None,
@@ -136,7 +138,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
             "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
             "selection": "failure_priority_with_same_task_dependency_closure",
-            "projection": "structured_tool_outcomes_no_raw_text",
+            "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 2,
             "limitations": ["Local manifest membership is not an external provenance attestation.",
                             "No raw outputs, evaluator scores or task correctness claims are projected."]}
 

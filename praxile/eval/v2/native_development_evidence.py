@@ -11,7 +11,8 @@ from ...services.native_trace_import import _read
 from ...trace import native_run_to_events
 from .alignment import _identity
 from .development_evidence import select_evidence
-from .document_evidence import project_layout, project_revision, revision_layout_links
+from .document_evidence import (project_layout, project_revision, revision_layout_links,
+                                project_document_read, project_deliverable_check, project_exit_code)
 from .schema import EvalSchemaError, canonical_json
 
 
@@ -54,7 +55,8 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         if event.type != "TOOL_RESULT" or event.tool_call_id not in calls:
             continue
         call = calls[event.tool_call_id]
-        document = project_layout(call, event) or project_revision(call, event)
+        document = (project_layout(call, event) or project_revision(call, event)
+                    or project_document_read(call, event) or project_deliverable_check(call, event))
         identity = document[0] if document else _identity(call)
         status = event.payload.get("status")
         if identity is None or status not in {"success", "failure", "error", "blocked", "timeout", "timed_out"}:
@@ -62,7 +64,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         counts[identity] += 1
         observation = event.payload.get("observation")
         data = observation.get("data") if isinstance(observation, dict) else None
-        exit_code = data.get("exit_code") if isinstance(data, dict) else None
+        exit_code = project_exit_code(data)
         facts = {"operation": identity[0], "parameter_sha256": identity[1], "status": status,
             "same_parameter_occurrence": counts[identity], "call_event_id": call.event_id,
             "exit_code": exit_code if type(exit_code) is int else None, "state_equivalence": "unknown"}
@@ -78,7 +80,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         "source_result_sha256": digest, "task_id": task,
         "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
         "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
-        "projection": "structured_tool_outcomes_no_raw_text", "provenance_attested": False,
+        "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 2, "provenance_attested": False,
         "promotion_eligible": False,
         "limitations": ["Development membership is explicitly supplied by the caller, not independently attested.",
             "No task correctness, evaluator score, raw command/output or causal claim is projected."]}
