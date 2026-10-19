@@ -18,6 +18,10 @@ class SubtaskEpisode:
     action_refs: list[str] = field(default_factory=list)
     artifacts: list[str] = field(default_factory=list)
     observed_status_counts: dict[str, int] = field(default_factory=dict)
+    failure_evidence: list[dict[str, Any]] = field(default_factory=list)
+    failure_attribution: dict[str, Any] = field(default_factory=lambda: {
+        "status": "not_assessed", "cause": None,
+        "reason": "Observed failures do not independently establish a root cause."})
     uncertainty: list[str] = field(default_factory=lambda: ["Model-defined boundary; causal attribution and outcome are not independently verified."])
     schema_version: str = "praxile.subtask_episode.v1"
 

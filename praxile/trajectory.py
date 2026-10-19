@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from copy import deepcopy
 
-from .utils import new_id, utc_now
+from .utils import new_id, utc_now, shorten
 from .subtasks import SubtaskEpisode
 
 
@@ -144,7 +144,21 @@ class TrajectoryLogger:
             active["action_refs"].append(action_record["action_id"])
             counts = active["observed_status_counts"]
             counts[status] = counts.get(status, 0) + 1
-            artifact = (observation.get("data") or {}).get("artifact")
+            details = observation.get("data")
+            details = details if isinstance(details, dict) else {}
+            if status in {"failure", "failed", "error", "blocked", "timeout", "timed_out", "cancelled"}:
+                output = observation.get("output")
+                reason = shorten(output, 1000) if isinstance(output, str) and output else None
+                code = details.get("returncode", details.get("exit_code"))
+                active.setdefault("failure_evidence", []).append({
+                    "action_ref": action_record["action_id"], "action_type": action_type,
+                    "observed_status": status, "reported_reason": reason,
+                    "reason_source": "tool_observation" if reason else "not_reported",
+                    "exit_code": code if type(code) is int else None,
+                    "root_cause_verified": False})
+                active["failure_attribution"] = {"status": "abstained", "cause": None,
+                    "reason": "Failure observations are available but independent causal evidence is insufficient."}
+            artifact = details.get("artifact")
             if isinstance(artifact, str) and artifact not in active["artifacts"]:
                 active["artifacts"].append(artifact)
         if action_type not in {
@@ -184,6 +198,9 @@ class TrajectoryLogger:
             raise ValueError("subtask summary must be at most 4000 characters")
         active.update(status="closed", claimed_outcome=claimed_outcome, summary=summary,
                       state_after=deepcopy(snapshot), ended_at=utc_now())
+        if claimed_outcome == "completed" and active.get("failure_evidence"):
+            active.setdefault("uncertainty", []).append(
+                "Completion claim coexists with failure observations; recovery requires separate verification.")
         return active["episode_id"]
 
     def set_model_route(self, route: dict[str, Any]) -> None:

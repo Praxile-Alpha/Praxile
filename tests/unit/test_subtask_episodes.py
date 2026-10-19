@@ -9,6 +9,7 @@ from praxile.config import Config, ProjectPaths, default_config
 from praxile.runtime import AgentRuntime
 from praxile.security import SafetyPolicy
 from praxile.trajectory import TrajectoryLogger
+from praxile.trace import events_to_v1_trajectory, v1_trajectory_to_events
 
 
 def test_subtask_evidence_resume_and_claim_separation():
@@ -27,6 +28,42 @@ def test_subtask_evidence_resume_and_claim_separation():
     assert episode["action_refs"] == [restored.data["actions"][0]["action_id"]]
     assert episode["artifacts"] == ["output/a"]
     assert episode["uncertainty"]
+    assert episode["failure_evidence"][0]["action_ref"] == episode["action_refs"][0]
+    assert episode["failure_evidence"][0]["reported_reason"] is None
+    assert episode["failure_attribution"]["status"] == "abstained"
+    assert episode["failure_attribution"]["cause"] is None
+
+
+@pytest.mark.parametrize("status", ["failure", "blocked", "timed_out", "cancelled"])
+def test_observed_failure_keeps_reason_and_exit_code_without_inventing_cause(status):
+    logger = TrajectoryLogger("task", {})
+    logger.begin_subtask("inspect", {})
+    logger.add_action(action_type="run_command", input_data={}, status=status,
+        observation={"output": "observed error " * 200, "data": {"returncode": 2}})
+    logger.end_subtask(claimed_outcome="failed", summary="model's cause claim", snapshot={})
+    episode = logger.data["subtask_episodes"][0]
+    evidence = episode["failure_evidence"][0]
+    assert evidence["exit_code"] == 2
+    assert evidence["observed_status"] == status
+    assert len(evidence["reported_reason"]) <= 1000
+    assert not evidence["root_cause_verified"]
+    assert episode["failure_attribution"]["cause"] is None
+    assert episode["summary"] == "model's cause claim"
+    projected = events_to_v1_trajectory(v1_trajectory_to_events(logger.data))
+    assert projected["subtask_episodes"][0]["failure_evidence"] == episode["failure_evidence"]
+    assert projected["actions"][0]["action_id"] == evidence["action_ref"]
+
+
+@pytest.mark.parametrize("data", [None, "error details", ["error"], 1])
+def test_non_mapping_observation_data_preserves_failure_evidence(data):
+    logger = TrajectoryLogger("task", {})
+    logger.begin_subtask("inspect", {})
+    logger.add_action(action_type="run_command", input_data={}, status="error",
+                      observation={"output": "failed", "data": data})
+    episode = logger.data["subtask_episodes"][0]
+    assert episode["failure_evidence"][0]["reported_reason"] == "failed"
+    assert episode["failure_evidence"][0]["exit_code"] is None
+    assert episode["artifacts"] == []
 
 
 def test_unclosed_subtask_is_not_marked_successful():

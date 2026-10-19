@@ -98,4 +98,12 @@ V1 trajectory 转 AgentEvent 时追加 `SUBTASK_EPISODE` 回顾性证据事件�
 
 19 项 trace/兼容性测试通过，包括确定性 ID、旧事件稳定、子任务往返、缺失引用与跨任务拒绝。
 
+## 失败证据与归因
+
+子任务内的 failure/failed/error/blocked/timeout/timed_out/cancelled 动作进入 failure_evidence，保存 action_ref、动作类型、实际状态、工具报告的错误摘要（最多 1000 字符）及整数退出码。没有错误信息时 reported_reason=null，不从模型总结填充假原因。原始完整观察仍在动作日志中。
+
+failure_attribution 与检测分开：未评估时 not_assessed；有失败观察但无独立因果证据时 abstained、cause=null。root_cause_verified=false。模型 completed 声明与失败并存时追加恢复未验证提示，不自动认定恢复成功，也不直接把子任务最终结果改成失败。
+
+这些字段沿原 checkpoint 和 SUBTASK_EPISODE trace 投影保留，动作引用反向投影后仍能解析。30 项子任务/笔记/trace 测试通过，涵盖四类失败、来源、摘要限制、退出码、声明冲突、非字典观察数据及序列化。该完成范围是证据记录，不包含自动根因发现。
+
 验证：日志复制/序列化恢复、失败观察与成功声明并存、未关闭状态、实际 action-loop 边界/工具分发/checkpoint 测试通过。完整 R2-A 总项尚未完成，不提前勾选。
