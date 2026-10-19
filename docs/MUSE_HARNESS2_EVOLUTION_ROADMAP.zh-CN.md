@@ -143,6 +143,15 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+隔离构建与真实执行入口复验：用户批准仅在副本把 Debian HTTP 改 HTTPS，
+Linux ARM64 任务镜像构建及无网络依赖检查通过，原冻结 manifest 未变。
+随后用 Harbor 0.22 原生适配器运行原始公开 instruction（30 步/900 秒上限），
+发现 TaskAnalyzer 将通用说明中的 `database or workbook` 判为架构变更，
+在第一次模型请求前返回 needs_human。模型调用和输出文件均为 0，容器已清理；
+不是官方完整 Trial，也未调用 judge，不生成零分。该结果暴露 Coding 任务意图与
+环境说明混合的入口问题，必须补齐中立任务分析边界，不能靠关闭架构门禁解决。
+详细摘要及原始证据 hash 见 HARBOR_NATIVE_EXECUTOR.zh-CN.md；真实评分总项不勾选。
+
 真实环境进展：easy technical_writers/task1 原始基础镜像经官方 registry 同摘要映射
 成功获取（未改任务文件或全局镜像源），后续 APT 下载因 deb.debian.org:80 连接失败
 返回 100，最终镜像未生成。未调用执行模型或 judge，不计任务零分。官方 judge 的

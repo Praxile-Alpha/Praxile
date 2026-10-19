@@ -193,7 +193,7 @@ python -m praxile.eval.jobbench_results \
 
 ## 真实材料准备记录
 
-### JobBench easy 环境构建验收（2026-10-19，未完成）
+### JobBench easy 环境构建验收（2026-10-19，隔离传输修复版已构建）
 
 目标 `easy--technical_writers--task1`，沿用下列冻结 generation。原始 Dockerfile
 第一阶段在 `registry.docker-cn.com` TLS 握手超时，未进入模型执行。
@@ -206,6 +206,57 @@ python -m praxile.eval.jobbench_results \
 `deb.debian.org:80` 多个归档下载连接失败，退出码 100。没有生成最终任务镜像，
 也没有启动 Agent、MiniMax benchmark 请求或官方 judge；不能记作 0 分任务。
 这次记录是基础设施失败证据，不是成功环境复现或正式支持声明。
+
+随后原样重试仍在约 447 秒后因 HTTP 包下载失败退出。用户明确批准仅在隔离
+构建副本修复 Debian 下载协议后，添加如下补丁（位于 apt-get update 之前）：
+
+```diff
++RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources
++
+```
+
+隔离副本 `/tmp/praxile-jobbench-easy-https-20261019` 构建成功；递归 diff 确认
+相对于冻结 environment 目录只有上述 Dockerfile 改动。未修改原始 generation、
+依赖列表、任务材料、评分规则或 Docker 全局配置。基础镜像仍通过上述同摘要
+build-context 映射获取。构建证据：
+
+- 原 Dockerfile SHA-256：`24466ac896b59145e688bea0285dcca0751b375c5b43810d499049ab5d59cf85`。
+- 修复副本 Dockerfile SHA-256：`63ed77bb0f29ea1f20bbd0c5ae0460c8781923e755f187b333811c8c5fa0d29c`。
+- requirements.txt SHA-256：`64aa0ed2ab5e6fe1b0102b28508c6b378b0fbe18217d9692679ed10bd99b440a`。
+- 本地 tag：`praxile-jobbench-easy-technical-writers:https-20261019`。
+- 本地 image ID：`sha256:ab091d47aad612a3d2d6be3ec102e8870e0d44a1d09de7b9cab5740c7601e55c`，`linux/arm64`，2,506,973,637 字节；不是已发布 registry digest。
+- 原始 manifest SHA-256 再次核对未变，仍为下方记录值。
+- `docker run --rm --network none` 检查通过：python-docx 1.2.0、openpyxl 3.1.5、
+  pdfplumber 0.11.7 可导入，TASK_INSTRUCTIONS.txt 存在，output 目录为空。
+
+这是**带传输修复的集成环境**，不是未修改的官方环境复现。APT 与传递 Python
+依赖仍由原配方在线解析，不能仅凭顶层 requirements 推断依赖树逐字节可复现。
+此次构建和离线 smoke check 没有调用模型；真实 Agent 执行、独立官方 judge
+以及非空交付物验收仍未完成，不能宣称 benchmark 已通过或演化有效。
+
+#### 真实执行入口复验：在模型调用前被门禁拦截
+
+同日在 Harbor 0.22 DockerEnvironment 中，以该镜像启动 PraxileAgent，
+原样传入冻结的公开 instruction.md，使用 MiniMax-M3 配置、宿主凭据代理、
+30 步和 900 秒上限。未挂载隐藏 tests/rubric。这是适配器入口运行，
+**不是完整 Harbor Trial 或官方评测**。
+
+- 执行代码基线：`4764b3b6b574c51838c129eb53de6ba35127ff94`；工作树另有文档变更。
+- 新 wheel SHA-256：`8c4f83500350290bc515e67391d45d16b9393af7f950a91b756c6e1fafc9731b`。
+- 原始证据目录：`/tmp/praxile-jobbench-executor-https-20261019`（本地临时目录，不承诺长期保存）。
+- `trial/agent/praxile-result.json` SHA-256：`d764ebfef4671be87b492a20dd27aba4c411c4797b1584eddf04e60c7409afd5`。
+- `trial/agent/praxile-execution.json` SHA-256：`b17ae0d244693a419ab6a0b0fadd997be30ce98687189bf7ae7fa94b3a46eb23`。
+- 进程正常返回，任务结果 `needs_human`，唯一 action 为 `architecture_gate`。
+- 原因：通用说明 “If the task asks you to modify an existing database or workbook”
+  命中 `database`。分析器没有区分环境说明与任务改动意图，还未读取实际任务文件。
+- model_calls / prompt_tokens / completion_tokens 均为 0；输出目录为空。
+- 输出回收与容器清理成功，并以 Docker project label 查询确认无遗留容器。
+- 官方评分 `not_run`，不填 0 分，不声明 MiniMax 真实推理或任务成功。
+
+下一项研发约束：中立 benchmark 入口需要可审计地区分任务正文、环境操作说明与
+安全边界。不能删除官方说明、设置默认 gate bypass，或把条件句简单视为可信授权。
+真正的架构变更、命中的 frozen boundary 和文件/命令权限仍须生效；修复后重跑时
+使用新的 run 身份，保留本次失败证据。
 
 另检查官方 judge 使用 `max_completion_tokens=200000`。宿主代理新增该字段的
 保真转发和同一预算校验（不能同时携带 max_tokens），未改写官方 judge。
