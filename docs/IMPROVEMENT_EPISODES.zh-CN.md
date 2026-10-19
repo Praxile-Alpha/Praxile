@@ -493,6 +493,31 @@ manifest 冻结修订预算，resume 不得更换。每次请求使用完整的�
 精确候选数及 JSON 整数类型要求，不转发任意 exception 文本、未知字段名或
 评审器内容；上次模型提交仍作为不可信内容单独传入，不作为证据。该增强已
 通过离线测试，尚未进行追加模型验收，不回填历史结果。
+
+具体反馈复验 specific-repair-001 仍未通过：首次证据引用失败，修订后首个
+read_document 的 start/limit 校验失败。合计输入 15193、输出 11116 tokens，
+没有候选或 probe。记录见 `results/docx-repair-specific-repair-20261019.json`。
+停止重复该 DOCX 设计实验，先区分基础协议遵守问题与复杂任务候选质量问题。
+
+### 独立提交协议探针
+
+显式执行（会调用配置的 proposal_composer 模型，不是离线 doctor）：
+
+```bash
+python -m praxile.eval.submission_probe --project /absolute/project --probe-id protocol-001
+```
+
+只发送固定合成 JSON，不加载项目文件、benchmark、评审材料或经验。要求模型
+通过指定函数原样提交两个条目、精确引用和 JSON 整数；不执行工具。一次设计
+调用最多 1024 输出 tokens、60 秒，transport 重试沿用配置，需要零重试时先
+明确配置。可用 `--private` 请求本地路由。
+
+结果位于 `.praxile/eval/v2/submission_probes/<id>/`，包含 manifest、report、
+trajectory。请求前保存 unknown 状态，重复 ID 拒绝；响应仅记录摘要、长度、
+检查项和用量，不保存正文或异常文本。进程中断不自动重放，缺用量仍未知。
+失败退出码 1；通过也只代表这一固定样例，不能据此宣称复杂 oneOf 合同、完整
+候选生成或任务质量可靠。不会自动修改 supports_tools/路由配置或晋升资产。
+当前仅通过离线 fixture 验证，尚未做真实模型探针验收。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

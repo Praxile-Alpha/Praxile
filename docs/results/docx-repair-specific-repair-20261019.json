@@ -1,0 +1,44 @@
+{
+  "schema_version": "praxile.public_experiment_receipt.v1",
+  "design_id": "docx-repair-specific-repair-001",
+  "scope": "seeded_docx_development_candidate_design_only",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "low",
+  "response_mode": "function",
+  "max_repairs": 1,
+  "max_output_tokens_per_request": 8000,
+  "request_timeout_seconds": 120,
+  "transport_max_retries": 0,
+  "contract_sha256": "a7c8c055ea9b48db9ab6d4fd9c588de9351c99ab9b6c190bbb086273f0e6eb83",
+  "attempts": [
+    {
+      "submission_attempt": 0,
+      "input_sha256": "7bdb95a92fcbd5955c9fd4d775fda6c22ab2f956fae4abcb0f51d1cb4ee1efc9",
+      "response_sha256": "545272456722288aa34578fd31be1ae4168a2c9e48ce8423a46ea26c0013da2c",
+      "transport_elapsed_ms": 26895,
+      "failure_stage": "candidate_evidence_refs",
+      "candidate_position": "first"
+    },
+    {
+      "submission_attempt": 1,
+      "input_sha256": "be3e1d0bd048865b7ff7b3f60385c7e6dcfb3e11622747658b8d8a8f81a64b74",
+      "response_sha256": "93d642b0216928ee12732a86013ec5606516c8efe598e4af8af6917c1e6f0f78",
+      "transport_elapsed_ms": 21521,
+      "failure_stage": "candidate_action_examples",
+      "candidate_position": "first",
+      "action_type": "read_document",
+      "example_index": 0,
+      "field_error_counts": {"start": 2, "limit": 2}
+    }
+  ],
+  "usage": {"input_tokens": 15193, "output_tokens": 11116, "model_calls": 2, "cost_usd": null},
+  "status": "failed",
+  "candidate_published": false,
+  "probe_executed": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Detailed repair feedback did not produce a valid candidate in this run.",
+    "Not a held-out evaluation or a task performance comparison.",
+    "Further repetitions of this DOCX generation setup stopped pending protocol diagnosis."
+  ]
+}
