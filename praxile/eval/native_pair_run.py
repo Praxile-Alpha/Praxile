@@ -68,6 +68,23 @@ def harbor_backend(arms):
     return Job.create, configs, expected
 
 
+class InputIntegrityError(ValueError):
+    """Execution evidence is confounded by changed or unreadable inputs."""
+
+
+def verify_inputs(root, plan, config, snapshots):
+    try:
+        for name, checksum in snapshots.items():
+            if read_json(root / name)[1] != checksum:
+                raise InputIntegrityError("pair inputs changed after execution claim")
+        if "local_inputs" in plan and encoded(snapshot_inputs(config)) != encoded(plan["local_inputs"]):
+            raise InputIntegrityError("local task or worker inputs changed during experiment")
+    except InputIntegrityError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise InputIntegrityError("input integrity could not be verified") from exc
+
+
 async def run_pair(root):
     root, plan, arms, snapshots = load_pair(root)
     create, configs, harbor_version = harbor_backend(arms)
@@ -76,6 +93,7 @@ async def run_pair(root):
         "plan_sha256": snapshots["manifest.json"], "harbor_version": harbor_version,
         "order": ["baseline", "candidate"], "arms": {}, "promotion_eligible": False,
         "local_inputs_frozen": "local_inputs" in plan,
+        "input_checks": [],
         "controlled_experiment_verified": False}
     # Exclusive durable claim prevents duplicate calls, including after crashes.
     with os.fdopen(os.open(state_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as handle:
@@ -83,13 +101,21 @@ async def run_pair(root):
         handle.flush()
         os.fsync(handle.fileno())
     current = None
+    def check_inputs(phase):
+        record = {"arm": current, "phase": phase,
+                  "scope": "plan_and_local_inputs" if "local_inputs" in plan else "plan_files_only",
+                  "status": "unverified"}
+        state["input_checks"].append(record)
+        try:
+            verify_inputs(root, plan, arms[current], snapshots)
+        except InputIntegrityError:
+            record["status"] = "failed"
+            raise
+        record["status"] = "unchanged"
+
     try:
         for current in state["order"]:
-            for name, checksum in snapshots.items():
-                if read_json(root / name)[1] != checksum:
-                    raise ValueError("pair inputs changed after execution claim")
-            if "local_inputs" in plan and encoded(snapshot_inputs(arms[current])) != encoded(plan["local_inputs"]):
-                raise ValueError("local task or worker inputs changed between arms")
+            check_inputs("before")
             output = Path(arms[current]["jobs_dir"]) / arms[current]["job_name"]
             if output.exists() or output.is_symlink():
                 raise ValueError("arm output already exists; implicit resume forbidden")
@@ -100,10 +126,13 @@ async def run_pair(root):
             await job.run()
             # Harbor returning can include failed tasks: never label it resolved.
             state["arms"][current]["status"] = "job_returned"
+            check_inputs("after")
             write_json(state_path, state)
         state["status"] = "jobs_returned"
     except BaseException as exc:
         state["status"] = "interrupted" if isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt)) else "failed"
+        if isinstance(exc, InputIntegrityError):
+            state["status"] = "confounded"
         state["error_type"] = type(exc).__name__
         state["stopped_at_arm"] = current
         if state["arms"].get(current, {}).get("status") == "running":

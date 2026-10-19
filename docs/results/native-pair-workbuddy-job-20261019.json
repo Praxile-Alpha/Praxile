@@ -11,6 +11,17 @@
   "test": "tests/resource/test_native_pair_docker.py::test_real_harbor_job_pair_runs_native_workers",
   "results": {"passed": 2, "seconds": 50.22, "trials": 4, "fixture_model_requests": 4},
   "paid_model_calls": 0,
+  "input_integrity_followup": {
+    "host_base_revision": "793e614",
+    "plan_schema": "praxile.native_pair_plan.v2",
+    "passed": 2,
+    "seconds": 52.15,
+    "trials": 4,
+    "input_checks_per_pair": 4,
+    "verified": "Task, wheel and plan snapshots unchanged before and after both arms",
+    "paid_model_calls": 0,
+    "limitation": "Boundary checks cannot exclude transient changes restored during an arm"
+  },
   "verified": [
     "Harbor 0.18 Job.create/run with official WorkBuddy Docker environment plugin",
     "WorkBuddyPraxileAgent setup and native worker execution in both arms",

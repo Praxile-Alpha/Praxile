@@ -47,6 +47,9 @@ def test_executes_in_order_and_refuses_duplicate_call(pair, monkeypatch):
     state = asyncio.run(runner.run_pair(pair))
     assert calls == ["paired-baseline", "paired-candidate"]
     assert state["status"] == "jobs_returned"
+    assert [(check["arm"], check["phase"]) for check in state["input_checks"]] == [
+        ("baseline", "before"), ("baseline", "after"), ("candidate", "before"), ("candidate", "after")]
+    assert all(check["status"] == "unchanged" for check in state["input_checks"])
     assert not state["controlled_experiment_verified"] and not state["promotion_eligible"]
     with pytest.raises(FileExistsError):
         asyncio.run(runner.run_pair(pair))
@@ -88,7 +91,9 @@ def test_changed_inputs_between_arms_stop_candidate(pair, monkeypatch):
     assert calls == ["paired-baseline"]
     state = json.loads((pair / "execution.json").read_text())
     assert state["arms"]["baseline"]["status"] == "job_returned"
-    assert state["stopped_at_arm"] == "candidate"
+    assert state["stopped_at_arm"] == "baseline"
+    assert state["status"] == "confounded"
+    assert state["input_checks"][-1]["phase"] == "after"
 
 
 def test_execute_flag_required_without_starting_anything(pair, monkeypatch):
@@ -98,7 +103,8 @@ def test_execute_flag_required_without_starting_anything(pair, monkeypatch):
     assert not (pair / "execution.json").exists()
 
 
-def test_v2_local_snapshot_stops_changed_task_between_arms(pair, monkeypatch):
+@pytest.mark.parametrize("changed_arm", ["baseline", "candidate"])
+def test_v2_local_snapshot_stops_changed_task_between_arms(pair, monkeypatch, changed_arm):
     import hashlib
     from praxile.eval.native_input_snapshot import snapshot_inputs
     task = pair.parent / "task"
@@ -115,8 +121,27 @@ def test_v2_local_snapshot_stops_changed_task_between_arms(pair, monkeypatch):
     (pair / "manifest.json").write_bytes(encoded(plan))
     for arm, config in arms.items():
         (pair / (arm + ".json")).write_bytes(encoded(config))
-    calls = backend(monkeypatch, lambda config: (task / "instruction.md").write_text("changed"))
-    with pytest.raises(ValueError, match="between arms"):
+    def change(config):
+        if config["job_name"] == "paired-" + changed_arm:
+            (task / "instruction.md").write_text("changed")
+    calls = backend(monkeypatch, change)
+    with pytest.raises(runner.InputIntegrityError, match="during experiment"):
         asyncio.run(runner.run_pair(pair))
-    assert calls == ["paired-baseline"]
-    assert json.loads((pair / "execution.json").read_text())["local_inputs_frozen"] is True
+    assert calls == (["paired-baseline"] if changed_arm == "baseline" else ["paired-baseline", "paired-candidate"])
+    state = json.loads((pair / "execution.json").read_text())
+    assert state["local_inputs_frozen"] is True
+    assert state["status"] == "confounded" and state["stopped_at_arm"] == changed_arm
+    assert state["input_checks"][-1] == {"arm": changed_arm, "phase": "after",
+        "scope": "plan_and_local_inputs", "status": "failed"}
+
+
+def test_missing_plan_after_last_arm_is_confounded(pair, monkeypatch):
+    def remove(config):
+        if config["job_name"].endswith("candidate"):
+            (pair / "manifest.json").unlink()
+    backend(monkeypatch, remove)
+    with pytest.raises(runner.InputIntegrityError):
+        asyncio.run(runner.run_pair(pair))
+    state = json.loads((pair / "execution.json").read_text())
+    assert state["status"] == "confounded"
+    assert state["arms"]["candidate"]["status"] == "job_returned"

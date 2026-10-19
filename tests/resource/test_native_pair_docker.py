@@ -83,6 +83,9 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     state = asyncio.run(run_pair(root))
     assert state["status"] == "jobs_returned"
     assert state["local_inputs_frozen"] is True
+    assert len(state["input_checks"]) == 4
+    assert all(check["status"] == "unchanged" and check["scope"] == "plan_and_local_inputs"
+               for check in state["input_checks"])
     assert observed == [False, active]
     assert brokers and all(broker.status()["revoked"] for broker in brokers)
     if workbuddy:
