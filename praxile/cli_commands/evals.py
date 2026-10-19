@@ -234,18 +234,22 @@ def cmd_eval_diagnose(args: argparse.Namespace, project_root: Path) -> int:
 def _development_cycle_inputs(args):
     second = getattr(args, "second_candidate", None)
     composed = getattr(args, "composed_candidate", None)
+    adaptive = getattr(args, "compose_after_probes", False)
     development = getattr(args, "development_task_id", [])
     heldout = getattr(args, "heldout_task_id", [])
-    if not any((second, composed, development, heldout)):
+    if getattr(args, "composer_private", False) and not adaptive:
+        raise ValueError("--composer-private requires --compose-after-probes")
+    if not any((second, composed, adaptive, development, heldout)):
         return None
-    if not all((second, composed, development, heldout)):
-        raise ValueError("composition requires --second-candidate, --composed-candidate, --development-task-id and --heldout-task-id")
+    if not all((second, development, heldout)) or bool(composed) == bool(adaptive):
+        raise ValueError("composition requires --second-candidate, task memberships and exactly one of --composed-candidate/--compose-after-probes")
     if not args.development_only or args.capability_protocol or args.proxy_eval:
         raise ValueError("composition requires --development-only without --capability-protocol or --proxy-eval")
     if set(development) & set(heldout):
         raise ValueError("development and held-out task IDs must not overlap")
     return {"second": ContextCandidate.load(Path(second).expanduser().resolve()),
-            "composed": ContextCandidate.load(Path(composed).expanduser().resolve()),
+            "composed": ContextCandidate.load(Path(composed).expanduser().resolve()) if composed else None,
+            "adaptive": adaptive,
             "development_task_ids": development, "heldout_task_ids": heldout}
 
 
@@ -346,10 +350,19 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
         )
         if cycle is not None:
             from ..eval.v2.development_cycle import DevelopmentContextCycle
-            report = DevelopmentContextCycle(config.paths.state, EventStore(config.paths)).run(
-                task_set, candidates=[candidate, cycle["second"]], composed_candidate=cycle["composed"],
+            cycle_args = dict(candidates=[candidate, cycle["second"]], composed_candidate=cycle["composed"],
                 development_task_ids=cycle["development_task_ids"], heldout_task_ids=cycle["heldout_task_ids"],
                 cycle_id=args.experiment_id, **common)
+            runner = DevelopmentContextCycle(config.paths.state, EventStore(config.paths))
+            if cycle["adaptive"]:
+                from ..eval.v2.configured_composer import configured_probe_composer
+                if candidate.applies_to != cycle["second"].applies_to:
+                    raise ValueError("probe-driven CLI composition requires identical explicit parent scopes")
+                with configured_probe_composer(config, cycle_id=args.experiment_id,
+                        applies_to=dict(candidate.applies_to), private=args.composer_private) as (composer, identity):
+                    report = runner.run(task_set, composer=composer, composer_identity=identity, **cycle_args)
+            else:
+                report = runner.run(task_set, **cycle_args)
         else:
             report = ControlledABExperiment(config.paths.state, EventStore(config.paths)).run(
                 task_set, candidate=candidate, experiment_id=args.experiment_id,
@@ -360,7 +373,7 @@ def cmd_eval_ab(args: argparse.Namespace, project_root: Path) -> int:
     elif cycle is not None:
         print(f"Development composition cycle: {report['cycle_id']}")
         print(f"Decision: {report['decision']} (not adopted or promoted)")
-        print("Three independent A/B experiments; six execution arms.")
+        print(f"{len(report['experiments'])} independent A/B experiments; {2 * len(report['experiments'])} execution arms.")
         print(f"Report: {config.paths.state / 'eval/v2/development_cycles' / args.experiment_id / 'report.json'}")
     else:
         comparison = report["comparison"]

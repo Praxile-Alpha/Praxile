@@ -610,6 +610,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval_ab.add_argument("--development-only", action="store_true", help="Run a proxy-development A/B without held-out eligibility")
     p_eval_ab.add_argument("--second-candidate", help="Second candidate JSON; enables a six-arm development composition cycle")
     p_eval_ab.add_argument("--composed-candidate", help="Separately versioned composition JSON; always rerun independently")
+    p_eval_ab.add_argument("--compose-after-probes", action="store_true", help="Generate composition after development probes using configured proposal_composer")
+    p_eval_ab.add_argument("--composer-private", action="store_true", help="Use private/local routing for probe composition")
     p_eval_ab.add_argument("--development-task-id", action="append", default=[], help="Explicit development membership for composition (repeatable)")
     p_eval_ab.add_argument("--heldout-task-id", action="append", default=[], help="Excluded held-out membership for composition (repeatable)")
     p_eval_ab.add_argument("--dataset-name", default="SWE-bench/SWE-bench_Lite")

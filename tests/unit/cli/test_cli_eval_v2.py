@@ -81,6 +81,9 @@ def test_eval_diagnose_and_ab_parsers_expose_p0_c_controls() -> None:
 
 @pytest.mark.parametrize("extra", [
     ["--second-candidate", "missing.json"],
+    ["--composer-private"],
+    ["--second-candidate", "a.json", "--composed-candidate", "b.json", "--compose-after-probes",
+     "--development-task-id", "dev", "--heldout-task-id", "test", "--development-only"],
     ["--second-candidate", "a.json", "--composed-candidate", "b.json",
      "--development-task-id", "dev", "--heldout-task-id", "test"],
     ["--second-candidate", "a.json", "--composed-candidate", "b.json",

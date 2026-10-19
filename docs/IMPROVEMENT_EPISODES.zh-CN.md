@@ -57,8 +57,22 @@ task_id/verdict/has_confounders，禁止把整份报告、评分细则或自由�
 模型用量留在传入 TrajectoryLogger。调用方负责持久化该日志并冻结正确的
 composer_identity；身份声明不是模型配置的独立认证。
 
-此模式已通过 fixture 的实际两阶段执行、重跑及弃权恢复测试；CLI 当前仍是
-预先组合模式。真实模型有效性、机制因果归因和完整 R2-C 验收仍未完成。
+此模式已通过 fixture 的实际两阶段执行、重跑及弃权恢复测试。真实模型有效性、
+机制因果归因和完整 R2-C 验收仍未完成。
+
+CLI 中用 `--compose-after-probes` 替代 `--composed-candidate composed.json` 即可
+启用后组合；二者互斥。执行器仍使用 `--model`，组合使用项目配置的
+proposal_composer 角色（可与执行模型不同），可用 `--composer-private` 请求
+私有/本地路由。要求父候选的 applies_to 完全一致，且显式填写 repositories、
+task_signals 和 does_not_apply_when；拒绝无范围自动组合。
+
+组合器角色、provider/model、去敏配置摘要及作用范围摘要被冻结在 cycle manifest；
+配置变化时不能原样恢复，需另起 cycle。`composer-trajectory.json` 保留生成
+状态、路由与用量，失败也落盘，缺用量仍为未知；退出时关闭本次 router 的
+HTTP transports。日志尚未与六个 arm 的成本汇总为完整实验账本。模型调用
+本身由 60 秒/2500 输出 token 的上限约束，--max-cost 仍是执行 arm 的预算，
+不是包含组合器的全流程费用上限。以上链路仅通过 fixture 验证，未运行付费
+模型或真实 benchmark 成绩验收。
 
 ### 结构化轨迹证据入口
 

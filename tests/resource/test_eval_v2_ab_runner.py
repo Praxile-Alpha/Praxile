@@ -211,6 +211,32 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
     assert "KEEP_BASE" in capsys.readouterr().out
     cli_report = read_json(config.paths.state / "eval/v2/development_cycles/cli-cycle/report.json", {})
     assert len(cli_report["experiments"]) == 3 and cli_report["track"] == "development"
+    import praxile.eval.v2.configured_composer as configured_module
+    closed = []
+    class ComposerRouter:
+        def __init__(self, config):
+            self.providers = {"fixture": SimpleNamespace(transport=SimpleNamespace(close=lambda: closed.append(True)))}
+        def route(self, *args, **kwargs):
+            return None, "fixture"
+        def describe_route(self, *args, **kwargs):
+            return {"provider": "fixture", "model": "composer"}
+        def chat(self, *args, **kwargs):
+            assert kwargs["purpose"] == "proposal_composer"
+            return {"content": '{"decision":"abstain"}', "usage": {"prompt_tokens": 13}}
+    monkeypatch.setattr(configured_module, "ModelRouter", ComposerRouter)
+    args.composed_candidate = None
+    args.compose_after_probes = True
+    args.experiment_id = "cli-adaptive"
+    assert evals.cmd_eval_ab(args, tmp_path) == 0
+    root = config.paths.state / "eval/v2/development_cycles/cli-adaptive"
+    assert read_json(root / "report.json", {})["composition_status"] == "abstained"
+    usage = read_json(root / "composer-trajectory.json", {})["cost"]["usage_evidence"]
+    assert usage["known_tokens"]["prompt_tokens"] == 13
+    assert usage["complete_tokens"]["completion_tokens"] is None
+    args.resume = True
+    assert evals.cmd_eval_ab(args, tmp_path) == 0
+    assert read_json(root / "composer-trajectory.json", {})["cost"]["model_calls"] == 1
+    assert len(closed) == 2
 
 
 def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tmp_path: Path) -> None:
