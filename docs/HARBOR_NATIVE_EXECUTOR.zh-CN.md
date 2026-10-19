@@ -630,7 +630,26 @@ python -m praxile.eval.native_pair \
 候选注入参数。此命令不启动 Harbor、不调用模型，也不自动评分或批准经验。
 正式执行前应在对应的隔离 Harbor 环境校验配置与材料；冻结镜像、模型端点、
 judge、外部文件和运行顺序仍需进一步验证，当前 manifest 不宣称受控实验通过。
-真实双臂执行、结果收集和恢复编排仍待完成。
+真实双臂执行验收、结果收集和恢复编排仍待完成。
+
+准备后可通过显式入口串行启动两臂（会消耗执行模型和评分器额度）：
+
+```sh
+python -m praxile.eval.native_pair_run \
+  --pair-dir /absolute/private/new-pair --execute
+```
+
+WorkBuddy 要求隔离 Harbor 0.18.0，JobBench 要求 0.22.0。入口重建并核对计划、
+两臂配置与候选摘要，调用官方 `await Job.create(config)` / `await job.run()`。
+`execution.json` 以独占创建方式认领运行，逐臂持久化状态；重复调用和已有 job
+目录拒绝自动重跑。每臂启动前重新检查准备文件。异常或取消阻止后续臂启动，
+错误记录只保存异常类型，不复制可能含凭据的异常文本。
+
+`jobs_returned` 仅说明两个 Harbor 调用返回，不表示任务成功或官方评分通过；
+仍须按上文导入官方 Trial 结果并核对 trace。中断后当前不提供自动 resume，
+不要删除执行记录来强制重跑：先核实 Harbor/容器终态，再显式准备新实验。
+此入口的排序/拒绝/异常处理已有 fixture 测试，两个上游版本的 API 解析已验证；
+真实两臂运行、强杀后的残留资源恢复、来源认证和外部环境冻结仍待验收。
 
 ## 官方 Trial 与 Native Trace 的绑定
 
