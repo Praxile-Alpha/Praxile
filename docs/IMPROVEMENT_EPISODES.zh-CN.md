@@ -100,6 +100,16 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 
 ### 从轨迹生成文件
 
+开发实验采集器现支持 `check_document_layout` 的结构化结果：只投影页数、
+调用参数中的上限、是否满足上限和调用引用；参数使用摘要，不暴露路径、正文或
+renderer 路径。结果的路径、上限、布尔值、状态须与调用及页数一致，否则跳过。
+未指定上限保留 unknown，不当成满足任务约束；渲染成功不代表视觉或内容质量。
+原有 development manifest/task/run 归属检查仍适用，不能从 held-out 偷取证据。
+本次测试覆盖采集器到结构化证据的链路；尚未据此完成原生文档 A/B 执行或收益验收。
+对已冻结 compact repair 轨迹做离线投影复验，提取 4 条布局结果，均为
+2 页且未满足 1 页上限；未调用模型、未修改源材料。这仅验证投影器兼容真实
+轨迹，不将该 seeded repair 冒充带完整开发实验 manifest 的 A/B。
+
 真实 profile 生成复验仍失败：MiniMax-M3 在 4000 输出 token 内只返回推理块，
 finish_reason=length，没有最终 JSON，未产生候选。见
 results/jobbench-candidate-profile-20261019.json。缺少输出不等于能力约束已有效。

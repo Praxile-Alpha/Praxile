@@ -5,6 +5,7 @@ import re
 
 from ...utils import read_json
 from .alignment import _identity
+from .document_evidence import project_layout
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
 
@@ -65,6 +66,9 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
                 continue
             call = calls[event.tool_call_id]
             identity = _identity(call)
+            layout = project_layout(call, event)
+            if layout is not None:
+                identity = layout[0]
             if identity is None:
                 continue
             status = event.payload.get("status")
@@ -78,6 +82,8 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
                          "status": status, "same_parameter_occurrence": counts[identity],
                          "exit_code": exit_code if type(exit_code) is int else None,
                          "call_event_id": call.event_id, "state_equivalence": "unknown"}
+            if layout is not None:
+                projected.update(layout[1])
             evidence.append({"task_id": row["task_id"], "event_id": event.event_id,
                              "observation": canonical_json(projected)})
             priorities.append(1 if status == "success" else 0)
