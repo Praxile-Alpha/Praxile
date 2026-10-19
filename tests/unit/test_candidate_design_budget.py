@@ -81,6 +81,18 @@ def test_function_protocol_frozen_and_cannot_change_on_resume(setup_run):
     assert calls == [4000]
 
 
+def test_repair_budget_frozen_and_cannot_change_on_resume(setup_run):
+    config, kwargs, calls, root = setup_run
+    module.run_candidate_design(config, None, **kwargs, repair_attempts=1)
+    plan = json.loads((root / "manifest.json").read_text())
+    assert plan["validation_repair_budget"]["max_designer_calls"] == 2
+    module.run_candidate_design(config, None, **kwargs, repair_attempts=1, resume=True)
+    for value in (None, 0):
+        with pytest.raises(EvalSchemaError):
+            module.run_candidate_design(config, None, **kwargs, repair_attempts=value, resume=True)
+    assert calls == [4000]
+
+
 def test_intent_persisted_before_generator_and_failed_run_not_replayed(setup_run, monkeypatch):
     config, kwargs, calls, root = setup_run
     def fail(**unused):

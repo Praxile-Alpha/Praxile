@@ -41,6 +41,85 @@ def test_explicit_request_timeout_reaches_router_and_trajectory():
         "evidence_sufficiency_verified": False}
 
 
+def test_one_explicit_repair_preserves_failed_attempt_and_both_costs():
+    bad = proposal()
+    bad["candidates"][0]["evidence_refs"] = ["event:invented"]
+    kwargs, _ = inputs({})
+    calls = []
+    def chat(messages, **options):
+        calls.append((messages, options))
+        return {"content": json.dumps(bad if len(calls) == 1 else proposal()),
+                "usage": {"prompt_tokens": 10, "completion_tokens": 20}}
+    kwargs["router"] = SimpleNamespace(chat=chat)
+    checkpoints = []
+    result = design_development_candidates(**kwargs, repair_attempts=1, response_mode="function",
+        attempt_checkpoint=lambda: checkpoints.append(deepcopy(kwargs["logger"].data)))
+    assert result["decision"] == "DRAFTS_REQUIRE_EXPERIMENT"
+    assert result["promotion_eligible"] is False
+    records = kwargs["logger"].data["development_candidate_designs"]
+    assert [item["status"] for item in records] == ["failed", "drafted"]
+    assert [item["submission_attempt"] for item in records] == [0, 1]
+    assert kwargs["logger"].data["cost"]["model_calls"] == 2
+    assert kwargs["logger"].data["cost"]["prompt_tokens"] == 20
+    assert len(checkpoints) == 2
+    assert checkpoints[0]["development_candidate_designs"][0]["status"] == "failed"
+    assert checkpoints[0]["cost"]["model_calls"] == 1
+    assert calls[0][1]["response_contract"] == calls[1][1]["response_contract"]
+    repaired = json.loads(calls[1][0][1]["content"])
+    assert repaired["allowed_refs"] == ["event:e1"]
+    assert repaired["validation_repair"]["validation_stage"] == "candidate_evidence_refs"
+    assert "previous_submission" not in json.dumps(records)
+
+
+@pytest.mark.parametrize("repairs, expected", [(0, 1), (1, 2)])
+def test_invalid_drafts_stop_at_explicit_repair_budget(repairs, expected):
+    kwargs, calls = inputs({"content": '{"decision":"propose"}'})
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs, repair_attempts=repairs)
+    assert len(calls) == expected
+
+
+def test_repair_never_retries_transport_failure():
+    kwargs, _ = inputs({})
+    calls = []
+    def chat(*args, **options):
+        calls.append(options)
+        raise TimeoutError("unavailable")
+    kwargs["router"] = SimpleNamespace(chat=chat)
+    with pytest.raises(TimeoutError):
+        design_development_candidates(**kwargs, repair_attempts=1)
+    assert len(calls) == 1
+
+
+def test_failed_checkpoint_prevents_repair_request():
+    kwargs, calls = inputs({"content": '{"decision":"propose"}'})
+    def fail_checkpoint():
+        raise OSError("disk full")
+    with pytest.raises(OSError, match="disk full"):
+        design_development_candidates(**kwargs, repair_attempts=1, attempt_checkpoint=fail_checkpoint)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("response", [
+    {"content": json.dumps(proposal()), "finish_reason": "length"},
+    {"content": "not JSON"},
+    {"content": json.dumps({"decision": "propose", "extra": "x" * 65536})},
+])
+def test_truncated_unparseable_or_oversized_response_not_repaired(response):
+    kwargs, calls = inputs(response)
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs, repair_attempts=1)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("value", [True, -1, 2, "1"])
+def test_invalid_repair_budget_rejected_before_model(value):
+    kwargs, calls = inputs({})
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs, repair_attempts=value)
+    assert calls == []
+
+
 def test_function_contract_is_forwarded_and_local_validation_still_applies():
     kwargs, calls = inputs({"content": json.dumps(proposal()), "finish_reason": "tool_calls"})
     result = design_development_candidates(**kwargs, response_mode="function")

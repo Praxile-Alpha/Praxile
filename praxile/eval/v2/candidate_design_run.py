@@ -11,7 +11,9 @@ from .schema import EvalSchemaError
 
 def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
                          development_task_ids, heldout_task_ids, applies_to, private=False, resume=False,
-                         executor_profile=None, max_output_tokens=None, request_timeout_seconds=None, response_mode=None):
+                         executor_profile=None, max_output_tokens=None, request_timeout_seconds=None, response_mode=None,
+                         repair_attempts=None):
+    _validate_repairs(repair_attempts)
     _validate_mode(response_mode)
     _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
@@ -23,15 +25,16 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
         executor_profile=executor_profile, max_output_tokens=max_output_tokens,
-        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode)
+        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode, repair_attempts=repair_attempts)
 
 
 def run_native_candidate_design(config, result_path, *, expected_sha256, track,
                                 design_id, development_task_ids, heldout_task_ids, applies_to,
                                 private=False, resume=False, executor_profile=None, max_output_tokens=None,
                                 request_timeout_seconds=None, public_task_context_path=None,
-                                public_task_context_sha256=None, response_mode=None):
+                                public_task_context_sha256=None, response_mode=None, repair_attempts=None):
     from .native_development_evidence import collect_native_evidence
+    _validate_repairs(repair_attempts)
     _validate_mode(response_mode)
     _validate_timeout(request_timeout_seconds)
     if max_output_tokens is not None and (type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384):
@@ -50,7 +53,12 @@ def run_native_candidate_design(config, result_path, *, expected_sha256, track,
         development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,
         applies_to=applies_to, private=private, resume=resume,
         executor_profile=executor_profile, max_output_tokens=max_output_tokens,
-        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode)
+        request_timeout_seconds=request_timeout_seconds, response_mode=response_mode, repair_attempts=repair_attempts)
+
+
+def _validate_repairs(value):
+    if value is not None and (type(value) is not int or value not in (0, 1)):
+        raise EvalSchemaError("candidate repair attempts must be 0 or 1")
 
 
 def _validate_mode(value):
@@ -64,7 +72,8 @@ def _validate_timeout(value):
 
 
 def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
-                applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds, response_mode):
+                applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds, response_mode,
+                repair_attempts):
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
@@ -78,6 +87,9 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
         if executor_profile is not None:
             from .executor_profile import profile_context
             plan["executor_capability"] = profile_context(executor_profile)
+        if repair_attempts is not None:
+            plan["validation_repair_budget"] = {"max_repairs": repair_attempts,
+                "max_designer_calls": 1 + repair_attempts, "local_validation_failures_only": True}
         if response_mode is not None:
             plan["response_protocol"] = {"mode": response_mode}
             if response_mode == "function":
@@ -117,6 +129,8 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                     applies_to=applies_to, design_id=design_id, router=router, logger=logger,
                     private=private, executor_profile=executor_profile,
                     response_mode=response_mode or "text",
+                    repair_attempts=repair_attempts or 0,
+                    attempt_checkpoint=lambda: write_json(trajectory_path, logger.data),
                     public_task_context=bundle.get("public_task_context"),
                     request_timeout_seconds=request_timeout_seconds if request_timeout_seconds is not None else 60,
                     max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {

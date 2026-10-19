@@ -461,6 +461,27 @@ trajectory 保存合同摘要；resume 不允许改变模式或合同。提交�
 `results/docx-repair-bounded-function-design-20261019.json`。没有重试或执行候选。
 此后增加 proposal_validation_diagnostic，仅保存已知缺失字段、未知字段数量、
 decision 是否合法及候选数量，不保存未知字段名或字段内容。旧结果无法回填。
+
+同合同诊断复验 shape-diagnostic-001 通过了顶层结构，但首个候选在证据引用校验
+失败，未进入动作校验；详见 `results/docx-repair-shape-diagnostic-20261019.json`。
+这不证明旧结构错误已消除，也不能将未执行的草案计为成功经验。
+
+### 显式限次校验修订
+
+设计命令可选 `--repair-attempts 1`，默认关闭。只有已解析的候选/弃权结构、
+文本长度、引用、动作示例或重复候选校验失败才允许一次修订。网络异常、
+截断、JSON 解析失败、配置错误和持久化失败不触发该循环。函数提交在 provider
+层失败也不会进入修订。单次模型请求内部的 transport 重试仍由其已有配置控制。
+
+修订提示包含原有公开证据、相同 allowed_refs/合同和上次模型提交，后者明确视为
+不可信文本，不是证据或指令。原提交仅在本次进程内用于修订，不复制到公开报告
+或轨迹；失败阶段、摘要、每次调用用量和 submission_attempt 分别保留。持久化
+设计服务在每次调用结束后保存轨迹，再开始下一次；进程中断后仍禁止自动重放。
+
+manifest 冻结修订预算，resume 不得更换。每次请求使用完整的输出/超时预算，
+因此开启一次修订可使设计成本上限翻倍；外层 supervisor 应按整个流程另设期限。
+原有 candidate 校验、证据范围和 promotion_eligible=false 均不放宽；模型可以
+弃权。测试证明预算和状态行为，不证明真实修订成功率；尚未追加付费修订实验。
 [MiniMax 官方兼容文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)
 列出 tools 支持，但未在该页明确说明 response_format 保证；因此不以文本 JSON
 模式或未验证的 provider 行为作为结构化输出成功证据。

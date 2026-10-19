@@ -624,6 +624,8 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Frozen per-request timeout in seconds, 1..300; default 60, not a total deadline")
         design_parser.add_argument("--response-mode", choices=("text", "function"),
                           help="Frozen result protocol; function requires a tool-capable OpenAI-compatible model")
+        design_parser.add_argument("--repair-attempts", type=int, choices=(0, 1),
+                          help="Opt-in local validation repair budget; default 0, each call uses the full request budget")
         design_parser.add_argument("--development-task-id", action="append", required=True)
         design_parser.add_argument("--heldout-task-id", action="append", required=True)
         design_parser.add_argument("--private", action="store_true")
