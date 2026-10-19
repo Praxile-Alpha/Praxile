@@ -78,3 +78,18 @@ def test_contract_scope_and_duplicates(tmp_path):
     value["outputs"] *= 2
     with pytest.raises(EvalSchemaError):
         verify_deliverables(tmp_path, value)
+
+
+def test_csv_minimum_rows(tmp_path):
+    (tmp_path / "table.csv").write_text("name\nfirst\n")
+    result = verify_deliverables(tmp_path, contract("table.csv", "text/csv", structure={"min_rows": 2}))
+    assert not result["passed"]
+    assert result["outputs"][0]["structure_checks"] == [
+        {"requirement": "min_rows", "expected": 2, "actual": 1, "passed": False}]
+
+
+@pytest.mark.parametrize("structure", [{"min_rows": True}, {"min_rows": -1},
+    {"min_rows": "2"}, {"min_pages": 2}, {"unknown": 1}, []])
+def test_invalid_or_wrong_format_constraints_are_not_ignored(tmp_path, structure):
+    with pytest.raises(EvalSchemaError):
+        verify_deliverables(tmp_path, contract("table.csv", "text/csv", structure=structure))

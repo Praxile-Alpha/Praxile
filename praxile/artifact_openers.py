@@ -54,7 +54,12 @@ def inspect_document(path: Path, kind: str) -> dict:
     elif kind == "docx":
         from docx import Document
         document = Document(path)
-        details = {"paragraphs": len(document.paragraphs), "tables": len(document.tables)}
+        headings = [paragraph.text.strip() for paragraph in document.paragraphs
+                    if paragraph.style is not None and paragraph.style.style_id in
+                    {"Heading" + str(level) for level in range(1, 10)}]
+        if len(headings) > 1000 or sum(map(len, headings)) > 100_000:
+            return {"status": "failed", "reason": "heading_metadata_limit"}
+        details = {"paragraphs": len(document.paragraphs), "tables": len(document.tables), "headings": headings}
     elif kind == "pptx":
         from pptx import Presentation
         document = Presentation(path)

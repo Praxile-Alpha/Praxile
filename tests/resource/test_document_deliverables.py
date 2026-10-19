@@ -30,6 +30,7 @@ def test_actual_document_roundtrip(tmp_path, kind, module):
         book.close()
     elif kind == "docx":
         book = library.Document()
+        book.add_heading("Summary", level=1)
         book.add_paragraph("Public request deliverable")
         book.save(path)
     elif kind == "pptx":
@@ -49,6 +50,18 @@ def test_actual_document_roundtrip(tmp_path, kind, module):
     if kind == "xlsx":
         assert output["structure"]["cells_visited"] == 4
         assert not output["structure"]["formulas_recalculated"]
+    passing = {"xlsx": {"required_sheets": ["Sheet"]}, "docx": {"required_headings": ["Summary"], "min_tables": 0},
+               "pptx": {"min_slides": 1}, "pdf": {"min_pages": 1}}
+    failing = {"xlsx": {"required_sheets": ["Absent"]}, "docx": {"required_headings": ["Absent"]},
+               "pptx": {"min_slides": 2}, "pdf": {"min_pages": 2}}
+    specification = request(kind)
+    specification["outputs"][0]["structure"] = passing[kind]
+    assert verify_deliverables(tmp_path, specification)["passed"]
+    specification["outputs"][0]["structure"] = failing[kind]
+    failed = verify_deliverables(tmp_path, specification)
+    assert not failed["passed"]
+    assert failed["outputs"][0]["opened"]
+    assert failed["outputs"][0]["reason"] == "user_structure_requirement_unmet"
 
 
 def test_invalid_document_and_timeout(tmp_path, monkeypatch):

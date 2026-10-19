@@ -16,6 +16,29 @@ from .eval.v2.schema import EvalSchemaError
 from .artifact_openers import MEDIA
 
 
+STRUCTURE_FIELDS = {
+    "pdf": {"min_pages": "pages"},
+    "pptx": {"min_slides": "slides"},
+    "docx": {"min_tables": "tables", "required_headings": "headings"},
+    "xlsx": {"required_sheets": "sheets"},
+    "text/csv": {"min_rows": "data_rows"},
+}
+
+
+def _structure_checks(requirement: dict, observed: dict) -> list[dict]:
+    mapping = STRUCTURE_FIELDS.get(MEDIA.get(requirement["media_type"], requirement["media_type"]), {})
+    checks = []
+    for name, expected in requirement.get("structure", {}).items():
+        actual = observed.get(mapping[name])
+        if name.startswith("min_"):
+            passed = type(actual) is int and actual >= expected
+            checks.append({"requirement": name, "expected": expected, "actual": actual, "passed": passed})
+        else:
+            missing = [item for item in expected if not isinstance(actual, list) or item not in actual]
+            checks.append({"requirement": name, "missing": missing, "passed": not missing})
+    return checks
+
+
 def validate_contract(value: object) -> list[dict]:
     if not isinstance(value, dict) or set(value) != {"schema_version", "source", "outputs"}:
         raise EvalSchemaError("invalid deliverable contract fields")
@@ -26,7 +49,7 @@ def validate_contract(value: object) -> list[dict]:
         raise EvalSchemaError("deliverable contract requires 1 to 100 outputs")
     seen = set()
     for item in outputs:
-        if not isinstance(item, dict) or set(item) - {"path", "media_type", "required", "required_fields"}:
+        if not isinstance(item, dict) or set(item) - {"path", "media_type", "required", "required_fields", "structure"}:
             raise EvalSchemaError("invalid deliverable requirement")
         try:
             output = OutputContract(item["path"], item["media_type"], item.get("required", True))
@@ -38,6 +61,17 @@ def validate_contract(value: object) -> list[dict]:
         fields = item.get("required_fields", [])
         if not isinstance(fields, list) or len(fields) > 100 or any(not isinstance(field, str) or not field for field in fields):
             raise EvalSchemaError("required_fields must contain up to 100 non-empty names")
+        structure = item.get("structure", {})
+        allowed = STRUCTURE_FIELDS.get(MEDIA.get(output.media_type, output.media_type), {})
+        if not isinstance(structure, dict) or set(structure) - set(allowed):
+            raise EvalSchemaError("unsupported structure constraint for deliverable format")
+        for name, expected in structure.items():
+            if name.startswith("min_"):
+                if type(expected) is not int or not 0 <= expected <= 1_000_000:
+                    raise EvalSchemaError("structural minimum must be an integer in [0, 1000000]")
+            elif (not isinstance(expected, list) or not 1 <= len(expected) <= 100
+                  or any(not isinstance(entry, str) or not entry.strip() or len(entry) > 200 for entry in expected)):
+                raise EvalSchemaError("named structure requirements must contain 1 to 100 bounded names")
     return outputs
 
 
@@ -131,11 +165,20 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
                 if not isinstance(parsed, dict) or parsed.get("status") not in {"passed", "failed", "unsupported"}:
                     raise ValueError("invalid parser result")
                 result.update(parsed)
+                if parsed["status"] == "passed":
+                    checks = _structure_checks(requirement, parsed.get("structure", {}))
+                    result["structure_checks"] = checks
+                    if not all(check["passed"] for check in checks):
+                        result.update(status="failed", reason="user_structure_requirement_unmet")
                 continue
             else:
                 result.update(status="unsupported", reason="format_opener_not_available")
                 continue
             result.update(status="failed" if missing else "passed", missing_fields=missing)
+            checks = _structure_checks(requirement, result)
+            result["structure_checks"] = checks
+            if not all(check["passed"] for check in checks):
+                result.update(status="failed", reason="user_structure_requirement_unmet")
         except (ValueError, UnicodeError, csv.Error, RecursionError):
             result["reason"] = "invalid_structure_or_encoding"
     passed = all(item["status"] in {"passed", "optional_missing"} for item in results)

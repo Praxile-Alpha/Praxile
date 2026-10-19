@@ -54,4 +54,22 @@ Office ZIP 最多 2000 成员、声明解压后最多 50 MB；拒绝重复成员
 
 输出记录 opened 和页/幻灯片/工作表等结构信息，明确 `rendered=false`，XLSX 明确 `formulas_recalculated=false`。二进制格式的 required_fields 暂不支持，返回 unsupported，而不是忽略要求。解析成功不代表正文正确、图像可读、公式有最新缓存或页面布局正常。
 
+### 用户结构要求
+
+输出项可增加 `structure`，只支持与格式对应的明确要求：
+
+| 格式 | 结构约束 |
+|---|---|
+| CSV | `min_rows`，不含表头 |
+| XLSX | `required_sheets`，精确工作表名称 |
+| DOCX | `required_headings`、`min_tables`；标题取正文 Heading1–Heading9 段落，去除首尾空白后精确匹配 |
+| PPTX | `min_slides` |
+| PDF | `min_pages` |
+
+例如 XLSX 输出项可声明 `"structure":{"required_sheets":["Summary","Details"]}`。没有这些工作表时即使文件能打开，仍会得到 `status=failed`、`reason=user_structure_requirement_unmet`，并保留 `opened=true` 和具体缺失项。无效字段、类型不符或格式不支持的约束在解析契约时拒绝，不静默忽略。
+
+`required_fields` 仍用于 JSON 顶层键/CSV 表头，不能用它表达 Office 任意结构。DOCX 页数需要渲染，尚不支持；标题检查不覆盖表格内文本、页眉页脚、自定义标题样式或语义等价标题。结构检查不替代内容评审。
+
+增补验证：19 项单元测试、9 项真实格式资源测试通过，后者对四种格式分别验证满足与不满足结构要求的情况。
+
 9 项资源测试覆盖四种真实格式生成后重新打开、损坏文件、超时、宏、ZIP 成员限制以及两种编码的 XML 实体攻击。使用 `tests/resource/test_document_deliverables.py --forked` 运行；未安装可选依赖时明确跳过。
