@@ -78,11 +78,24 @@ def main():
     try:
         if options.get("operation") == "create_docx":
             import docx
-            from docx.shared import Pt
+            from docx.shared import Pt, Inches
             document = docx.Document()
             document.styles["Normal"].font.name = "Calibri"
             document.styles["Normal"].font.size = Pt(11)
             spec = json.loads(path.read_text())
+            compact = spec.get("layout") == "compact"
+            if compact:
+                section = document.sections[0]
+                section.page_width, section.page_height = Inches(8.5), Inches(11)
+                section.top_margin = section.bottom_margin = Inches(0.6)
+                section.left_margin = section.right_margin = Inches(0.6)
+                for name, size in (("Normal", 10), ("List Bullet", 10),
+                                   ("Heading 1", 14), ("Heading 2", 12), ("Heading 3", 11)):
+                    style = document.styles[name]
+                    style.font.size = Pt(size)
+                    style.paragraph_format.line_spacing = 1
+                    style.paragraph_format.space_before = Pt(0)
+                    style.paragraph_format.space_after = Pt(3)
             for block in spec["blocks"]:
                 kind = block["type"]
                 if kind == "heading":
@@ -92,9 +105,23 @@ def main():
                 elif kind == "table":
                     table = document.add_table(rows=0, cols=len(block["rows"][0]))
                     table.style = "Table Grid"
-                    for row in block["rows"]:
-                        for cell, text in zip(table.add_row().cells, row):
+                    for index, row in enumerate(block["rows"]):
+                        table_row = table.add_row()
+                        if compact:
+                            from docx.oxml import OxmlElement
+                            properties = table_row._tr.get_or_add_trPr()
+                            properties.append(OxmlElement("w:cantSplit"))
+                            if index == 0:
+                                properties.append(OxmlElement("w:tblHeader"))
+                        for cell, text in zip(table_row.cells, row):
                             cell.text = text
+                            if compact:
+                                for paragraph in cell.paragraphs:
+                                    paragraph.paragraph_format.space_after = Pt(0)
+                                    paragraph.paragraph_format.line_spacing = 1
+                                    for run in paragraph.runs:
+                                        run.font.size = Pt(9.5)
+                                        run.bold = index == 0
                 else:
                     document.add_paragraph(block["text"], style="List Bullet" if kind == "bullet" else None)
             document.save(path.parent / "result.docx")

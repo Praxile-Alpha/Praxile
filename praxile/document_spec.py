@@ -4,8 +4,10 @@ import json
 
 def docx_spec_prompt():
     return (
-        'create_docx.document must contain ONLY {"blocks":[...]}. No title, metadata, '
-        'styles, header, footer, or page settings outside blocks. Supported blocks: '
+        'create_docx.document requires {"blocks":[...]} and optionally "layout":"compact" '
+        '(default "standard"). Compact uses fixed Letter paper, 0.6-inch margins, '
+        '10pt body and 9.5pt tables with single spacing; it does not guarantee one page. '
+        'No title, metadata, styles, header, footer, or arbitrary page settings. Supported blocks: '
         '{"type":"paragraph","text":"..."}, {"type":"heading","text":"...","level":1}, '
         '{"type":"bullet","text":"..."}, {"type":"table","rows":[["cell","cell"]]}, '
         '{"type":"page_break"}. Heading level is 1..3; tables must be rectangular strings '
@@ -16,8 +18,10 @@ def docx_spec_prompt():
 
 
 def validate_docx_spec(spec):
-    if not isinstance(spec, dict) or set(spec) != {"blocks"}:
-        raise ValueError("document spec requires only blocks")
+    if not isinstance(spec, dict) or "blocks" not in spec or set(spec) - {"blocks", "layout"}:
+        raise ValueError("document spec requires blocks and optional layout")
+    if spec.get("layout", "standard") not in ("standard", "compact"):
+        raise ValueError("document layout must be standard or compact")
     blocks = spec["blocks"]
     if not isinstance(blocks, list) or not 1 <= len(blocks) <= 200:
         raise ValueError("document requires 1..200 blocks")

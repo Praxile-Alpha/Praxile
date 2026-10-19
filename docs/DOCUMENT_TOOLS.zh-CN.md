@@ -221,6 +221,24 @@ Harbor 0.18 与 0.22 各 2 项 Docker 测试通过；本机 worker 集成 8 项�
 须明确授权、固定版本并记录摘要；改变依赖后的环境不能冒充原环境严格 A/B。
 Harbor 0.18/0.22 各 18 项适配器测试通过（各 2 项跳过、6 项排除）。
 
+## 固定紧凑版式
+
+`create_docx` 与 `revise_docx` 的 document 可选 `"layout":"compact"`，默认
+`standard` 保持原渲染行为。compact 使用 Letter 纸、0.6 英寸页边距、10pt 正文、
+9.5pt 表格和单倍行距；表格首行加粗并跨页重复，行不拆分。没有任意模板、字体
+路径、宏或用户脚本入口，不承诺任何内容都能装进一页；仍需渲染验证。
+
+12 步真实 MiniMax 产物修订实验执行了三次 revise_docx，checklist 从 5 页逐次
+变为 4/3/2 页，memo 摘要不变，但最终 needs_human。详情见
+`results/jobbench-seeded-repair-20261019.json`。该实验使用原有产物和单独修订指令，
+不是原始 benchmark 成功，也不是 A/B 效果验证。
+
+随后对最后一次模型修订的相同 blocks 应用 compact，离线本机渲染为一页并检查
+截图，无文字裁切或重叠；不代表事实正确、信息完整，也不是模型自主选择 compact
+的证据。新生成 DOCX 摘要为
+`6db4733c63e74fe8a577f80a49daa164ea55fc3035f55504846c2b9cfc63861a`。
+606 项快速单元测试、8 项文档修订/版式资源测试通过。
+
 ## 模型输出截断诊断
 
 OpenAI-compatible 的 `finish_reason` 与 Anthropic 的 `stop_reason` 统一保留为

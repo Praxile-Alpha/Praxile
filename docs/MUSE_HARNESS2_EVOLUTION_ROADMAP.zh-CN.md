@@ -289,6 +289,11 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   修订失败可观测性增补：动作解码保留完整响应摘要/长度、reasoning 边界原因及
   JSON 解析错误偏移，修复提示明确“未执行，不应假设产物已改变”。不放宽解析
   或安全规则；旧失败只有截断预览，精确原因仍未知，自主修订总项继续未完成。
+  单独产物修订实验（不是原始 benchmark）已用 MiniMax 成功执行三次摘要校验
+  修订，5 页变为 4/3/2 页，memo 未变，但预算耗尽仍不满足一页。随后新增
+  compact 固定版式；同内容离线渲染为一页并检查截图，606 项快速测试及
+  8 项修订/版式资源测试通过。模型自主选择版式、内容保持及完整原任务验收仍缺，
+  不把离线排版修正记为自主修复成功。见 `results/jobbench-seeded-repair-20261019.json`。
 - [ ] 浏览器具备 click/fill/navigation/download、页面状态断言、截图和错误记录；截图存在不能充当视觉质量通过。
 - [ ] 任务状态机：queued/running/waiting_approval/paused/completed/failed/cancelled；子任务边界 checkpoint，恢复前重新确认环境与产物状态。
 - [ ] 本地自检检查“产物存在、能打开、结构符合请求”；与官方评分器物理分离。

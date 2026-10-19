@@ -1,0 +1,39 @@
+{
+  "schema_version": "praxile.integration_observation.v1",
+  "scope": "seeded_artifact_repair_not_original_benchmark",
+  "source_task_id": "easy--technical_writers--task1",
+  "code_commit": "a97d51e",
+  "model": "MiniMax-M3",
+  "wheel_sha256": "f4179d9a3fb65bcd4c67307418578da21ffda90cd502378cd4aff33b16767db3",
+  "result_sha256": "87fcce74b9e22160e402cd2d796da0b2312137151c10480065c5dcbc9f648757",
+  "environment_variant": "authorized_https_overlay_plus_worker_pypdf_6.21.1",
+  "max_steps": 12,
+  "timeout_seconds": 600,
+  "executor_elapsed_seconds": 52.668361541000195,
+  "executor_usage": {"model_calls": 12, "prompt_tokens": 81623, "completion_tokens": 5304, "tool_calls": 12},
+  "cost_usd": null,
+  "task_status": "needs_human",
+  "termination": "max_steps",
+  "successful_revision_actions": 3,
+  "seed_checklist_pages": 5,
+  "observed_revision_page_counts": [4, 3, 2],
+  "checklist_sha256_chain": [
+    "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+    "9a3edb964efd44ed0afec51fdc27dae6de04e4523d693eea9060c6b05babc9a7",
+    "cf57bda3c010551d1524c927f40d50c66f19e79f47d9e80eb92dd6265ca8af16",
+    "ded0406b04a69ccaef7473d4c63506a5021d78403398f6b3b734c8ea6f201bc7"
+  ],
+  "memo_unchanged": true,
+  "memo_sha256": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+  "final_deliverable_verification_passed": false,
+  "official_evaluation": "not_run",
+  "environment_cleaned": true,
+  "promotion": false,
+  "performance_improvement_claim": false,
+  "limitations": [
+    "Existing outputs were seeded and a new repair instruction was supplied; this is not the original benchmark or an A/B arm.",
+    "Three revisions and page measurements executed successfully, but the one-page requirement was not met within budget.",
+    "Content preservation and factual quality were not independently scored; fewer pages alone do not prove better output.",
+    "A separate offline compact-layout probe of the final declarative content rendered to one page on macOS and was visually inspected; that was not an autonomous model run."
+  ]
+}
