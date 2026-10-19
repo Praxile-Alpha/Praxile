@@ -36,9 +36,28 @@ does_not_apply_when 范围，以及 TrajectoryLogger。单次有界请求生成�
 引用必须属于输入证据，模型不能新增权限、修改范围或宣称通过；截断/非法响应
 失败，消耗仍保留。confidence=0 表示未经验证，不使用模型自评授予实验资格。
 草案不自动执行，不自动存为长期经验；调用方负责保存轨迹与草案。
-当前依赖调用方提供的公开开发证据，不能识别 observation 字符串中被错误粘贴
-的隐藏 rubric，也没有独立证据来源认证；不得直接输入评分器报告。尚未自动从
-真实失败 trace 提取证据，也未实现先 probe 再按反馈 compose 的自适应闭环。
+直接调用设计 API 时依赖调用方提供的公开开发证据，不能识别 observation 字符串
+中被错误粘贴的隐藏 rubric，也没有独立证据来源认证；不得直接输入评分器报告。
+尚未实现先 probe 再按反馈 compose 的自适应闭环。
+
+### 结构化轨迹证据入口
+
+`development_evidence.collect_development_evidence(state_root, event_store, ...)`
+接收 experiment_id、arm、development_task_ids、heldout_task_ids 和可选 limit
+（1..20）。仅接受 track=development 的冻结 A/B 实验，并检查 task set digest、
+run manifest、report digest、任务名单和 trace 的任务归属。clean/held-out 来源
+直接拒绝，而不是按目录名称猜测分组。
+
+支持已配对的 search/read_file/run_command 调用与结果，保存事件引用、原事件
+摘要及经过白名单投影的工具类型/状态/退出码/参数摘要/同参数出现次数；优先
+保留失败记录。缺失或不支持的事件不伪造证据，报告 omitted_count。不传输原始
+命令、路径、搜索词、输出或 evaluator 内容。它能观察操作失败和重复，不能
+据此证明根因、状态等价或任务失败；当前也未覆盖所有工具/适配器 payload。
+
+`design_from_development_experiment(...)` 将该投影直接送入前述设计 API，返回
+候选与 source_evidence；无可用事件时 NO_ENTRY 且不调用模型。调用方仍需保存
+结果和轨迹。本地文件/事件一致性检查不等于防恶意篡改的来源认证，尚无真实
+模型验收或独立 attestation；不能把 fixture 链路通过说成经验质量提升。
 
 CLI 沿用 `eval ab`，同时提供以下参数启用组合流程：
 

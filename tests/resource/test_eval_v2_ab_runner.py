@@ -84,7 +84,11 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
         logger=TrajectoryLogger("designer", {}), router=SimpleNamespace(chat=lambda *args, **kwargs: {
             "content": json.dumps({"decision": "propose", "candidates": drafts[:2], "composition": drafts[2]})}))
     candidates = [ContextCandidate.from_dict(item) for item in [*designed["candidates"], designed["composition"]]]
-    adapter = FixtureAgentAdapter(artifacts=[FixtureArtifact("workspace_patch", "candidate.patch",
+    adapter = FixtureAgentAdapter(events=[
+        FixtureEvent("TOOL_CALL", payload={"tool": "search", "input": {"pattern": "private-needle"}}, tool_call_id="search-1"),
+        FixtureEvent("TOOL_RESULT", payload={"status": "error", "observation": {
+            "output": "private-output", "data": {"exit_code": 1}}}, tool_call_id="search-1")],
+        artifacts=[FixtureArtifact("workspace_patch", "candidate.patch",
         "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest())])
     cycle = DevelopmentContextCycle(config.paths.state, EventStore(config.paths))
     kwargs = dict(candidates=candidates[:2], composed_candidate=candidates[2],
@@ -101,6 +105,51 @@ def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path, monke
         assert read_json(root / "manifest.json", {})["track"] == "development"
         assert read_json(root / "report.json", {})["improvement_episodes"]
     assert cycle.run(tasks, resume=True, **kwargs) == report
+    from praxile.eval.v2.development_evidence import collect_development_evidence, design_from_development_experiment
+    evidence_args = dict(experiment_id="dev-cycle.first", arm="baseline",
+                         development_task_ids=[task.task_id], heldout_task_ids=["heldout"])
+    bundle = collect_development_evidence(config.paths.state, EventStore(config.paths), **evidence_args)
+    assert bundle["eligible_count"] == 1
+    assert "private-needle" not in json.dumps(bundle) and "private-output" not in json.dumps(bundle)
+    projected = json.loads(bundle["evidence"][0]["observation"])
+    assert projected["operation"] == "search" and projected["exit_code"] == 1
+    assert EventStore(config.paths).get_event(bundle["sources"][0]["event_id"]) is not None
+    messages = []
+    def abstain(message, **kwargs):
+        messages.extend(message)
+        return {"content": '{"decision":"abstain"}'}
+    designed_again = design_from_development_experiment(config.paths.state, EventStore(config.paths),
+        **evidence_args, applies_to=candidates[0].applies_to, design_id="from-trace",
+        logger=TrajectoryLogger("new-design", {}), router=SimpleNamespace(chat=abstain))
+    assert designed_again["decision"] == "NO_ENTRY"
+    assert "private-output" not in json.dumps(messages)
+    with pytest.raises(EvalSchemaError, match="membership"):
+        collect_development_evidence(config.paths.state, EventStore(config.paths),
+            **{**evidence_args, "development_task_ids": ["another"]})
+    source_plan_path = config.paths.state / "eval/v2/experiments/dev-cycle.first/manifest.json"
+    original_plan = source_plan_path.read_text()
+    invalid_plan = json.loads(original_plan)
+    invalid_plan["track"] = "clean"
+    source_plan_path.write_text(json.dumps(invalid_plan))
+    try:
+        with pytest.raises(EvalSchemaError, match="explicit development"):
+            collect_development_evidence(config.paths.state, EventStore(config.paths), **evidence_args)
+    finally:
+        source_plan_path.write_text(original_plan)
+    source_report_path = config.paths.state / "eval/v2/runs/dev-cycle.first.baseline/report.json"
+    original_report = source_report_path.read_text()
+    invalid_report = json.loads(original_report)
+    invalid_report["manifest_digest"] = "forged"
+    source_report_path.write_text(json.dumps(invalid_report))
+    try:
+        with pytest.raises(EvalSchemaError, match="frozen manifest"):
+            collect_development_evidence(config.paths.state, EventStore(config.paths), **evidence_args)
+    finally:
+        source_report_path.write_text(original_report)
+    wrong_store = SimpleNamespace(list_events=lambda **kwargs: [
+        SimpleNamespace(trace_id=kwargs["trace_id"], task_id="wrong-task")])
+    with pytest.raises(EvalSchemaError, match="source task"):
+        collect_development_evidence(config.paths.state, wrong_store, **evidence_args)
     with pytest.raises(EvalSchemaError, match="resume"):
         cycle.run(tasks, **kwargs)
     with pytest.raises(EvalSchemaError, match="development split"):
