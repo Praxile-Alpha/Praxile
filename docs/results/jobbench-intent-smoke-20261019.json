@@ -1,0 +1,40 @@
+{
+  "schema_version": "praxile.integration_observation.v1",
+  "scope": "single_task_native_executor_not_official_trial",
+  "task_id": "easy--technical_writers--task1",
+  "code_commit": "c82541c",
+  "model": "MiniMax-M3",
+  "experience_mode": "fresh_disabled",
+  "environment_variant": "authorized_debian_https_overlay",
+  "wheel_sha256": "03526e5a49fb0bfb509c5518f7681c9d3e4cb7439c75978346dd69d6a0fd1b91",
+  "image_id": "sha256:ab091d47aad612a3d2d6be3ec102e8870e0d44a1d09de7b9cab5740c7601e55c",
+  "manifest_sha256": "246cdeca67266141ddb35172279e5d1c9be5ceb8d5bca1f68102d276ea6a0b18",
+  "result_sha256": "41cc810ebb1add1db4451a38f1d8dbc7b55616a3a635159b16959f2188805278",
+  "max_steps": 30,
+  "timeout_seconds": 900,
+  "architecture_gate_required": false,
+  "process_status": "executor_returned",
+  "task_status": "needs_human",
+  "termination_reason": "max_steps",
+  "usage": {
+    "model_calls": 30,
+    "prompt_tokens": 336906,
+    "completion_tokens": 3564,
+    "tool_calls": 19,
+    "cost_usd": null
+  },
+  "action_status_counts": {"success": 13, "blocked": 3, "failure": 14},
+  "output_file_count": 0,
+  "outputs_collected": true,
+  "environment_cleaned": true,
+  "official_evaluation": "not_run",
+  "official_score": null,
+  "performance_improvement_claim": false,
+  "limitations": [
+    "Single integration task, no baseline/candidate comparison.",
+    "Model attempted binary PDF reads and unittest-based extraction; typed document tools are missing.",
+    "Repeated responses did not satisfy the JSON action protocol.",
+    "No deliverable was produced and no official judge was invoked.",
+    "Raw evidence is local temporary storage, not a durable public artifact or signed attestation."
+  ]
+}

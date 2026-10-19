@@ -278,6 +278,28 @@ worker 在运行前验证文件大小（最多 256 KiB）、真实路径及摘�
 它也不抵御同权限宿主进程在校验期间并发替换文件。当前通过本地 fixture 完整
 worker 测试，新的真实 MiniMax 运行和官方评分尚待复验。
 
+#### 新入口真实 MiniMax 复验（未完成任务）
+
+基于 `c82541c`，在独立目录 `/tmp/praxile-jobbench-executor-intent-20261019`
+再次运行同一公开任务，原始环境说明未改动，显式绑定 TASK_INSTRUCTIONS.txt 摘要。
+架构 gate 为 false，发生 30 次 MiniMax-M3 调用；输入 336,906 tokens、输出
+3,564 tokens，记录 19 次工具调用。到达 30 步上限，任务为 needs_human。
+13 个 action success、3 blocked、14 failure；这些动作状态不等于任务成功率。
+输出目录为空，容器结束清理，官方 judge 未调用，score 保持 null。
+
+新 wheel、镜像、manifest 和结果摘要详见
+[`results/jobbench-intent-smoke-20261019.json`](results/jobbench-intent-smoke-20261019.json)。
+原始轨迹位于上述临时目录的 trial/agent/praxile-result.json；未公开原始请求、
+模型思考文本或凭据，也没有将自评分代替官方分数。
+
+观察到的缺口：PDF 经 read_file 返回二进制内容；通用 Python 提取请求受到
+Coding shell 策略拦截；随后模型通过 unittest 执行临时提取脚本，并产生多次非
+JSON action 回复。后期虽能导入任务镜像中的 pdfplumber/openpyxl 等库，仍未
+生成交付物。不能把缺少依赖当作已证实的根因，也不能把全部失败归咎模型。
+下一步应提供受限、分页、限时的正式文档提取及产物生成工具，并对接 Action
+Schema 和运行配置，避免依靠 unittest 绕行；不默认放开宿主 shell 或提高步数。
+本次只验证任务正文分离进入真实模型链路，不是性能提升或完整 benchmark 验收。
+
 另检查官方 judge 使用 `max_completion_tokens=200000`。宿主代理新增该字段的
 保真转发和同一预算校验（不能同时携带 max_tokens），未改写官方 judge。
 只有显式配置足够输出预留时才允许请求；provider 实际是否支持此上限、

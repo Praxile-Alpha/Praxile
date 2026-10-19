@@ -143,6 +143,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+真实新入口复验已完成：同一 easy technical-writers 任务在 c82541c 下越过误报
+门禁，产生 30 次 MiniMax-M3 调用（336,906 input / 3,564 output tokens），
+到达步数上限，未生成交付物，官方评分未运行。容器已清理。结果暴露 R1 正式
+文档读取/生成工具缺口和 JSON action 协议失配；不增加步数掩盖问题，不把动作
+success 当作任务成功。详见 results/jobbench-intent-smoke-20261019.json。
+
 任务意图边界修复：新增显式 TaskInput V1，正文与完整环境说明分别记录；Harbor
 适配器可通过公开正文相对路径和冻结 SHA-256 传递该输入。worker 校验路径、
 大小和摘要；正文用于意图分析，完整说明继续进入模型，隐私信号不丢失。
