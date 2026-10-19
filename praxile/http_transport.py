@@ -37,6 +37,16 @@ def _attempt_record(attempts, started, status, status_code=None):
                      "elapsed_ms": max(0, int((time.monotonic() - started) * 1000))})
 
 
+def _stream_failure(error, name, attempts, started, emitted, max_retries):
+    status = ("cancelled" if isinstance(error, HTTPTransportCancelled) else
+              "decode_error" if isinstance(error, HTTPResponseDecodeError) else
+              "http_error" if error.status_code else "unavailable")
+    _attempt_record(attempts, started, status, error.status_code)
+    error.transport_evidence = {**_request_evidence(name, attempts, max_retries),
+        "scope": "streaming_transport_failure", "events_delivered": emitted,
+        "automatic_replay_forbidden": emitted > 0}
+
+
 class HTTPTransportUnavailable(HTTPTransportError):
     pass
 
@@ -151,11 +161,15 @@ class SimpleHTTPTransport:
         request = urllib.request.Request(url, data=body, headers=request_headers, method="POST")
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
+        attempts, emitted = [], 0
         for attempt in range(self.max_retries + 1):
             _raise_if_cancelled(cancel_requested)
+            started = time.monotonic()
             try:
                 with urllib.request.urlopen(request, timeout=effective_timeout) as response:
-                    yield from _json_events_from_sse_lines(response, cancel_requested=cancel_requested)
+                    for event in _json_events_from_sse_lines(response, cancel_requested=cancel_requested):
+                        emitted += 1
+                        yield event
                 return
             except urllib.error.HTTPError as exc:
                 detail = _safe_error_body(exc)
@@ -169,7 +183,11 @@ class SimpleHTTPTransport:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except TimeoutError as exc:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
-            if not last_error.retryable or attempt >= self.max_retries:
+            except HTTPTransportError as exc:
+                _stream_failure(exc, self.name, attempts, started, emitted, self.max_retries)
+                raise
+            _stream_failure(last_error, self.name, attempts, started, emitted, self.max_retries)
+            if emitted or not last_error.retryable or attempt >= self.max_retries:
                 break
             _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None
@@ -274,8 +292,10 @@ class HttpxTransport:
         request_headers.setdefault("Accept", "text/event-stream")
         effective_timeout = max(1, int(timeout or self.timeout_seconds))
         last_error: HTTPTransportError | None = None
+        attempts, emitted = [], 0
         for attempt in range(self.max_retries + 1):
             _raise_if_cancelled(cancel_requested)
+            started = time.monotonic()
             try:
                 with self._get_client().stream(
                     "POST",
@@ -285,7 +305,9 @@ class HttpxTransport:
                     timeout=effective_timeout,
                 ) as response:
                     response.raise_for_status()
-                    yield from _json_events_from_sse_lines(response.iter_lines(), cancel_requested=cancel_requested)
+                    for event in _json_events_from_sse_lines(response.iter_lines(), cancel_requested=cancel_requested):
+                        emitted += 1
+                        yield event
                 return
             except self.httpx.HTTPStatusError as exc:
                 retryable = exc.response.status_code >= 500
@@ -298,7 +320,11 @@ class HttpxTransport:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
             except self.httpx.HTTPError as exc:
                 last_error = HTTPTransportUnavailable(str(exc), retryable=True)
-            if not last_error.retryable or attempt >= self.max_retries:
+            except HTTPTransportError as exc:
+                _stream_failure(exc, self.name, attempts, started, emitted, self.max_retries)
+                raise
+            _stream_failure(last_error, self.name, attempts, started, emitted, self.max_retries)
+            if emitted or not last_error.retryable or attempt >= self.max_retries:
                 break
             _sleep_with_cancel(self.retry_backoff_seconds * (attempt + 1), cancel_requested)
         assert last_error is not None

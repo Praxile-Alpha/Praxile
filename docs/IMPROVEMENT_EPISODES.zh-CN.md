@@ -186,6 +186,15 @@ usage 不能覆盖先前失败尝试可能产生的供应商消耗。
 单次 socket 超时和 retry backoff 语义未改，尚未实现总墙钟硬截止或远端计费取消。
 验证使用可控传输替身，无新增模型调用；真实超时实验不能追溯补填成已完整观测。
 
+流式增补：urllib/httpx 在首个解析事件交付给调用方之后，遇到网络错误不再自动
+重试整个请求，避免重复文本或重复结构化动作。首个事件之前的失败仍遵循原配置。
+流式异常携带尝试记录、`events_delivered` 和 `automatic_replay_forbidden`，
+记录 scope 为 `streaming_transport_failure`，不包含 SSE 正文。读取事件边界的
+取消会记录 cancelled 并关闭响应；调用方显式关闭生成器也关闭响应。
+成功结束的流暂不提供汇总收据，取消发生在首个尝试之前或退避期间也未覆盖完整记录；
+阻塞读取时仍依赖底层超时，不是即时取消或总墙钟截止。该行为由两套可控传输替身
+验证，不等于外部 provider 的实际计费或远端请求终止证明。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
