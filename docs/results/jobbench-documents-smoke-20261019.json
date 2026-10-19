@@ -1,0 +1,39 @@
+{
+  "schema_version": "praxile.integration_observation.v1",
+  "scope": "single_task_native_executor_not_official_trial",
+  "task_id": "easy--technical_writers--task1",
+  "code_commit": "6050fbe",
+  "model": "MiniMax-M3",
+  "experience_mode": "fresh_disabled",
+  "environment_variant": "authorized_debian_https_overlay",
+  "inherit_task_packages": true,
+  "wheel_sha256": "383c5457e8fa8da93748e16315787c4505ddcd8de6df690e26b242c6c949ba0a",
+  "result_sha256": "d7ac774d2d8e8ade7f4141f6db1b4400d6e6e0c3306e93b509534f967668836e",
+  "max_steps": 30,
+  "timeout_seconds": 900,
+  "model_timeout_seconds": 30,
+  "process_status": "executor_returned",
+  "task_status": "needs_human",
+  "termination_reason": "model_unavailable_timeout",
+  "recorded_successful_response_usage": {
+    "model_calls": 28,
+    "prompt_tokens": 558536,
+    "completion_tokens": 1826,
+    "tool_calls": 25
+  },
+  "failed_request_usage": null,
+  "cost_usd": null,
+  "output_file_count": 0,
+  "outputs_collected": true,
+  "environment_cleaned": true,
+  "official_evaluation": "not_run",
+  "official_score": null,
+  "performance_improvement_claim": false,
+  "limitations": [
+    "Document reads succeeded but no create_docx action completed.",
+    "A final request timed out; successful-response counters are not total billable usage.",
+    "No official judge invoked on empty deliverables.",
+    "Different code and dependency visibility from previous smoke; not a controlled efficacy comparison.",
+    "Raw evidence is local temporary storage, not a durable public artifact."
+  ]
+}

@@ -143,6 +143,15 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+独立官方 judge 镜像已按原始 Dockerfile 构建，无网络检查确认固定计算环境
+标识和评分入口；未改 rubric、依赖或 generation。当前仍没有非空交付物的
+官方评分，镜像不可提供给执行器，正式任务验收总项保持未完成。
+
+正式文档工具真实复验：6050fbe 已能在冻结任务镜像中多次调用 read_document，
+但最后模型请求超时，输出仍为空，未调用官方 judge。记录到的成功响应输入
+558,536 tokens，失败请求用量未知。补充显式单请求超时配置及准确的中途失败
+提示，不自动增加预算/重试；详情见 jobbench-documents-smoke-20261019.json。
+
 真实新入口复验已完成：同一 easy technical-writers 任务在 c82541c 下越过误报
 门禁，产生 30 次 MiniMax-M3 调用（336,906 input / 3,564 output tokens），
 到达步数上限，未生成交付物，官方评分未运行。容器已清理。结果暴露 R1 正式

@@ -4,6 +4,7 @@ import pytest
 
 from praxile.config import Config, ProjectPaths, default_config
 from praxile.eval.native_worker import load_task_input
+from praxile.eval.native_worker import benchmark_config
 from praxile.task_analyzer import TaskAnalyzer
 from praxile.task_input import TaskInput
 
@@ -48,3 +49,13 @@ def test_public_body_size_is_bounded(tmp_path):
     body.write_bytes(raw)
     with pytest.raises(ValueError, match="size"):
         load_task_input(tmp_path, "Read task.txt", "task.txt", hashlib.sha256(raw).hexdigest())
+
+
+def test_benchmark_request_timeout_is_explicit_and_bounded(tmp_path):
+    config = benchmark_config(tmp_path, model="fixture", base_url="http://localhost/v1", max_steps=3,
+                              model_timeout_seconds=90)
+    assert config.get("runtime", "model_timeout_seconds") == 90
+    for invalid in (True, 0, 111, "90"):
+        with pytest.raises(ValueError, match="model_timeout_seconds"):
+            benchmark_config(tmp_path, model="fixture", base_url="http://localhost/v1", max_steps=3,
+                             model_timeout_seconds=invalid)

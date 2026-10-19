@@ -25,7 +25,10 @@ class PraxileAgent(BaseAgent):
                  workspace: str, base_url: str, max_steps: int = 50,
                  timeout_seconds: int = 900, credential_file: str | None = None,
                  task_body_file: str | None = None, task_body_sha256: str | None = None,
-                 inherit_task_packages: bool = False, **kwargs):
+                 inherit_task_packages: bool = False, model_timeout_seconds: int = 30, **kwargs):
+        if type(model_timeout_seconds) is not int or not 1 <= model_timeout_seconds <= 110:
+            raise ValueError("model_timeout_seconds must be an integer in [1, 110]")
+        self.model_timeout_seconds = model_timeout_seconds
         if type(inherit_task_packages) is not bool:
             raise ValueError("inherit_task_packages must be a boolean")
         self.inherit_task_packages = inherit_task_packages
@@ -96,7 +99,8 @@ class PraxileAgent(BaseAgent):
             endpoint=self.base_url.rstrip("/") + "/chat/completions", model=self.model_name,
             max_calls=min(self.max_steps + 10, 1000), max_output=6000,
             output_budget=min((self.max_steps + 10) * 6000, 10_000_000),
-            ttl_seconds=self.timeout_seconds + 60)
+            ttl_seconds=self.timeout_seconds + 60,
+            request_timeout=self.model_timeout_seconds + 10)
         remote = self.remote_root + "/" + new_id("capability")
         try:
             _, port = broker.start()
@@ -136,6 +140,7 @@ class PraxileAgent(BaseAgent):
             "--workspace", self.workspace, "--instruction", self.remote_root + "/instruction.txt",
             "--result", self.remote_root + "/result.json", "--model", self.model_name,
             "--base-url", endpoint or self.base_url, "--max-steps", str(self.max_steps),
+            "--model-timeout-seconds", str(self.model_timeout_seconds),
         ]
         if capability_file:
             argv.extend(["--capability-file", capability_file])
@@ -145,7 +150,8 @@ class PraxileAgent(BaseAgent):
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
                   "wheel_sha256": self.wheel_sha256, "result_available": False,
-                  "inherit_task_packages": self.inherit_task_packages}
+                  "inherit_task_packages": self.inherit_task_packages,
+                  "model_timeout_seconds": self.model_timeout_seconds}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:
             await self._exec(environment, command, timeout_seconds=self.timeout_seconds + 10)

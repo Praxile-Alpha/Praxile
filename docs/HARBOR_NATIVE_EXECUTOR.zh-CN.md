@@ -300,6 +300,39 @@ JSON action 回复。后期虽能导入任务镜像中的 pdfplumber/openpyxl �
 Schema 和运行配置，避免依靠 unittest 绕行；不默认放开宿主 shell 或提高步数。
 本次只验证任务正文分离进入真实模型链路，不是性能提升或完整 benchmark 验收。
 
+#### 正式文档工具复验（模型请求超时）
+
+`6050fbe` 在新目录 `/tmp/praxile-jobbench-executor-docs-20261019` 重跑，
+显式 inherit_task_packages=true，原任务、30 步/900 秒上限不变。多次
+read_document 成功，最后模型请求超时，未生成交付物。成功响应累计 28 次、
+558,536 input / 1,826 output tokens，25 次工具调用；失败请求用量未知，
+这些数字不能作为完整账单。容器已清理，空产物未启动付费 judge。
+摘要见 `results/jobbench-documents-smoke-20261019.json`。工具与依赖可见性发生
+变化，这不是受控收益对照，不能声称提升或回退的因果效果。
+
+定位发现 worker 单请求沿用 runtime 默认 30 秒，与 900 秒任务预算独立。
+现新增显式 `model_timeout_seconds`，默认仍为 30，范围 1–110 秒；worker
+与宿主代理分别按该值和该值+10 秒配置，整体 supervisor 上限不变。该值写入
+execution record，不自动重试失败调用或调整运行中的冻结实验。
+超时返回文字不再声称“没有尝试修改”，要求检查此前动作和部分输出。
+更高超时设置是否能完成交付仍未验证，不能将超时配置调整视为任务修复成功。
+
+#### 独立官方评分镜像已构建
+
+原始 tests/Dockerfile 构建成功，未改写评分材料或依赖；仅通过 build-context
+将 Ubuntu 与 Python 的原固定摘要映射到 registry-1.docker.io 同摘要镜像，
+避免本机镜像源 TLS 故障。此处没有使用 Agent 环境的 Debian HTTPS 补丁。
+
+- Dockerfile SHA-256：`baaf2f58ee59a8331f2de84386d0a48b6a23aeef16df2afddd64b399e82d61d0`。
+- 本地 tag：`praxile-jobbench-judge:original-20261019`。
+- 本地 image ID：`sha256:021aae679c3db6f96dad2826b8daecaa6a7ada69a42728e373c9590f1db28f30`。
+- 无网络容器检查：计算环境标识 `libreoffice-24.2.7.2-ubuntu24.04.6-snapshot20260911`，
+  openai SDK 2.54.0，官方 verify.py 存在。
+- 原始 generation manifest SHA-256 再次核对未变。
+
+这仅验证镜像构建与入口，不验证公式重算的结果或非空产物的官方 LLM 评分。
+镜像内含私有评分材料，只用于控制面，不作为执行器镜像或公开推送。
+
 另检查官方 judge 使用 `max_completion_tokens=200000`。宿主代理新增该字段的
 保真转发和同一预算校验（不能同时携带 max_tokens），未改写官方 judge。
 只有显式配置足够输出预留时才允许请求；provider 实际是否支持此上限、

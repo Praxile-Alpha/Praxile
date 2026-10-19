@@ -1144,8 +1144,9 @@ class AgentRuntime:
         except ModelUnavailable as exc:
             self._emit_progress(progress_callback, "model_unavailable", "Model route unavailable; task needs human review.")
             output = (
-                "Model unavailable. No code edits were attempted. Configure an OpenAI-compatible endpoint "
-                "or local model in .praxile/config.json to enable autonomous edits.\n\n"
+                "Model request failed; execution is paused. Earlier actions and any file changes remain "
+                "recorded in the trajectory. Check model availability, credentials and request timeout. "
+                "Usage for unsuccessful requests may be unknown.\n\n"
                 f"Details: {exc}"
             )
             logger.add_action(
@@ -1164,7 +1165,7 @@ class AgentRuntime:
                 }
             )
             self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
-            return "needs_human", "Model unavailable; planning trajectory and proposals were generated."
+            return "needs_human", "Model request failed; review the recorded actions and any partial outputs before resuming."
 
     def _subtask_boundary(self, action: dict[str, Any], logger: TrajectoryLogger) -> dict[str, Any]:
         decision = self.tools.safety.check_tool_call(action["type"], action,
