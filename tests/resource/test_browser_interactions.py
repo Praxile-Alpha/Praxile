@@ -59,3 +59,47 @@ def test_real_browser_session_interaction_and_capture(tmp_path):
         server.server_close()
         thread.join(timeout=5)
     assert not thread.is_alive()
+
+
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_BROWSER"), reason="explicit Chromium integration opt-in required")
+@pytest.mark.parametrize("operation", ["open", "screenshot"])
+def test_one_shot_browser_blocks_redirects_and_external_subresources(tmp_path, operation):
+    pytest.importorskip("playwright.sync_api")
+    requests = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_GET(self):
+            requests.append(self.path)
+            forbidden = f"http://localhost:{self.server.server_port}/private"
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", forbidden)
+                self.end_headers()
+                return
+            body = f'<title>Fixture</title><img src="{forbidden}"><p>Public page</p>'.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
+    config.data["browser"].update(enabled=True, allowed_hosts=["127.0.0.1"], timeout_ms=5000)
+    try:
+        with BrowserEnv(config) as browser:
+            result = getattr(browser, operation)(f"http://127.0.0.1:{server.server_port}/")
+            assert result.status == "success"
+            if operation == "screenshot":
+                assert (tmp_path / result.data["artifact"]).read_bytes().startswith(b"\x89PNG")
+            assert browser._session_context is None
+            redirected = getattr(browser, operation)(f"http://127.0.0.1:{server.server_port}/redirect")
+            assert redirected.status in {"blocked", "failure"}
+            assert "/private" not in requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert not thread.is_alive()

@@ -181,6 +181,8 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 
 下载增补：browser_download 为显式 opt-in 的公开 HTTP URL GET，逐跳白名单、流式大小限制、临时文件清理、项目内随机产物路径和 SHA-256 证据已接入 runtime；dry-run 阻止分发。6 项真实本机 HTTP 测试通过。无 cookie/登录态/点击下载，Playwright 隐式下载仍关闭；DNS/IP 隔离、认证导出、接管与完整浏览器工作流未完成，总项不勾选。见 BROWSER_SESSIONS.zh-CN.md。
 
+浏览器安全回归：一次性 open/screenshot 改用与交互共享的受限 context。真实测试发现 route.continue_ 的重定向可先触达非白名单目标，现改为禁止 fetch 自动跳转并拦截全部重定向响应；目标测试服务器已验证无越界请求。21 项单元与3项真实 Chromium 测试通过。允许域内自动重定向也暂时拒绝，流式页面/完整登录流程不在兼容承诺内；完整浏览器项不勾选。
+
 这阶段吸收 Meta Muse 的长期任务体验与 MUSE 的子任务组织方式；R0 使用的基础工具在 R0 一并实现，R1 负责系统化增强。
 
 - [ ] Deliverable Contract：目标路径、格式、必要结构、允许的状态变化、证据位置；来自用户任务，不能从隐藏 rubric 推导。

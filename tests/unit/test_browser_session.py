@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -103,10 +104,25 @@ def test_requires_optin_session_and_explicit_hosts(session):
 def test_subrequests_and_redirects_are_checked(session, url, allowed):
     _, env, _ = session
     events = []
+    response = SimpleNamespace(status=200, dispose=lambda: None)
     route = SimpleNamespace(request=SimpleNamespace(url=url),
-        abort=lambda: events.append("abort"), continue_=lambda: events.append("continue"))
+        abort=lambda: events.append("abort"), fetch=lambda **kwargs: response,
+        fulfill=lambda **kwargs: events.append("fulfill"))
     env._route_session_request(route)
-    assert events == (["continue"] if allowed else ["abort"])
+    assert events == (["fulfill"] if allowed else ["abort"])
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_redirect_response_is_never_forwarded_to_browser(session, status):
+    _, env, _ = session
+    events = []
+    def fetch(**kwargs):
+        assert kwargs["max_redirects"] == 0
+        return SimpleNamespace(status=status, dispose=lambda: events.append("dispose"))
+    route = SimpleNamespace(request=SimpleNamespace(url="http://localhost/redirect"), fetch=fetch,
+        abort=lambda: events.append("abort"), fulfill=lambda **kwargs: events.append("fulfill"))
+    env._route_session_request(route)
+    assert events == ["abort", "dispose"]
 
 
 def test_error_is_sanitized_and_session_closed(session):
@@ -133,3 +149,50 @@ def test_playwright_is_released_even_when_browser_close_raises(session):
         env.close()
     assert released == [True]
     assert env._closed
+
+
+@pytest.mark.parametrize("operation", ["open", "screenshot"])
+def test_one_shot_uses_restricted_context_and_closes_it(session, operation):
+    _, env, context = session
+    options = []
+    env._browser_instance.new_context = lambda **kwargs: (options.append(kwargs), context)[1]
+    context.page.title = lambda: "Fixture"
+    context.page.screenshot = lambda path, **kwargs: Path(path).write_bytes(b"png fixture")
+    result = getattr(env, operation)("http://localhost/example")
+    assert result.status == "success"
+    assert options == [{"viewport": {"width": 1280, "height": 900}, "service_workers": "block", "accept_downloads": False}]
+    assert context.handler
+    assert context.socket_handler
+    assert context.closed
+    assert env._session_page is None
+
+
+@pytest.mark.parametrize("operation", ["open", "screenshot"])
+def test_one_shot_errors_are_sanitized_and_released(session, operation):
+    _, env, context = session
+    def fail(*args, **kwargs):
+        raise RuntimeError("PRIVATE_CREDENTIAL_IN_URL")
+    context.page.goto = fail
+    result = getattr(env, operation)("http://localhost/example")
+    assert result.status == "failure"
+    assert "PRIVATE" not in str(result.to_dict())
+    assert context.closed
+
+
+def test_context_setup_failure_is_closed_and_never_navigates(session):
+    _, env, context = session
+    def fail(*args):
+        raise AttributeError("old Playwright")
+    context.route_web_socket = fail
+    assert env.open("http://localhost").status == "failure"
+    assert context.closed
+    assert context.page.url == "about:blank"
+
+
+def test_one_shot_refuses_empty_hosts_and_embedded_credentials(session):
+    config, env, context = session
+    assert env.open("http://user:secret@localhost/").status == "blocked"
+    assert env.open("http://[invalid/").status == "blocked"
+    config.data["browser"]["allowed_hosts"] = []
+    assert env.screenshot("http://localhost").status == "blocked"
+    assert context.page.url == "about:blank"

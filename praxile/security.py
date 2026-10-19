@@ -483,11 +483,16 @@ class SafetyPolicy:
         policy_decision = self._check_policy_rules("browser_open", {"url": url})
         if not policy_decision.allowed:
             return policy_decision
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return SafetyDecision(False, "invalid browser URL", "medium")
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return SafetyDecision(False, f"browser URL must be absolute http(s): {url}", "medium")
+            return SafetyDecision(False, "browser URL must be absolute http(s)", "medium")
+        if parsed.username or parsed.password:
+            return SafetyDecision(False, "embedded URL credentials are forbidden", "medium")
         allowed_hosts = self.config.get("browser", "allowed_hosts", default=["localhost", "127.0.0.1", "::1"])
-        if allowed_hosts and parsed.hostname not in allowed_hosts:
+        if not isinstance(allowed_hosts, list) or not allowed_hosts or parsed.hostname not in allowed_hosts:
             return SafetyDecision(False, f"browser host not allowed: {parsed.hostname}", "medium")
         return SafetyDecision(True)
 

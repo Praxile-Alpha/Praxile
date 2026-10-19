@@ -69,12 +69,8 @@ class BrowserEnv:
             return Observation("blocked", "embedded URL credentials are forbidden", risk_level="medium")
         try:
             if self._session_context is None:
-                context = self._browser().new_context(viewport=self._viewport(), service_workers="block",
-                                                       accept_downloads=False)
+                context = self._restricted_context()
                 self._session_context = context
-                context.route("**/*", self._route_session_request)
-                # Socket traffic bypasses HTTP routing. Fail closed on old Playwright.
-                context.route_web_socket("**/*", lambda socket: socket.close())
                 self._session_page = context.new_page()
             page = self._session_page
             if operation == "navigate":
@@ -111,20 +107,47 @@ class BrowserEnv:
 
     def _route_session_request(self, route: Any) -> None:
         url = route.request.url
-        parsed = urlparse(url)
-        if self._preflight(url) or parsed.username or parsed.password:
+        if self._preflight(url):
             route.abort()
         else:
-            route.continue_()
+            response = None
+            try:
+                # continue_ follows redirect chains without routing each hop.
+                # Fetch only this response and fail closed on all redirects.
+                response = route.fetch(max_redirects=0, timeout=self._timeout_ms())
+                if response.status in {301, 302, 303, 307, 308}:
+                    route.abort()
+                else:
+                    route.fulfill(response=response)
+            except Exception:
+                route.abort()
+            finally:
+                if response is not None:
+                    response.dispose()
 
-    def _close_session(self) -> None:
-        context, self._session_context = self._session_context, None
-        self._session_page = None
+    def _restricted_context(self) -> Any:
+        context = self._browser().new_context(viewport=self._viewport(), service_workers="block", accept_downloads=False)
+        try:
+            context.route("**/*", self._route_session_request)
+            # Socket traffic bypasses HTTP routing; old Playwright fails closed.
+            context.route_web_socket("**/*", lambda socket: socket.close())
+            return context
+        except BaseException:
+            self._close_context(context)
+            raise
+
+    @staticmethod
+    def _close_context(context: Any | None) -> None:
         if context is not None:
             try:
                 context.close()
             except Exception:
                 pass
+
+    def _close_session(self) -> None:
+        context, self._session_context = self._session_context, None
+        self._session_page = None
+        self._close_context(context)
 
     def __enter__(self) -> "BrowserEnv":
         return self
@@ -142,16 +165,18 @@ class BrowserEnv:
         preflight = self._preflight(url)
         if preflight:
             return preflight
-        page = None
+        context = None
         try:
-            browser = self._browser()
-            page = browser.new_page()
+            context = self._restricted_context()
+            page = context.new_page()
             page.goto(url, wait_until=self._wait_until(), timeout=self._timeout_ms())
+            if self._preflight(page.url):
+                return Observation("blocked", "navigation left the allowed HTTP host set", risk_level="medium")
             title = page.title()
         except Exception as exc:
-            return Observation("failure", f"browser_open failed: {exc}", {"url": url}, risk_level="low")
+            return Observation("failure", "browser_open failed", {"error_type": type(exc).__name__}, risk_level="low")
         finally:
-            self._close_page(page)
+            self._close_context(context)
         return Observation("success", f"Opened {url}", {"url": url, "title": title})
 
     def screenshot(self, url: str, *, name: str | None = None) -> Observation:
@@ -164,17 +189,21 @@ class BrowserEnv:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{slugify(name or url, max_length=60)}.png"
         target = artifact_dir / filename
-        page = None
+        if target.is_symlink():
+            return Observation("blocked", "screenshot target must not be a symlink", risk_level="medium")
+        context = None
         try:
-            browser = self._browser()
-            page = browser.new_page(viewport=self._viewport())
+            context = self._restricted_context()
+            page = context.new_page()
             page.goto(url, wait_until=self._wait_until(), timeout=self._timeout_ms())
-            page.screenshot(path=str(target), full_page=True)
+            if self._preflight(page.url):
+                return Observation("blocked", "navigation left the allowed HTTP host set", risk_level="medium")
+            page.screenshot(path=str(target), full_page=True, timeout=self._timeout_ms())
             title = page.title()
         except Exception as exc:
-            return Observation("failure", f"browser_screenshot failed: {exc}", {"url": url}, risk_level="low")
+            return Observation("failure", "browser_screenshot failed", {"error_type": type(exc).__name__}, risk_level="low")
         finally:
-            self._close_page(page)
+            self._close_context(context)
         rel = target.relative_to(self.root).as_posix()
         return Observation(
             "success",
@@ -191,15 +220,20 @@ class BrowserEnv:
     def _preflight(self, url: str) -> Observation | None:
         if not self.config.get("browser", "enabled", default=False):
             return Observation("blocked", "browser adapter is disabled; set browser.enabled=true", risk_level="low")
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return Observation("blocked", "invalid browser URL", risk_level="medium")
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return Observation("blocked", f"browser URL must be absolute http(s): {url}", risk_level="medium")
+            return Observation("blocked", "browser URL must be absolute http(s)", risk_level="medium")
+        if parsed.username or parsed.password:
+            return Observation("blocked", "embedded URL credentials are forbidden", risk_level="medium")
         allowed_hosts = self.config.get(
             "browser",
             "allowed_hosts",
             default=["localhost", "127.0.0.1", "::1"],
         )
-        if allowed_hosts and parsed.hostname not in allowed_hosts:
+        if not isinstance(allowed_hosts, list) or not allowed_hosts or parsed.hostname not in allowed_hosts:
             return Observation("blocked", f"browser host not allowed: {parsed.hostname}", risk_level="medium")
         return None
 
@@ -251,7 +285,7 @@ class BrowserEnv:
         target = raw if raw.is_absolute() else self.root / raw
         target = target.resolve(strict=False)
         allowed_root = (self.config.paths.state / "experience" / "artifacts").resolve(strict=False)
-        if not path_is_relative_to(target, allowed_root):
+        if not path_is_relative_to(allowed_root, self.root.resolve()) or not path_is_relative_to(target, allowed_root):
             return None
         return target / "browser"
 

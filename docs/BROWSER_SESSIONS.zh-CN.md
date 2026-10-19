@@ -31,6 +31,24 @@ Playwright 会话仍禁用隐式下载，原有安全边界不放宽。
 
 ## 启用
 
+### 一次性页面与重定向边界（后续修复）
+
+browser_open/browser_screenshot 与交互会话共用受限 context：显式非空域名白名单、
+Service Worker 关闭、WebSocket 拦截、隐式下载关闭。一次性 context 无论成功或失败
+都会释放；异常只记录类型，避免把 Playwright 的 URL/凭据原文写入错误消息。
+截图目录不得经 .praxile 符号链接逃出项目，现有截图目标为符号链接时拒绝。
+
+真实 Chromium 测试发现 route.continue_ 会自动跟随重定向，后续跳转不再经过同一
+route 检查，事后检查最终 URL 已太迟。现在使用 route.fetch(max_redirects=0)，
+301/302/303/307/308 均在返回给浏览器前 abort，其他响应再 fulfill 并释放响应对象。
+**同白名单域内的自动重定向也暂时拒绝**；需要明确导航最终 URL。
+该路径缓冲单次响应，不承诺支持 SSE/长流页面或网络级内存配额。
+公开 URL 下载另有流式逐跳检查，不使用此路径。
+
+21 项浏览器单元测试、3 项真实 Chromium 资源测试通过；后者覆盖交互、一次性打开、
+截图、外部子资源及重定向，检查目标测试服务器没有收到越界请求。
+测试为本机内容，不代表完整浏览器产品/登录流程兼容性或网络沙箱认证。
+
 安装 `praxile[browser]`，运行 `python -m playwright install chromium`。交互需要 Playwright >=1.48，旧版本缺 WebSocket 拦截能力时失败关闭会话。
 
 在项目配置中显式启用：
