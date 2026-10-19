@@ -103,6 +103,8 @@ R0 是首个实现阶段，不沿用旧 P0/P1 编号，避免与已完成的 V2 
 
 R0-A 第一批实现（2026-10-19）：`praxile/eval/contracts.py` 提供通用任务、环境描述、输入/输出与评分记录；执行视图使用白名单投影，旧 SWE-bench 任务可显式转换且原始序列化不变。`test_benchmark_contracts.py` 与原有 `test_eval_v2_schema.py` 合计 25 项通过。当前验证的是契约、私有字段不泄露、路径拒绝和序列化兼容；实际环境租约、文件只读挂载、运行恢复和真实 benchmark 验收仍未完成。
 
+R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执行、产物读取、取消、超时进程组回收与幂等释放；仅对显式传入的 release 回调委托环境销毁，默认不删除工作区。资源测试通过 `--forked` 隔离运行。该后端不是安全沙箱，目前仅支持 POSIX；reset 明确要求通过 preparer 创建新租约，尚未接入正式 runner。Harbor 管理容器、只读输入挂载、持久化恢复及两个 benchmark 的真实执行均仍未完成，因此环境协议总项不勾选。上游依赖需分别隔离：WorkBuddy 固定 Harbor 0.18.0，JobBench 固定 0.22.0。
+
 ### R0-B WorkBuddy Adapter
 
 官方 [WorkBuddy-Bench](https://github.com/Tencent/workbuddy-bench) 当前基于 Harbor/Docker，含 Code/Web/Office/Security 子集。实现时固定仓库提交、数据修订、镜像摘要和评分配置，不能把 Harness² 的论文子集当成官方全量任务集。
