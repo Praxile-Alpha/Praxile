@@ -229,3 +229,19 @@ python -m praxile.eval.workbuddy_results \
 导入结果可能含私有 rubric、诊断信息及上游异常文本，必须保存在控制面私有目录；输出仅允许新建，权限 0600，不能直接送给演化主体或作为公开报告。摘要及配置一致性校验不提供数字签名，也不能证明评分器未被执行环境篡改。后续真实任务验收仍须验证隔离和来源可信度。
 
 验证：16 项结果导入测试（含上游 ArtifactWriter 输出兼容），与清单/准备/job 测试合计 47 项通过；没有把 fixture 结果冒充真实 benchmark 成绩。
+
+## 首次真实 Office 镜像构建记录
+
+2026-10-19，任务 `api-usage-explain-cli-l3-001`，使用已冻结 Office 副本中的原始 Dockerfile，未改写任务环境。该 Dockerfile 固定下载 `node-v20.18.1-linux-x64.tar.xz`，因此在 ARM64 宿主机上先显式检查 amd64 构建：
+
+```sh
+docker build --platform linux/amd64 \
+  --tag praxile-workbuddy-office-smoke:3e8ad83 \
+  /absolute/office-prepared/tasks/api-usage-explain-cli-l3-001/environment
+```
+
+实际结果：构建在解析 `python:3.12-slim` 基础镜像时失败，Docker 配置的 `registry.docker-cn.com` 返回 TLS handshake timeout。未进入 apt/pip 安装、Agent 执行或官方评分，不能计为任务零分。没有调用模型、没有修改 Docker 全局镜像源。
+
+另一个尚未解决的兼容点：Harbor 0.18.0 的 `default_docker_platform()` 查询 daemon 的 OS/Arch，构建流程据此选择平台；不能假设设置 `DOCKER_DEFAULT_PLATFORM` 就能覆盖它。因此通用 Python 容器 smoke test 通过不代表这一 x64 任务镜像在 ARM daemon 上可直接运行。完整 trial 启动前需要验证明确的 amd64 环境路径或任务官方多架构支持，不能只靠改变 job 标签宣称兼容。
+
+下一步：确认并修复本机镜像源连通性（变更全局配置和重启需用户确认），然后完成真实镜像构建及平台一致性验收，再进行模型任务执行与官方评分。
