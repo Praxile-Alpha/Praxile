@@ -10,6 +10,7 @@ from ...adapters import AdapterPolicy, AgentAdapterV2
 from ...trace import EventStore
 from ...utils import file_lock, read_json, utc_now, write_json
 from .activation import ContextActivationGate
+from .alignment import align_operations
 from .candidate import ContextCandidate
 from .capability import CapabilityProtocol
 from .heldout import HeldoutUseLedger
@@ -384,6 +385,9 @@ def compare_ab_reports(
             ),
             "progress": _progress_comparison(left, right),
             "context_activation": right.get("context_activation"),
+            "operation_alignment": align_operations(
+                event_store.list_events(trace_id=str(left["trace_id"])) if left.get("trace_id") else [],
+                event_store.list_events(trace_id=str(right["trace_id"])) if right.get("trace_id") else []),
             "diff_scope": {
                 "baseline": left.get("diff_scope"),
                 "candidate": right.get("diff_scope"),

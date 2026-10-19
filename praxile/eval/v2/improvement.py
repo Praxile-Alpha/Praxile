@@ -54,6 +54,7 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
             "uncertainty": ["Single pair does not establish statistical significance or transferable causality.",
                             "Metric deltas do not prove the predicted behavior occurred."],
             "prediction_verified": False, "promotion_eligible": False,
+            "operation_alignment": deepcopy(row.get("operation_alignment")),
             "next_action": "collect missing evidence" if confounders else "repeat and perform component ablation",
             "experience_entry": "NO_ENTRY",
         })
