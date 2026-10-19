@@ -79,6 +79,12 @@ Harbor 0.18 和 0.22 各 **4 passed / 11 deselected**，耗时分别 44.26s / 44
 - 模型 endpoint 是 OpenAI-compatible，`model_name` 是 endpoint 接受的原始模型名。优先使用 Harbor 外部凭据代理；不要在 URL、配置文件或命令行放 API key。直接环境变量模式的 `PRAXILE_BENCHMARK_API_KEY` 不是凭据隔离代理。
 - 暂不支持 Harbor MCP/skills 注入，传入即报错；不声称 ATIF 兼容。原始 Praxile JSON 保存在 `agent/praxile-result.json`。
 - usage 缺失保持 unknown；不把 Praxile reward 当成官方得分，不伪造成本为零。
+- Harbor token 导出从原始调用重算，复用 `praxile.trajectory_usage.v1`，并在
+  `AgentContext.metadata.praxile.usage_evidence` 保存完整性和角色覆盖证据。
+  调用数大于实际记录、非法计数、冲突的 token 别名均不产生完整总量；不信任
+  worker 中缓存的 usage 摘要。旧轨迹没有 model_calls 时按现有记录计算，明确
+  标记 `call_count_source=recorded_calls_only`，不能当作全实验成本。空记录保持
+  unknown；明确报告的零 token 则保留为零。独立 judge 与 broker 账本尚未合并。
 
 ## 安装与验证
 

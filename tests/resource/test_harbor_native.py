@@ -224,6 +224,39 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
     assert context.n_output_tokens == 7
 
 
+@pytest.mark.parametrize("calls,count,expected", [
+    ([{"usage": {"input_tokens": 12, "output_tokens": 7}}], 1, (12, 7)),
+    ([{"usage": {"prompt_tokens": 0, "completion_tokens": 0}}], 1, (0, 0)),
+    ([{"usage": {"prompt_tokens": 12, "completion_tokens": 7}}], 2, (None, None)),
+    ([{"usage": {"prompt_tokens": 12, "input_tokens": 13, "completion_tokens": 7}}], 1, (None, 7)),
+    ([{"usage": None}], 1, (None, None)),
+    ([None], 1, (None, None)),
+    (None, 1, (None, None)),
+    ([], 0, (None, None)),
+    ([{"usage": {"prompt_tokens": 12, "completion_tokens": 7}}], True, (None, None)),
+    ([{"usage": {"prompt_tokens": 12, "completion_tokens": 7}}], 0, (None, None)),
+])
+def test_harbor_usage_preserves_coverage_and_rejects_forged_summary(tmp_path, calls, count, expected):
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel),
+                         wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                         workspace="/workspace", base_url="http://127.0.0.1:18888/v1",
+                         model_name="fixture")
+    report = {"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
+              "trajectory": {"model_routing": {"calls": calls}, "cost": {
+                  "model_calls": count, "usage_evidence": {"complete_tokens": {
+                      "prompt_tokens": 999, "completion_tokens": 999}}}}}
+    (tmp_path / "praxile-result.json").write_text(json.dumps(report))
+    context = AgentContext()
+    agent.populate_context_post_run(context)
+    assert (context.n_input_tokens, context.n_output_tokens) == expected
+    evidence = context.metadata["praxile"]["usage_evidence"]
+    assert evidence["schema_version"] == "praxile.trajectory_usage.v1"
+    assert evidence["call_count_source"] == "model_calls"
+    assert evidence["cost_usd"] is None
+
+
 @pytest.mark.parametrize("inherit", [False, True])
 def test_task_dependency_inheritance_is_explicit(tmp_path, inherit):
     from types import SimpleNamespace

@@ -383,6 +383,8 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   旧 `prompt_tokens/completion_tokens` 字段仅保留已知小计兼容语义。该证据仅覆盖
   TrajectoryLogger 记录的调用，未记录的失败请求、独立 judge 和离线演化不能据此
   声称已纳入总成本；金额保持 null，完整账本总项仍不勾选。
+  Harbor 导出已复用该完整性计算并保留 metadata：调用数与记录不一致时拒绝
+  输出完整 token 总量，旧轨迹注明 recorded_calls_only，不信任缓存摘要。
   A/B 汇总修复：缺失/非法 token、工具次数、延迟、费用及进展计数不再补零；
   缺一侧则差值 unknown，缺一任务则总量 unknown，并报告完整配对覆盖率。
   效率证据不足时不宣称节省，客观任务结果单独保留。完整全角色成本及中性

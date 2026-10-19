@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 from harbor.agents.base import BaseAgent
 from ..utils import new_id, write_json
+from ..usage_evidence import summarize_usage
 
 
 class PraxileAgent(BaseAgent):
@@ -304,19 +305,27 @@ class PraxileAgent(BaseAgent):
         if result.get("schema_version") != "praxile.native_benchmark_run.v1":
             raise ValueError("unsupported native worker result")
         trajectory = result["trajectory"]
-        calls = trajectory.get("model_routing", {}).get("calls", [])
-        # Missing usage stays unknown, rather than becoming a free run.
-        for field, keys in (("n_input_tokens", ("prompt_tokens", "input_tokens")),
-                            ("n_output_tokens", ("completion_tokens", "output_tokens"))):
-            values = [next((call.get("usage", {})[key] for key in keys if key in call.get("usage", {})), None)
-                      for call in calls]
-            setattr(context, field, None)
-            if values and all(type(value) is int and value >= 0 for value in values):
-                setattr(context, field, sum(values))
+        routing = trajectory.get("model_routing")
+        calls = routing.get("calls") if isinstance(routing, dict) else None
+        records_valid = isinstance(calls, list)
+        calls = calls if records_valid else []
+        cost = trajectory.get("cost")
+        count_present = isinstance(cost, dict) and "model_calls" in cost
+        declared_count = cost.get("model_calls") if count_present else len(calls)
+        count_valid = type(declared_count) is int and declared_count >= len(calls)
+        evidence = summarize_usage(calls, declared_count if count_valid else len(calls))
+        evidence["call_count_source"] = "model_calls" if count_present else "recorded_calls_only"
+        evidence["call_count_valid"] = count_valid
+        # Recompute from raw records, never trust a cached usage summary.
+        if not records_valid or not count_valid or not calls:
+            evidence["complete_tokens"] = {key: None for key in evidence["complete_tokens"]}
+        context.n_input_tokens = evidence["complete_tokens"]["prompt_tokens"]
+        context.n_output_tokens = evidence["complete_tokens"]["completion_tokens"]
         context.metadata = {**(context.metadata or {}), "praxile": {
             "wheel_sha256": self.wheel_sha256, "trajectory_task_id": trajectory.get("task_id"),
             "result": trajectory.get("result"), "official_evaluation": "external",
             "experience_mode": result["experience_mode"],
+            "usage_evidence": evidence,
         }}
 
 
