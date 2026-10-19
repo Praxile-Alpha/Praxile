@@ -5,6 +5,7 @@ import pytest
 from praxile.config import Config, ProjectPaths, default_config
 from praxile.eval.native_worker import load_task_input
 from praxile.eval.native_worker import benchmark_config
+from praxile.eval.native_worker import run_native
 from praxile.task_analyzer import TaskAnalyzer
 from praxile.task_input import TaskInput
 
@@ -59,3 +60,11 @@ def test_benchmark_request_timeout_is_explicit_and_bounded(tmp_path):
         with pytest.raises(ValueError, match="model_timeout_seconds"):
             benchmark_config(tmp_path, model="fixture", base_url="http://localhost/v1", max_steps=3,
                              model_timeout_seconds=invalid)
+
+
+@pytest.mark.parametrize("directory", ["/tmp/out", "../out", ".", ""])
+def test_output_directory_rejected_before_runtime(tmp_path, directory):
+    with pytest.raises(ValueError, match="output directory"):
+        run_native(tmp_path, "Create memo", model="fixture", base_url="http://localhost/v1", max_steps=1,
+                   output_directory=directory)
+    assert not (tmp_path / ".praxile").exists()

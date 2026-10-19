@@ -205,6 +205,12 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+产物回收边界增补：原生 worker/Harbor 可显式配置输出目录，执行后生成独立
+artifact_inventory，区分不存在、空、格式问题、不支持和未检查完；来源是
+observed_outputs，不冒充用户契约。模型 completed 不覆盖机器检查 issues。
+旧真实无效 DOCX 两文件离线复查均失败；完整任务要求满足和官方评分仍未完成。
+详见 DOCUMENT_TOOLS.zh-CN.md。
+
 受控生成增补：create_docx 接入声明式标题/段落/列表/表格/分页符，禁用脚本和
 模板执行；仅新建、不覆盖、同目录 staging 原子发布。权限、dry-run、快照和
 轨迹已接入，回滚仅删除摘要匹配的新文件，保留后续人工修改。真实 DOCX 回读和

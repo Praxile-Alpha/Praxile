@@ -37,6 +37,8 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
     thread.start()
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    (workspace / "output").mkdir()
+    (workspace / "output/fake.docx").write_text("not a ZIP")
     instruction = tmp_path / "instruction.txt"
     instruction.write_text("Read the available project and summarize it.")
     extra = []
@@ -51,6 +53,7 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
             sys.executable, "-m", "praxile.eval.native_worker", "--workspace", str(workspace),
             "--instruction", str(instruction), "--result", str(result), "--model", "fixture",
             "--base-url", f"http://127.0.0.1:{server.server_port}/v1", "--max-steps", "2",
+            "--output-directory", "output",
         ] + extra, capture_output=True, text=True, timeout=20)
     finally:
         server.shutdown()
@@ -62,6 +65,8 @@ def test_worker_runs_real_native_loop_against_fixture_endpoint(tmp_path, structu
     assert report["official_evaluation"] == "not_run"
     assert report["trajectory"]["cost"]["prompt_tokens"] == 12
     assert report["trajectory"]["result"]["status"] == "completed"
+    assert report["artifact_inventory"]["status"] == "issues"
+    assert report["artifact_inventory"]["official_evaluation"] == "not_run"
     if structured:
         assert report["trajectory"]["task_input"]["source"] == "task.txt"
         assert any("If asked to modify a database" in message["content"]

@@ -59,6 +59,27 @@ Harbor 适配器新增 `inherit_task_packages: true` 显式选项，允许 Praxi
 
 ## 验证与剩余边界
 
+### 原生产物清单检查
+
+Harbor 的 `output_directory: "output"` 显式选项（worker 参数
+`--output-directory output`）在执行后产生独立 `artifact_inventory`。旧调用未
+配置时行为不变。目录必须在 workspace 下，不能传根目录或 `..`。扫描不跟随
+符号链接，最多 200 个文件/目录条目、单文件 10 MB、30 秒总检查预算；文档
+解析复用既有 artifact_openers，单次最多 15 秒。结果含文件摘要、大小和原因。
+
+状态区分 missing / empty / issues / clean_structure / incomplete /
+inspection_error / blocked。未知格式保留 unsupported，不能算通过。
+扫描完成不等于文档有效，格式有效也不等于事实正确或满足用户要求。
+清单来自实际输出而非用户约定，source=observed_outputs，绝不伪装成
+user_request contract；quality_verified 与 required_outputs_verified 均为 false。
+模型轨迹原始结果保持不变，消费者必须单独查看 artifact_inventory 和正式
+verifier，不能只依赖进程结束或模型 completed。检查仍在 worker 环境执行，
+不是独立可信见证；官方评分继续物理隔离。
+
+4 项资源测试验证伪 DOCX、真实 DOCX、空/缺失/未知文件、符号链接与扫描上限。
+worker fixture 端到端验证模型 completed 与清单 issues 可同时存在。旧真实
+实验的两个无效产物离线复查均判 failed，分别为解析失败和空文件；未调用模型。
+
 验证记录：5 项资源测试覆盖真实格式、分页/字符续读、损坏文件与超时返回；
 6 项 schema 测试覆盖参数范围和禁止批量并发。另用冻结 JobBench easy 任务
 的四份公开参考材料执行首页/首行提取，均成功：PDF 分别 1、29、16 页，

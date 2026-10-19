@@ -60,9 +60,13 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
 
 
 def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url: str, max_steps: int,
-               model_timeout_seconds: int = 30) -> dict[str, Any]:
+               model_timeout_seconds: int = 30, output_directory: str | None = None) -> dict[str, Any]:
     if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
+    if output_directory is not None:
+        path = Path(output_directory)
+        if path.is_absolute() or ".." in path.parts or not path.parts:
+            raise ValueError("output directory must be workspace-relative")
     config = benchmark_config(root, model=model, base_url=base_url, max_steps=max_steps,
                               model_timeout_seconds=model_timeout_seconds)
     runtime = AgentRuntime(config)
@@ -74,8 +78,12 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
             close = getattr(getattr(provider, "transport", None), "close", None)
             if close:
                 close()
-    return {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": trajectory,
-            "official_evaluation": "not_run", "experience_mode": "fresh_disabled"}
+    result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": trajectory,
+              "official_evaluation": "not_run", "experience_mode": "fresh_disabled"}
+    if output_directory is not None:
+        from ..artifact_inventory import inspect_outputs
+        result["artifact_inventory"] = inspect_outputs(root, output_directory)
+    return result
 
 
 def main() -> None:
@@ -87,6 +95,7 @@ def main() -> None:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--max-steps", type=int, required=True)
     parser.add_argument("--model-timeout-seconds", type=int, default=30)
+    parser.add_argument("--output-directory")
     parser.add_argument("--capability-file", type=Path)
     parser.add_argument("--task-body-file")
     parser.add_argument("--task-body-sha256")
@@ -103,7 +112,7 @@ def main() -> None:
         os.environ["PRAXILE_BENCHMARK_API_KEY"] = capability
     result = run_native(args.workspace, instruction,
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps,
-                        model_timeout_seconds=args.model_timeout_seconds)
+                        model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

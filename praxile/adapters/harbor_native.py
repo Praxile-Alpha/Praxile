@@ -25,7 +25,13 @@ class PraxileAgent(BaseAgent):
                  workspace: str, base_url: str, max_steps: int = 50,
                  timeout_seconds: int = 900, credential_file: str | None = None,
                  task_body_file: str | None = None, task_body_sha256: str | None = None,
-                 inherit_task_packages: bool = False, model_timeout_seconds: int = 30, **kwargs):
+                 inherit_task_packages: bool = False, model_timeout_seconds: int = 30,
+                 output_directory: str | None = None, **kwargs):
+        if output_directory is not None:
+            output_path = PurePosixPath(output_directory)
+            if output_path.is_absolute() or ".." in output_path.parts or not output_path.parts:
+                raise ValueError("output directory must be workspace-relative")
+        self.output_directory = output_directory
         if type(model_timeout_seconds) is not int or not 1 <= model_timeout_seconds <= 110:
             raise ValueError("model_timeout_seconds must be an integer in [1, 110]")
         self.model_timeout_seconds = model_timeout_seconds
@@ -146,11 +152,14 @@ class PraxileAgent(BaseAgent):
             argv.extend(["--capability-file", capability_file])
         if self.task_body_file:
             argv.extend(["--task-body-file", self.task_body_file, "--task-body-sha256", self.task_body_sha256])
+        if self.output_directory is not None:
+            argv.extend(["--output-directory", self.output_directory])
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
                   "wheel_sha256": self.wheel_sha256, "result_available": False,
                   "inherit_task_packages": self.inherit_task_packages,
+                  "output_directory": self.output_directory,
                   "model_timeout_seconds": self.model_timeout_seconds}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:
