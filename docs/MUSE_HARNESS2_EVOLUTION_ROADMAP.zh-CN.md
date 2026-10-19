@@ -321,6 +321,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   激活文本实际进入 fixture 模型请求、弃权文本未进入。修复宿主结果回收仍只接受
   baseline 的遗漏，新增身份与模式核验。无付费调用、不代表任务收益；规范化事件
   与完整双 arm 仍待完成，见 native-candidate-docker-20261019.json。
+  规范化事件增补：Harbor 回收时生成与结果文件摘要绑定的 praxile-events.json，
+  分离 CONTEXT_ACTIVATION / CONTEXT_INJECT，并验证实际注入标记及内容摘要；
+  不改变旧 baseline 的转换。当前为回收时投影，非实时流，EventStore 导入与
+  双 arm 编排未完成，完整项保持未勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

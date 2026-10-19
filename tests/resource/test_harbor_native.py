@@ -655,6 +655,12 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
                 observed = paths.agent_dir / "context-observed.json"
                 await environment.download_file("/tmp/context-observed.json", observed)
                 assert json.loads(observed.read_text())["sentinel"] is expected
+                projection = json.loads((paths.agent_dir / "praxile-events.json").read_text())
+                assert projection["source_result_sha256"] == hashlib.sha256(
+                    (paths.agent_dir / "praxile-result.json").read_bytes()).hexdigest()
+                normalized = projection["events"]
+                assert sum(event["type"] == "CONTEXT_ACTIVATION" for event in normalized) == 1
+                assert sum(event["type"] == "CONTEXT_INJECT" for event in normalized) == int(expected)
             if bound_contract:
                 trajectory = json.loads((paths.agent_dir / "praxile-result.json").read_text())["trajectory"]
                 assert trajectory["deliverable_verification"]["status"] == "failure"

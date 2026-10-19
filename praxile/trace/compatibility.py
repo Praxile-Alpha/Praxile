@@ -1,12 +1,54 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from copy import deepcopy
 from collections.abc import Iterable
 from typing import Any
 
 from ..interop import PRAXILE_TRAJECTORY_SCHEMA
 from ..utils import stable_hash, utc_now
 from .schema import AGENT_EVENT_SCHEMA_VERSION, AgentEvent, TokenUsage
+
+
+def native_run_to_events(result: dict[str, Any]) -> list[AgentEvent]:
+    """Normalize the worker result envelope, including development activation evidence."""
+    if (not isinstance(result, dict) or result.get("schema_version") != "praxile.native_benchmark_run.v1"
+            or not isinstance(result.get("trajectory"), dict)):
+        raise ValueError("invalid native run result")
+    trajectory = deepcopy(result["trajectory"])
+    mode = result.get("experience_mode")
+    if mode == "fresh_disabled":
+        if result.get("development_context") is not None or trajectory.get("experimental_context") is not None:
+            raise ValueError("baseline cannot contain experimental context")
+    elif mode == "development_candidate":
+        context = result.get("development_context")
+        decision = context.get("activation") if isinstance(context, dict) else None
+        if (not isinstance(decision, dict) or context.get("schema_version") != "praxile.native_development_context.v1"
+                or context.get("track") != "development" or type(context.get("injected")) is not bool
+                or type(decision.get("activated")) is not bool
+                or context.get("promotion_eligible") is not False or context.get("permission_granted") is not False
+                or (context["injected"] and not decision["activated"])):
+            raise ValueError("invalid native context activation")
+        experimental = trajectory.get("experimental_context")
+        actual_injection = experimental.get("injected") if isinstance(experimental, dict) else False
+        if actual_injection is not context["injected"]:
+            raise ValueError("native context injection evidence mismatch")
+        content_digest = None
+        if context["injected"]:
+            content = experimental.get("content")
+            if not isinstance(content, str) or not content:
+                raise ValueError("injected context content is missing")
+            content_digest = hashlib.sha256(content.encode()).hexdigest()
+            if content_digest != experimental.get("sha256"):
+                raise ValueError("injected context digest mismatch")
+        trajectory["native_development_context"] = {
+            "candidate_digest": context.get("candidate_digest"), "task_body_sha256": context.get("task_body_sha256"),
+            "activation": deepcopy(decision), "injected": context["injected"],
+            "content_sha256": content_digest, "track": "development"}
+    else:
+        raise ValueError("unsupported native experience mode")
+    return v1_trajectory_to_events(trajectory)
 
 
 def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
@@ -80,6 +122,18 @@ def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
             "legacy_schema": str(trajectory.get("schema") or PRAXILE_TRAJECTORY_SCHEMA),
         },
     )
+
+    development = trajectory.get("native_development_context")
+    if development is not None:
+        activation = add("CONTEXT_ACTIVATION", "control_plane", {
+            "source": "native_development_context", "candidate_digest": development["candidate_digest"],
+            "task_body_sha256": development["task_body_sha256"], "track": "development",
+            "decision": development["activation"], "projection": "native_result_envelope"})
+        if development["injected"]:
+            add("CONTEXT_INJECT", "agent", {
+                "source": "native_development_context", "candidate_digest": development["candidate_digest"],
+                "content_sha256": development["content_sha256"], "track": "development",
+                "projection": "native_result_envelope"}, evidence_refs=("event:" + activation.event_id,))
 
     loaded_assets = trajectory.get("loaded_assets") or []
     if loaded_assets:

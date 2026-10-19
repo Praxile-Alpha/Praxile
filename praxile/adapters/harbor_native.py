@@ -390,6 +390,12 @@ class PraxileAgent(BaseAgent):
                         or development.get("promotion_eligible") is not False
                         or development.get("permission_granted") is not False):
                     raise ValueError("native development result identity or activation mismatch")
+            from ..trace import native_run_to_events
+            events = native_run_to_events(result)
+            write_json(self.logs_dir / "praxile-events.json", {
+                "schema_version": "praxile.native_event_projection.v1",
+                "source_result_sha256": hashlib.sha256(temporary.read_bytes()).hexdigest(),
+                "events": [event.to_dict() for event in events]})
             temporary.replace(self.logs_dir / "praxile-result.json")
             self.populate_context_post_run(context)
         finally:

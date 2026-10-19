@@ -1,4 +1,4 @@
-from .compatibility import events_to_v1_trajectory, v1_trajectory_to_events
+from .compatibility import events_to_v1_trajectory, v1_trajectory_to_events, native_run_to_events
 from .schema import (
     AGENT_EVENT_SCHEMA_VERSION,
     ARTIFACT_SCHEMA_VERSION,
@@ -25,4 +25,5 @@ __all__ = [
     "TraceSchemaError",
     "events_to_v1_trajectory",
     "v1_trajectory_to_events",
+    "native_run_to_events",
 ]

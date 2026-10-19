@@ -51,6 +51,21 @@ Harbor 0.18/0.22 各 31 passed、9 skipped，包括冻结与参数转发；本�
 证据见 `results/native-candidate-docker-20261019.json`。该测试不证明模型任务能力、
 候选收益或完整 benchmark 双臂实验已完成。
 
+### 规范化上下文事件
+
+宿主回收结果时调用 `native_run_to_events`，生成 `praxile-events.json`，绑定原始
+结果文件 SHA-256。开发候选总有独立 CONTEXT_ACTIVATION；只有 result 与轨迹中的
+实际 injected 标记一致且文本摘要正确时，才产生 CONTEXT_INJECT，并引用激活事件。
+激活但被门禁提前终止不伪造注入。上下文事件仅保存候选/正文摘要，不复制建议正文。
+baseline 沿用原 V1 转换，事件 ID 不改变。事件是结果回收时的确定性投影，不是
+实时流；投影时间沿用轨迹起始时间，不声称逐事件实测时间或独立来源认证。
+原始 result 仍是完整源记录，现有 `events_to_v1_trajectory` 不是新开发元数据的
+无损往返接口；消费端应读取规范化事件或原始 result。统一 EventStore 导入与
+双 arm 编排仍需后续接入。
+本轮验证：772 项单元测试通过；两版 Harbor 本地回归各 31 passed；Harbor 0.22
+四种真实 Docker 候选路径 4 passed（44.16 秒），检查激活/注入事件数量及源文件
+摘要，0 付费调用。复用前轮 worker wheel，变更仅在宿主规范化/回收代码。
+
 ### 固定 worker 依赖
 
 适配器接受可选 `dependency_wheels`，每项严格为本机 `path` 和完整 `sha256`：
