@@ -62,6 +62,44 @@ def _repo(path: Path) -> str:
     ).stdout.strip()
 
 
+def test_development_cycle_reexecutes_composition_and_keeps_base(tmp_path):
+    from praxile.eval.v2.development_cycle import DevelopmentContextCycle
+    source = tmp_path / "source"
+    commit = _repo(source)
+    task = EvalTask(task_id="owner__repo-dev", instruction="Fix issue",
+                   repository=RepositorySpec("owner/repo", commit, "https://invalid.example/repo.git"),
+                   evaluation=SWEbenchEvaluationSpec("fixture", "dev"))
+    tasks = EvalTaskSet("dev", "fixture", "dev", (task,))
+    config = Config.load(tmp_path / "control")
+    candidates = [ContextCandidate(candidate_id=name, version="1", title=name,
+        candidate_type="context_policy", context_item={"content": text}, confidence=0.5,
+        evidence_refs=("event:prior",), source_task_ids=(task.task_id,),
+        expected_effect={"hypothesis": "Reduce irrelevant reads"})
+        for name, text in (("first", "Read focused files"), ("second", "Check tests first"),
+                           ("composed", "Check tests then read focused files"))]
+    adapter = FixtureAgentAdapter(artifacts=[FixtureArtifact("workspace_patch", "candidate.patch",
+        "sha256:" + hashlib.sha256((source / "candidate.patch").read_bytes()).hexdigest())])
+    cycle = DevelopmentContextCycle(config.paths.state, EventStore(config.paths))
+    kwargs = dict(candidates=candidates[:2], composed_candidate=candidates[2],
+        development_task_ids=[task.task_id], heldout_task_ids=["heldout"], cycle_id="dev-cycle",
+        adapter=adapter, evaluator=PassingEvaluator(), baseline_policy=AdapterPolicy(policy_id="base",
+        budgets={"wall_timeout_seconds": 30}, settings={"workspace_isolated": True}),
+        model={"model_name_or_path": "fixture"}, source_overrides={"owner/repo": source})
+    report = cycle.run(tasks, **kwargs)
+    assert len(report["experiments"]) == 3
+    assert report["decision"] == "KEEP_BASE"
+    assert not report["adopted"] and not report["promotion_eligible"]
+    for role in ("first", "second", "composition"):
+        root = config.paths.state / "eval/v2/experiments" / f"dev-cycle.{role}"
+        assert read_json(root / "manifest.json", {})["track"] == "development"
+        assert read_json(root / "report.json", {})["improvement_episodes"]
+    assert cycle.run(tasks, resume=True, **kwargs) == report
+    with pytest.raises(EvalSchemaError, match="resume"):
+        cycle.run(tasks, **kwargs)
+    with pytest.raises(EvalSchemaError, match="development split"):
+        cycle.run(tasks, **{**kwargs, "heldout_task_ids": [task.task_id]})
+
+
 def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tmp_path: Path) -> None:
     source = tmp_path / "source"
     commit = _repo(source)

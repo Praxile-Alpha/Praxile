@@ -75,7 +75,8 @@ class ControlledABExperiment:
                 raise EvalSchemaError("proxy eval hypothesis differs from the capability protocol")
             if not set(proxy_eval.task_ids) <= set(capability_protocol.evaluation.development_task_ids):
                 raise EvalSchemaError("proxy eval may only reference development tasks")
-        candidate.validate_clean_track({task.task_id for task in task_set.tasks})
+        if not development_only:
+            candidate.validate_clean_track({task.task_id for task in task_set.tasks})
         activation_plan = ContextActivationGate().plan(candidate, task_set.tasks)
         representation_plan = (
             ExperienceRepresentationRouter().plan(candidate, task_set.tasks, activation_plan)

@@ -1,5 +1,29 @@
 # 配对实验解释记录
 
+## 开发任务组合实验
+
+`praxile.eval.v2.development_cycle.DevelopmentContextCycle(state_root, event_store)`
+提供显式 opt-in Python API。`run(task_set, ...)` 接收 `candidates=[first, second]`、
+`composed_candidate`、`development_task_ids`、`heldout_task_ids`、`cycle_id`，以及
+原 A/B 的 adapter/evaluator/baseline_policy/model/source_overrides 参数。
+三条候选均须有 `expected_effect.hypothesis`；组合候选必须使用独立 ID。
+
+所有候选在开始执行前冻结，不根据 held-out 反馈组合。工作流执行三组独立 A/B，
+也就是六个 arm，而不是复用上一组 baseline；调用方必须按该成本配置每个 arm 的
+预算。产物位于 `eval/v2/development_cycles/<cycle_id>/`，包含不可变 manifest、
+progress 和 report；三个实际实验仍存入现有 experiments/runs/trace 目录。
+`resume=True` 恢复已存在子实验，计划变化拒绝恢复；失败不跳过组合验证。
+
+开发任务名单必须与 task set 精确一致且与 held-out 名单无交集；候选来源不能
+包含声明的 held-out 任务。开发轨道允许引用本任务证据，clean 轨道限制不变。
+这些名单由调用方声明，不能替代可信 benchmark split 与物理信息隔离。
+
+只有组合本身的逐任务结果存在客观提升、无回归和混杂、执行不变量通过时，
+返回 `TASK_LOCAL_TRIAL_RECOMMENDED`；其他情况返回 `KEEP_BASE`。单项结果再好
+也不会替组合授予资格。始终 `adopted=false`、`promotion_eligible=false`、
+`experience_entry=NO_ENTRY`，不改生产策略或长期资产。当前尚无自动 proposer/
+composer 或 CLI，真实模型质量、可迁移收益和完整 R2-C 验收均未完成。
+
 受控 Context A/B 的分析报告新增 `improvement_episodes`，逐 task 保存 `praxile.improvement_episode.v1`。沿用原 report.json，不新增第二套数据库，也不改变既有 promotion/terminal-selection 门禁。
 
 每项记录包含：
