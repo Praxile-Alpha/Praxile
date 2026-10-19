@@ -109,6 +109,12 @@ R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执
 
 ### R0-B WorkBuddy Adapter
 
+120 秒设计请求复验：`ed38302` 的 M3.1 Flash 在 87.560 秒完整返回，但 8000 输出
+token 全部为 reasoning，最终正文为空、length 截断；无候选/无晋升。官方文档
+确认默认 effort=max，下一步应冻结较低强度的新配置，不继续盲目增加预算。
+本轮只补齐 effort 枚举与请求正文测试，没有自动更改用户配置或追加模型请求。
+结果见 `results/office-flash-durable-design-120s-20261019.json`；有效经验闭环仍未完成。
+
 最新原生设计入口验收（2026-10-19）：`eval design-native-context` 已与旧设计入口共享
 请求意图、冻结预算、轨迹和拒绝未知请求重放的恢复逻辑。实际通过其服务入口向
 MiniMax M3.1 Flash 发送 7 条公开投影证据，零重试、无 fallback；一次请求 60 秒后

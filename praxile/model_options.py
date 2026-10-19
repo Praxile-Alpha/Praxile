@@ -6,7 +6,7 @@ def validate_request_options(value):
     if not isinstance(value, dict) or set(value) - {"thinking", "reasoning_effort", "reasoning_split"}:
         raise ValueError("request_options permits only thinking, reasoning_effort and reasoning_split")
     if "reasoning_effort" in value and (not isinstance(value["reasoning_effort"], str)
-            or value["reasoning_effort"] not in {"none", "minimal", "low", "medium", "high"}):
+            or value["reasoning_effort"] not in {"none", "minimal", "low", "medium", "high", "xhigh", "max"}):
         raise ValueError("invalid request_options.reasoning_effort")
     if "reasoning_split" in value and type(value["reasoning_split"]) is not bool:
         raise ValueError("request_options.reasoning_split must be boolean")

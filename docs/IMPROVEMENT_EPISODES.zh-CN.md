@@ -277,6 +277,37 @@ praxile eval design-native-context /absolute/path/to/native-result.json \
 内部重试。需要总截止仍应使用 supervisor，例如单请求 120 秒、进程 150 秒；
 这是下一次实验配置示例，并非已经完成更长预算的验收。
 
+120 秒预算的后续实测（`ed38302`）：新的 `office-flash-durable-002` 使用同一
+7 条证据、8000 输出上限、零重试、无 fallback、150 秒进程截止。HTTP 单次响应
+耗时 87.560 秒，报告 2105 input / 8000 output，其中 8000 reasoning，最终正文
+为空且 finish_reason=length。设计器拒绝截断响应，进程退出码 1，未生成候选，
+未启动 probe/晋升。费用未知，不能把本次已知 usage 用于补全先前超时请求的费用。
+见 `results/office-flash-durable-design-120s-20261019.json`；本轮没有第二次付费请求。
+
+2026-10-19 核对 [MiniMax 官方调用文档](https://platform.minimax.io/docs/guides/text-generation)：
+M3.1 Flash 推理不可关闭；省略 effort 默认 max，OpenAI-compatible 协议使用
+`reasoning_effort`，接受 low/medium/high/xhigh/max。降低推理开销应显式配置强度，
+不应发送已实测被拒绝的 thinking=disabled。下列只是已有 provider 的角色配置片段，
+不是通用默认，也不是已完成 low 强度实测：
+
+```json
+{
+  "model_roles": {
+    "proposal_composer": {
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "request_options": {"reasoning_effort": "low"}
+    }
+  }
+}
+```
+
+Praxile 原先支持 low/medium/high，本轮补齐 xhigh/max 的有界枚举；不自动改变任何
+角色配置，不把同一参数跨不兼容 provider 降级。测试验证参数进入请求正文，且
+不覆盖消息或 token 预算。参数通过本地校验不代表任意 provider/model 都支持；
+采用新 effort 必须冻结新设计配置与 ID。官方默认 max 与本次推理耗尽现象一致，
+但尚未通过对照证明因果，也没有 low 强度生成有效候选的实测证据。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
