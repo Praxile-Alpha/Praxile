@@ -651,6 +651,15 @@ WorkBuddy 要求隔离 Harbor 0.18.0，JobBench 要求 0.22.0。入口重建并�
 此入口的排序/拒绝/异常处理已有 fixture 测试，两个上游版本的 API 解析已验证；
 真实两臂运行、强杀后的残留资源恢复、来源认证和外部环境冻结仍待验收。
 
+2026-10-19 完整 Job 层 Docker 复验：Harbor 0.22.0 下 active/abstain 两组各执行
+baseline/candidate，共四个真实 Trial，2 项测试通过（40.65 秒）。使用已冻结
+worker wheel 和当前宿主适配器；四次本地 fixture 模型请求，零付费请求。
+核验了原生 completed、实际请求中的候选存在/缺失、代理撤销、fixture verifier
+结果以及 Trial 到 native result/events 的摘要绑定。首次测试曾因 fixture 把 bytes
+当 JSON 对象而产生 502，不能把当时固定 verifier 的分数当成功；修复后增加了
+原生完成状态断言。摘要见 `results/native-pair-job-docker-20261019.json`。
+此结果补齐 Job/Trial 执行通道，不代表官方任务质量、真实 A/B 收益或恢复能力。
+
 ## 官方 Trial 与 Native Trace 的绑定
 
 新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。

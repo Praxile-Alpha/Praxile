@@ -1,0 +1,34 @@
+{
+  "schema_version": "praxile.native_pair_job_acceptance.v1",
+  "date": "2026-10-19",
+  "implementation_revision": "7608527",
+  "harbor_version": "0.22.0",
+  "worker_wheel_sha256": "c349f27a120626f6460e22828d7a1247db68c454ba71d4ce5d8ab8ebfbfe3424",
+  "worker_note": "Existing development-context worker wheel; current host adapter and pair runner from checkout. Wheel was not rebuilt or published for this test.",
+  "environment": "macOS ARM64 Docker Desktop; fixture Dockerfile based on python:3.12-slim",
+  "test": "tests/resource/test_native_pair_docker.py::test_real_harbor_job_pair_runs_native_workers",
+  "results": {"passed": 2, "seconds": 40.65, "trials": 4, "fixture_model_requests": 4},
+  "paid_model_calls": 0,
+  "initial_failure": "Fixture tried json.dumps on broker bytes, causing upstream 502. Both workers returned needs_human despite constant fixture verifier reward. Corrected byte inspection and added completed-state assertions.",
+  "verified": [
+    "Real Harbor Job.create/run and Docker Trial lifecycle for both arms",
+    "Sequential baseline/candidate execution",
+    "Native worker completed states",
+    "Candidate active: baseline sentinel absent, candidate sentinel present",
+    "Candidate out of scope: sentinel absent from both arms, candidate abstained",
+    "Broker revoked after model calls",
+    "Fixture verifier reward recorded by Harbor",
+    "Trial metadata binds source result, normalized events and experience mode"
+  ],
+  "warnings": ["Four upstream Task.checksum deprecation warnings"],
+  "official_benchmark_result": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Fixture task/model/verifier, not WorkBuddy or JobBench official task acceptance",
+    "Verifier intentionally returns a constant reward; no task quality or performance inference",
+    "No paid MiniMax execution or semantic judge in this test",
+    "No crash recovery, daemon loss or cancelled full-Job cleanup acceptance",
+    "Image tag is not a fully frozen environment identity",
+    "WorkBuddy Harbor 0.18 full-Job pair not covered"
+  ]
+}

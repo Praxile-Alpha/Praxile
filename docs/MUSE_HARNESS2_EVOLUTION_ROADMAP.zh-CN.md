@@ -341,6 +341,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   官方 Job.create/run 顺序执行两臂；逐臂检查输入变化，异常/取消不启动下一臂，
   已有运行不自动恢复或重试。9 项 fixture 测试通过；真实双臂、资源强杀恢复与
   评分汇总仍缺，jobs_returned 不等于通过，总项保持未勾选。
+  完整 Job Docker 复验：Harbor 0.22 下 active/abstain 两组共四个 Trial，2 项测试
+  通过；原生完成、请求注入差异、代理撤销、fixture 评分及 trace 绑定均校验。
+  首次 fixture bytes 错误导致 502 已记录并修复。零付费调用，不是官方 benchmark
+  成绩；真实任务、0.18 完整 Job 与恢复仍缺，完整项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
