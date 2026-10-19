@@ -19,17 +19,29 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.slow]
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL") or version("harbor") != "0.22.0",
-                   reason="explicit wheel, Harbor 0.22 and Docker required")
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL") or version("harbor") not in {"0.18.0", "0.22.0"},
+                   reason="explicit wheel, supported Harbor and Docker required")
 @pytest.mark.parametrize("active", [True, False])
 def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active):
+    workbuddy = version("harbor") == "0.18.0"
+    identities = []
+    if workbuddy:
+        pytest.importorskip("workbuddy_bench.runner.docker_environment")
+        from praxile.adapters.harbor_native import WorkBuddyPraxileAgent
+        original_setup = WorkBuddyPraxileAgent.setup
+        async def setup_with_identity_check(agent, environment):
+            await original_setup(agent, environment)
+            observed = await environment.exec("id -u", timeout_sec=10)
+            assert observed.return_code == 0 and int(observed.stdout.strip()) != 0
+            identities.append(environment.default_user)
+        monkeypatch.setattr(WorkBuddyPraxileAgent, "setup", setup_with_identity_check)
     wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
     task = tmp_path / "task"
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "instruction.md").write_text("Summarize the available project.")
     (task / "task.toml").write_text(
-        '[agent]\ntimeout_sec=120\n[verifier]\ntimeout_sec=30\n'
+        '[agent]\ntimeout_sec=120\n' + ('user="dev"\n' if workbuddy else '') + '[verifier]\ntimeout_sec=30\n'
         '[environment]\nbuild_timeout_sec=120\nworkdir="/workspace"\n')
     (task / "environment/Dockerfile").write_text(
         "FROM python:3.12-slim\nRUN mkdir -p /workspace\nWORKDIR /workspace\n")
@@ -57,6 +69,9 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
             "kwargs": {"wheel_path": str(wheel), "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
                 "workspace": "/workspace", "base_url": "https://fixture.invalid/v1",
                 "credential_file": str(key), "max_steps": 2, "timeout_seconds": 90}}]}
+    if workbuddy:
+        job["agents"][0]["import_path"] = "praxile.adapters.harbor_native:WorkBuddyPraxileAgent"
+        job["environment"]["import_path"] = "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment"
     root = tmp_path / "pair"
     root.mkdir()
     plan, arms = prepare_pair(job, candidate, repository="fixture/repo" if active else "other/repo", output_dir=root)
@@ -67,6 +82,8 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     assert state["status"] == "jobs_returned"
     assert observed == [False, active]
     assert brokers and all(broker.status()["revoked"] for broker in brokers)
+    if workbuddy:
+        assert identities == ["dev", "dev"]
     for arm in ("baseline", "candidate"):
         trials = list((tmp_path / "jobs" / ("native-pair-" + arm)).glob("*/result.json"))
         assert len(trials) == 1

@@ -660,6 +660,15 @@ worker wheel 和当前宿主适配器；四次本地 fixture 模型请求，零�
 原生完成状态断言。摘要见 `results/native-pair-job-docker-20261019.json`。
 此结果补齐 Job/Trial 执行通道，不代表官方任务质量、真实 A/B 收益或恢复能力。
 
+Harbor 0.18 的对应复验同日完成：使用上游 WorkBuddy
+`625b2233093ae4f23e76be28c1f341d41cc70373` 的 Docker 环境插件和
+`WorkBuddyPraxileAgent`，active/abstain 两组共四个 Trial，2 项通过（50.22 秒）。
+每个 Trial 在 setup 后实际执行 `id -u`，确认非 root 且默认用户为 `dev`；同时
+检查候选请求差异、原生完成、代理撤销和 trace 绑定。零付费调用，仍为 fixture
+评分脚本，不含官方 CompositeVerifier、image mount 或真实任务质量验收。
+记录见 `results/native-pair-workbuddy-job-20261019.json`。可在安装上游插件的
+Harbor 0.18 隔离环境，使用同一个带 `PRAXILE_TEST_WHEEL` 的测试命令复验。
+
 ## 官方 Trial 与 Native Trace 的绑定
 
 新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。

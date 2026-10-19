@@ -1,0 +1,32 @@
+{
+  "schema_version": "praxile.native_pair_job_acceptance.v1",
+  "date": "2026-10-19",
+  "implementation_revision": "5f041e8",
+  "harbor_version": "0.18.0",
+  "workbuddy_revision": "625b2233093ae4f23e76be28c1f341d41cc70373",
+  "environment_plugin": "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment",
+  "executor": "praxile.adapters.harbor_native:WorkBuddyPraxileAgent",
+  "worker_wheel_sha256": "c349f27a120626f6460e22828d7a1247db68c454ba71d4ce5d8ab8ebfbfe3424",
+  "environment": "macOS ARM64 Docker Desktop; fixture image derived from python:3.12-slim",
+  "test": "tests/resource/test_native_pair_docker.py::test_real_harbor_job_pair_runs_native_workers",
+  "results": {"passed": 2, "seconds": 50.22, "trials": 4, "fixture_model_requests": 4},
+  "paid_model_calls": 0,
+  "verified": [
+    "Harbor 0.18 Job.create/run with official WorkBuddy Docker environment plugin",
+    "WorkBuddyPraxileAgent setup and native worker execution in both arms",
+    "Actual nonzero uid after setup under default user dev in all four trials",
+    "Candidate active and abstain paths verified in model request bodies",
+    "Native completed states and broker revocation",
+    "Trial result and native trace binding"
+  ],
+  "warnings": ["Four upstream Task.checksum deprecation warnings"],
+  "official_benchmark_result": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Fixture model/task/constant verifier, not official WorkBuddy CompositeVerifier or benchmark scores",
+    "No real-task quality, performance gain or held-out evidence",
+    "No image-mount path in this fixture",
+    "No crash recovery or full-Job cancellation cleanup verification",
+    "Existing worker wheel with current host code; no new wheel publication"
+  ]
+}

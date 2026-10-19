@@ -345,6 +345,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   通过；原生完成、请求注入差异、代理撤销、fixture 评分及 trace 绑定均校验。
   首次 fixture bytes 错误导致 502 已记录并修复。零付费调用，不是官方 benchmark
   成绩；真实任务、0.18 完整 Job 与恢复仍缺，完整项不勾选。
+  0.18 完整 Job 增补：上游 WorkBuddy Docker 插件 + WorkBuddyPraxileAgent 的
+  active/abstain 双臂四 Trial 均完成，2 项通过；额外实测 setup 后非 root UID
+  和 dev 默认身份。仍为 fixture 模型/评分，真实任务与官方 CompositeVerifier、
+  image mount 和恢复未验收，不据此勾选完整 benchmark 支持。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile
