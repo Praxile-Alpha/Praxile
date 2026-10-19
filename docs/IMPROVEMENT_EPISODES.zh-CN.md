@@ -343,6 +343,26 @@ rubric 填入 goal 或 constraints。该机制不是物理信息隔离证明；�
 独立执行环境承担。低层设计 API 同样验证字段与开发成员。动作参数与前后状态的
 更细证据仍未补齐，此公开上下文入口尚未做真实模型质量验证，不据此勾选完整 R2。
 
+### 文档读取参数与版本观察
+
+原生与旧实验投影统一升级为 projection_version=3。read_document 现在明确保留
+已记录的 requested_limit / requested_char_offset，未显式记录的值为 null，不
+根据当前工具默认值补写历史。参数摘要加入 char_offset，避免不同字符分页被
+误算为同一参数重复操作；非法分页值或截断路径不进入这一结构化投影。
+
+连续成功读取按 task_id + trace_id + 原始记录路径匹配，仅导出前次读取事件 ID、
+前次内容摘要，以及 same_bytes / different_bytes / unknown。不导出路径、sheet
+名称或正文。相同路径的两个哈希只描述观察到的字节版本，不能推出执行者、具体
+修改、前后内容语义或效果；causal_effect_verified=false、state_equivalence=unknown。
+不同路径、不同 trace 或不同任务不建立链接。证据截取把 previous_read_event_id
+纳入同任务依赖闭包，预算不足时不输出脱离来源的比较结论。
+
+固定 Office 结果 `351865f7...` 的离线回放仍生成 7 条证据：读取参数 limit 依次为
+5、20、3；同一输入的第二次读取与第一次同哈希，输出读取没有同路径前次观察，
+保持 unknown。这不是输入到输出的因果转换证据，也没有追加模型调用。现有历史
+设计 manifest 不改写；投影版本变化需要新 design ID，不能把 v3 塞进旧冻结设计。
+任意 shell 的动作参数与文件修改归因仍未补齐，完整语义前后状态对齐仍未实现。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

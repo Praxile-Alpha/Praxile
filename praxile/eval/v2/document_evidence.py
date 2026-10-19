@@ -36,15 +36,20 @@ def project_exit_code(data):
 def project_document_read(call, result):
     action, data = _action(call, "read_document"), _data(result)
     if (action is None or result.payload.get("status") != "success"
-            or not isinstance(action.get("path"), str) or data.get("path") != action["path"]
+            or not isinstance(action.get("path"), str) or not action["path"] or "[truncated" in action["path"]
+            or data.get("path") != action["path"]
             or not _sha(data.get("source_sha256")) or data.get("unit_kind") not in {"row", "page", "block"}):
         return None
     total, units, start = data.get("total_units"), data.get("units"), action.get("start", 1)
     if (type(total) is not int or not 0 <= total <= 100_000_000 or not isinstance(units, list)
-            or len(units) > 1000 or type(start) is not int or start < 1):
+            or len(units) > 1000 or type(start) is not int or not 1 <= start <= 100000):
         return None
+    for key, minimum, maximum in (("limit", 1, 20), ("char_offset", 0, 10000000)):
+        if key in action and (type(action[key]) is not int or not minimum <= action[key] <= maximum):
+            return None
     facts = {"source_sha256": data["source_sha256"], "unit_kind": data["unit_kind"],
         "total_units": total, "returned_units": len(units), "start_unit": start,
+        "requested_limit": action.get("limit"), "requested_char_offset": action.get("char_offset"),
         "semantic_quality_verified": False, "official_evaluation": False}
     for key in ("columns", "next_start"):
         value = data.get(key)
@@ -53,9 +58,36 @@ def project_document_read(call, result):
     if type(data.get("columns_truncated")) is bool:
         facts["columns_truncated"] = data["columns_truncated"]
     # Hash the selection, never export file/sheet names or extracted text.
-    selected = {key: action[key] for key in ("path", "start", "limit", "sheet") if key in action}
+    selected = {key: action[key] for key in ("path", "start", "limit", "sheet", "char_offset") if key in action}
     digest = hashlib.sha256(canonical_json(selected).encode()).hexdigest()
     return ("read_document", digest), facts
+
+
+def document_read_links(events):
+    """Compare observed versions at one path, never infer a causal write or quality."""
+    calls, previous, links = {}, {}, {}
+    for event in events:
+        scope = (event.task_id, event.trace_id)
+        call_key = (*scope, event.tool_call_id)
+        if event.type == "TOOL_CALL" and event.tool_call_id:
+            calls[call_key] = event
+        if event.type != "TOOL_RESULT" or call_key not in calls:
+            continue
+        call = calls[call_key]
+        if project_document_read(call, event) is None:
+            continue
+        data = _data(event)
+        key = (*scope, data["path"])
+        prior = previous.get(key)
+        links[event.event_id] = {
+            "previous_read_event_id": prior[0] if prior else None,
+            "previous_observed_source_sha256": prior[1] if prior else None,
+            "observed_version_relation": ("same_bytes" if prior[1] == data["source_sha256"] else "different_bytes") if prior else "unknown",
+            "comparison_basis": "same_task_trace_and_recorded_path",
+            "causal_effect_verified": False,
+        }
+        previous[key] = (event.event_id, data["source_sha256"])
+    return links
 
 
 def project_deliverable_check(call, result):

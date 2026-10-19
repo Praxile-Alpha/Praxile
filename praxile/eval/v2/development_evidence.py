@@ -6,7 +6,7 @@ import re
 
 from ...utils import read_json
 from .alignment import _identity
-from .document_evidence import (project_layout, project_revision, revision_layout_links,
+from .document_evidence import (project_layout, project_revision, revision_layout_links, document_read_links,
                                 project_document_read, project_deliverable_check, project_exit_code)
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
@@ -29,7 +29,7 @@ def select_evidence(evidence, priorities, limit):
                 break
             item = evidence[current]
             facts = json.loads(item["observation"])
-            for field in ("revision_event_id", "before_layout_event_id"):
+            for field in ("revision_event_id", "before_layout_event_id", "previous_read_event_id"):
                 reference = facts.get(field)
                 if reference is None:
                     continue
@@ -93,6 +93,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             raise EvalSchemaError("trace events do not belong to the source task")
         calls, counts = {}, Counter()
         layout_links = revision_layout_links(events)
+        layout_links.update(document_read_links(events))
         for event in events:
             if event.event_id in seen:
                 raise EvalSchemaError("duplicate source event ID")
@@ -138,7 +139,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
             "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
             "selection": "failure_priority_with_same_task_dependency_closure",
-            "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 2,
+            "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 3,
             "limitations": ["Local manifest membership is not an external provenance attestation.",
                             "No raw outputs, evaluator scores or task correctness claims are projected."]}
 

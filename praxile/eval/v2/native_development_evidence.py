@@ -11,7 +11,7 @@ from ...services.native_trace_import import _read
 from ...trace import native_run_to_events
 from .alignment import _identity
 from .development_evidence import select_evidence
-from .document_evidence import (project_layout, project_revision, revision_layout_links,
+from .document_evidence import (project_layout, project_revision, revision_layout_links, document_read_links,
                                 project_document_read, project_deliverable_check, project_exit_code)
 from .schema import EvalSchemaError, canonical_json
 
@@ -44,6 +44,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
     calls, counts, seen = {}, Counter(), set()
     evidence, sources, priorities = [], [], []
     links = revision_layout_links(events)
+    links.update(document_read_links(events))
     for event in events:
         if event.event_id in seen or event.task_id != task:
             raise EvalSchemaError("ambiguous native event identity")
@@ -80,7 +81,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         "source_result_sha256": digest, "task_id": task,
         "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
         "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
-        "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 2, "provenance_attested": False,
+        "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 3, "provenance_attested": False,
         "promotion_eligible": False,
         "limitations": ["Development membership is explicitly supplied by the caller, not independently attested.",
             "No task correctness, evaluator score, raw command/output or causal claim is projected."]}

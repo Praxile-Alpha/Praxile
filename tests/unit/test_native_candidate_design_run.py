@@ -43,7 +43,7 @@ def test_native_projection_uses_durable_designer_and_resumes_without_model(setup
     root = config.paths.state / "eval/v2/candidate_designs/native-design"
     plan = json.loads((root / "manifest.json").read_text())
     assert plan["source_evidence"]["source_result_sha256"] == options["expected_sha256"]
-    assert plan["source_evidence"]["projection_version"] == 2
+    assert plan["source_evidence"]["projection_version"] == 3
     assert "PRIVATE_SENTINEL" not in json.dumps(plan)
     assert (root / "request-intent.json").exists()
     assert report["decision"] == "NO_ENTRY"
