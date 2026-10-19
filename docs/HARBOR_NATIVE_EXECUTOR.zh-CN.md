@@ -761,6 +761,20 @@ docker build --platform linux/amd64 \
 
 实际结果：构建在解析 `python:3.12-slim` 基础镜像时失败，Docker 配置的 `registry.docker-cn.com` 返回 TLS handshake timeout。未进入 apt/pip 安装、Agent 执行或官方评分，不能计为任务零分。没有调用模型、没有修改 Docker 全局镜像源。
 
-另一个尚未解决的兼容点：Harbor 0.18.0 的 `default_docker_platform()` 查询 daemon 的 OS/Arch，构建流程据此选择平台；不能假设设置 `DOCKER_DEFAULT_PLATFORM` 就能覆盖它。因此通用 Python 容器 smoke test 通过不代表这一 x64 任务镜像在 ARM daemon 上可直接运行。完整 trial 启动前需要验证明确的 amd64 环境路径或任务官方多架构支持，不能只靠改变 job 标签宣称兼容。
+平台说明修正：Harbor 0.18.0 的 `default_docker_platform()` 在此 Docker adapter 中用于 egress sidecar 的构建，不是所有任务镜像的统一平台选择器。主任务镜像通过 Docker Compose 构建，Compose 环境包含宿主环境变量，但这本身不能证明 `DOCKER_DEFAULT_PLATFORM` 在完整 Trial 中的实际行为。完整 trial 启动前仍需验证明确的 amd64 环境路径，不能只靠改变 job 标签宣称兼容。
 
-下一步：确认并修复本机镜像源连通性（变更全局配置和重启需用户确认），然后完成真实镜像构建及平台一致性验收，再进行模型任务执行与官方评分。
+### 后续：官方 Registry 固定摘要构建成功
+
+同日对真实 Office 任务 `drug-inventory-split-L2-006` 完成环境构建。首次原始构建仍被镜像代理 TLS 超时阻断；随后直接拉取官方 registry 的 amd64 基础镜像，并用 BuildKit named context 映射原始 `FROM`，没有修改 Dockerfile、任务材料或 Docker 全局配置：
+
+```sh
+docker pull --platform linux/amd64 registry-1.docker.io/library/python:3.12-slim
+docker build --platform linux/amd64 \
+  --build-context python:3.12-slim=docker-image://registry-1.docker.io/library/python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 \
+  --tag praxile-workbuddy-inventory:official-registry-20261019 \
+  /absolute/office-prepared/tasks/drug-inventory-split-L2-006/environment
+```
+
+构建成功后按镜像 ID 启动 `--network none --platform linux/amd64` 临时容器，确认 Python、Node、pytest、openpyxl、pandas、PyYAML 和 NumPy 可用。摘要和实际版本见 [环境记录](results/workbuddy-inventory-environment-20261019.json)。原始依赖要求含版本范围，不能仅凭相同 Dockerfile 保证未来重建得到相同依赖；此次记录的是已构建镜像身份和实际版本，不是完整可复现 lockfile。
+
+此结果仅是环境验收，没有调用 MiniMax、执行任务或取得官方评分，也不是严格 A/B。尚需将固定镜像以显式来源配置接入完整 Harbor Trial，并验证平台与输入快照一致性；不能假设直接 Docker 构建成功就意味着 Harbor 会自动复用该镜像。

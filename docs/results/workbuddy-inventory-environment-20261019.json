@@ -1,0 +1,39 @@
+{
+  "schema": "praxile.environment_build_evidence.v1",
+  "date": "2026-10-19",
+  "task_id": "drug-inventory-split-L2-006",
+  "status": "environment_smoke_passed",
+  "original_build_failure": "registry mirror TLS handshake timeout before task execution",
+  "base_registry": "registry-1.docker.io/library/python",
+  "base_digest": "sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1",
+  "image_id": "sha256:64fd3491c37927734b6f2ebeeeaa9916f929e3d534c4b3e6bb3e39d3ab0165a5",
+  "dockerfile_sha256": "c6bbbb58b5293f0b0d38ac87a28a81981a1b62a381517f6f4ed907a6df17b689",
+  "instruction_sha256": "e3cea9e6a25f0dc0799171211e83986eb93b0d09bb31b3e568a7eb818a9c0fb0",
+  "build_strategy": "BuildKit named context maps original FROM to official registry digest",
+  "docker_global_config_modified": false,
+  "dockerfile_modified": false,
+  "task_materials_modified": false,
+  "smoke": {
+    "network": "none",
+    "platform": "linux/amd64",
+    "architecture": "x86_64",
+    "python": "3.12.15",
+    "node": "v20.18.1",
+    "packages": {
+      "pytest": "8.3.4",
+      "openpyxl": "3.1.5",
+      "pandas": "3.0.6",
+      "pyyaml": "6.0.3",
+      "numpy": "2.5.4"
+    }
+  },
+  "model_calls": 0,
+  "task_executed": false,
+  "official_score": null,
+  "promotion_eligible": false,
+  "limitations": [
+    "Direct Docker smoke only; full Harbor Trial platform and image integration not yet verified",
+    "Original dependency ranges are not a fully locked reproducible environment",
+    "No task success, A/B utility or evaluator result is implied"
+  ]
+}
