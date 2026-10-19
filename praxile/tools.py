@@ -12,6 +12,7 @@ from .security import SafetyPolicy
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
+MUTATING_ACTIONS = {"edit_file", "run_command", "browser_click", "browser_fill"}
 
 
 class ToolRegistry:

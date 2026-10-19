@@ -23,7 +23,7 @@ from .silent_failure import detect_silent_failure_signals
 from .specs import build_spec_context, spec_context_prompt, verify_spec_compliance
 from .store import ExperienceStore
 from .task_analyzer import TaskAnalyzer
-from .tools import ToolRegistry
+from .tools import MUTATING_ACTIONS, ToolRegistry
 from .trajectory import TrajectoryLogger
 from .utils import append_jsonl, shorten, utc_now
 
@@ -943,7 +943,7 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
-                if dry_run and action_type in {"edit_file", "run_command"}:
+                if dry_run and action_type in MUTATING_ACTIONS:
                     observation = {
                         "status": "blocked",
                         "output": f"Dry-run mode blocked `{action_type}`.",

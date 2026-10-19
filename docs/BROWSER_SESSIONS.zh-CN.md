@@ -38,6 +38,7 @@ R1 增量能力：同一个 AgentRuntime 的浏览器可以保持页面状态，
 - 新会话必须有非空主机白名单；每个 HTTP 请求及重定向受名单检查，URL 内嵌凭据被拒绝。
 - Service Worker、WebSocket 和自动下载默认关闭；不提供任意 JavaScript evaluate action。
 - 不允许将交互动作加入只读并发 batch，避免共享页面的顺序竞态。
+- dry-run 会拦截 browser_click/browser_fill，不向浏览器分发这两种修改动作；与文件写入和 shell 共用修改动作集合。导航/截图仍可访问允许的测试服务，dry-run 不是无网络模式。
 - 操作错误返回异常类型，不回显可能包含输入值的 Playwright 异常消息。错误后关闭该会话；任务结束关闭 browser/context。
 - 主机白名单不是网络沙箱，不校验 DNS 重绑定或每个端口；敏感场景仍需容器/网络策略隔离。
 - 用户输入本身属于 action，可能进入既有轨迹；不要通过 browser_fill 传入长期密钥。凭据代理仍是独立未完成项。
