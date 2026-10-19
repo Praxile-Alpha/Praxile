@@ -233,6 +233,10 @@ class FileSystemEnv:
         if not decision.allowed:
             return Observation("blocked", decision.reason, risk_level=decision.risk_level)
         target = (self.root / path).resolve()
+        if target.suffix.lower() in {".docx", ".xlsx", ".pptx", ".pdf"}:
+            return Observation("failure", "edit_file writes UTF-8 text, not binary document formats. "
+                "Use create_docx with structured blocks for a new DOCX; other binary writers are not supported here.",
+                {"path": path, "changed": False, "suggested_action": "create_docx" if target.suffix.lower() == ".docx" else None})
         before_exists = target.exists()
         before = target.read_text(encoding="utf-8", errors="replace") if before_exists else ""
         if before == content:

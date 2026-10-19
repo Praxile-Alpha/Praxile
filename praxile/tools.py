@@ -71,7 +71,7 @@ class ToolRegistry:
             {"name": "browser_capture", "description": "Capture current session state without reloading; not a visual quality judgment."},
             {"name": "browser_download", "description": "Download an allowed public HTTP URL as a bounded artifact; no session credentials."},
             {"name": "check_deliverables", "description": "Check public user-request output contracts locally; not official evaluation or semantic judgment."},
-            {"name": "edit_file", "description": "Write a full project-relative file with backup."},
+            {"name": "edit_file", "description": "Write UTF-8 text with backup, never DOCX/XLSX/PPTX/PDF bytes or base64."},
             {"name": "create_docx", "description": "Create a new DOCX from paragraph/heading/bullet/table/page_break blocks; never overwrite, no model code execution."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},

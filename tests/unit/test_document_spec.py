@@ -19,3 +19,10 @@ def test_writer_is_mutating_and_not_batchable():
     assert "create_docx" in MUTATING_ACTIONS
     assert ActionSchemaRegistry().validate(action)[0]
     assert not ActionSchemaRegistry().validate({"type": "batch", "actions": [action]})[0]
+
+
+def test_table_errors_identify_exact_location():
+    with pytest.raises(ValueError, match=r"blocks\[0\].rows\[1\] must contain exactly 2 cells"):
+        validate_docx_spec({"blocks": [{"type": "table", "rows": [["a", "b"], ["c"]]}]})
+    with pytest.raises(ValueError, match=r"rows\[0\]\[1\] must be a string"):
+        validate_docx_spec({"blocks": [{"type": "table", "rows": [["a", 1]]}]})

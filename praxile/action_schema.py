@@ -115,6 +115,8 @@ class ActionSchemaRegistry:
             optional = ", ".join(schema["optional"].keys()) or "(none)"
             lines.append(f"- {action_type}: required={required}; optional={optional}")
         lines.append(docx_spec_prompt())
+        lines.append("edit_file writes UTF-8 text only. Never use it for .docx/.xlsx/.pptx/.pdf, "
+                     "including base64 strings. Use create_docx for Word output.")
         lines.append("read_document pagination: start is 1-based; limit is 1..20 (default 5); "
                      "char_offset resumes truncated unit text; optional sheet selects an XLSX sheet.")
         return "\n".join(lines)

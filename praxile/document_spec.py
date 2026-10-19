@@ -22,7 +22,7 @@ def validate_docx_spec(spec):
         raise ValueError("document requires 1..200 blocks")
     if len(json.dumps(spec, ensure_ascii=False).encode()) > 256 * 1024:
         raise ValueError("document spec exceeds 256 KiB")
-    for block in blocks:
+    for block_index, block in enumerate(blocks):
         if not isinstance(block, dict):
             raise ValueError("block must be an object")
         kind = block.get("type")
@@ -40,9 +40,13 @@ def validate_docx_spec(spec):
             if (set(block) != {"type", "rows"} or not isinstance(rows, list) or not 1 <= len(rows) <= 100
                     or not isinstance(rows[0], list) or not 1 <= len(rows[0]) <= 12):
                 raise ValueError("table requires 1..100 rows and 1..12 columns")
-            if any(not isinstance(row, list) or len(row) != len(rows[0])
-                   or any(not isinstance(cell, str) or len(cell) > 4000 for cell in row) for row in rows):
-                raise ValueError("invalid table cells")
+            for row_index, row in enumerate(rows):
+                location = f"document.blocks[{block_index}].rows[{row_index}]"
+                if not isinstance(row, list) or len(row) != len(rows[0]):
+                    raise ValueError(f"{location} must contain exactly {len(rows[0])} cells")
+                for column, cell in enumerate(row):
+                    if not isinstance(cell, str) or len(cell) > 4000:
+                        raise ValueError(f"{location}[{column}] must be a string of at most 4000 characters")
         else:
             raise ValueError("unsupported document block")
     return spec

@@ -143,6 +143,11 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+协议版本真实复验仍未完成交付：两份 .docx 实为 0/4 字节文本，官方离线
+extract-only 虽返回 complete，但正文为两个格式读取错误；未调用付费评分。
+据此禁止 edit_file 写入/覆盖二进制文档，明确工具边界；表格 schema 错误
+增加具体位置。结果见 jobbench-protocol-smoke-20261019.json，不勾选真实成功。
+
 90 秒请求上限复验：10 次 MiniMax 响应后因连续非法动作停止，仍无交付物。
 新证据定位到 DOCX 嵌套契约描述不足及前置 think 文本干扰，已补完整结构提示
 和保守的 reasoning/final 边界解析（非法文档字段仍拒绝）。536 项快速测试通过，

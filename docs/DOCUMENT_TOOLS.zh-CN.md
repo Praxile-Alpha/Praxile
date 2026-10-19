@@ -22,6 +22,10 @@ Python shell。安装 `praxile[documents]` 后使用：
 子进程中读取，不执行宏或模型提供的代码；不把原始二进制文本送入模型。
 原 `read_file` 对 PDF/XLSX/DOCX 提示改用此工具。
 
+`edit_file` 同样拒绝 `.docx/.xlsx/.pptx/.pdf`，包含大小写变体；不能把文本或
+base64 当成二进制产物，也不会先解码并备份已有二进制文件。DOCX 应使用
+create_docx，其他格式尚未提供正式写出时明确不支持，不以错误扩展名降级。
+
 子进程 25 秒超时并回收；POSIX 限制 CPU 20 秒与单个输出文件 1 MiB，Linux
 另限制地址空间 1 GiB。macOS 没有该地址空间限制，Windows 没有 POSIX rlimit；
 因此这些限制不是跨平台完整资源沙箱。OOXML 声明的总解压大小最多 64 MiB，

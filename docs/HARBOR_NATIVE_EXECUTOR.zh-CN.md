@@ -331,6 +331,18 @@ JSON 示例，最终 JSON 字符串里的 literal 标签保留。此项不修改
 解析，也不宣称能可靠解析任意自然语言响应。4 项回归及 536 项快速测试通过，
 新协议的真实模型交付效果仍需复验。
 
+后续 `fb2ceae` 复验使用目录 `/tmp/praxile-jobbench-executor-protocol-20261019`：
+29 次模型响应，561,432 input / 8,419 output tokens，仍因连续非法动作停止。
+留下的两个 .docx 分别 0 与 4 字节，由 edit_file 写出，不是有效 Word 文件。
+原始官方 judge 的无网络 extract-only 命令退出 0、status=complete，但其 text
+明确包含两个 “File is not a zip file” 错误；characters 统计的是错误文本，
+不能据 complete 或字符数宣称提取成功。未调用付费评分，不推断零分。
+详细摘要见 `results/jobbench-protocol-smoke-20261019.json`。
+
+据此修复通用文本写入器，拒绝四种二进制文档扩展名且保留原文件不动；同时
+将 create_docx 表格错误细化到 block/row/cell 路径。11 项二进制写入边界测试
+及表格诊断测试通过。修复没有应用到正在运行的冻结实验，也未再次付费重试。
+
 #### 独立官方评分镜像已构建
 
 原始 tests/Dockerfile 构建成功，未改写评分材料或依赖；仅通过 build-context

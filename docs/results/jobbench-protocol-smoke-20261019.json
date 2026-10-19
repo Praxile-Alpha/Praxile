@@ -1,0 +1,40 @@
+{
+  "schema_version": "praxile.integration_observation.v1",
+  "scope": "single_task_native_executor_not_official_trial",
+  "task_id": "easy--technical_writers--task1",
+  "code_commit": "fb2ceae",
+  "model": "MiniMax-M3",
+  "wheel_sha256": "736366641a677c80b61cbc445223e4385c7ab61c28644fc10fed314d160ec905",
+  "result_sha256": "2c69d0d2195daf27747995571baba0b764d7ed21b5d12d10848520aff6e9f6f7",
+  "max_steps": 30,
+  "timeout_seconds": 900,
+  "model_timeout_seconds": 90,
+  "inherit_task_packages": true,
+  "task_status": "needs_human",
+  "termination_reason": "three_consecutive_invalid_actions",
+  "usage": {"model_calls": 29, "prompt_tokens": 561432, "completion_tokens": 8419, "tool_calls": 23},
+  "cost_usd": null,
+  "output_file_count": 2,
+  "valid_docx_count": 0,
+  "output_sizes_bytes": [0, 4],
+  "environment_cleaned": true,
+  "official_extraction": {
+    "mode": "extract_only_offline",
+    "exit_code": 0,
+    "reported_status": "complete",
+    "implementation_sha256": "81bb501feb8f1e7e65688519c54965d1c4806f2f0338f4428eada3fb53e06007",
+    "read_errors": 2,
+    "error": "File is not a zip file",
+    "reported_characters_are_valid_content": false
+  },
+  "official_evaluation": "not_run",
+  "official_score": null,
+  "performance_improvement_claim": false,
+  "limitations": [
+    "Generic edit_file created text files with .docx extensions; neither was a Word document.",
+    "Final create_docx responses failed parsing or rectangular-table schema validation.",
+    "Extractor complete status and character counts include error text, not valid document contents.",
+    "No paid judge invocation and no inferred zero score.",
+    "Single integration run, not evidence of a performance improvement."
+  ]
+}
