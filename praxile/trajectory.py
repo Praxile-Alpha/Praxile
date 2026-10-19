@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 
 from .utils import new_id, utc_now
+from .subtasks import SubtaskEpisode
 
 
 class TrajectoryLogger:
@@ -125,6 +127,7 @@ class TrajectoryLogger:
         executor: dict[str, Any] | None = None,
     ) -> None:
         action_record = {
+            "action_id": new_id("action"),
             "step": len(self.data["actions"]) + 1,
             "action_type": action_type,
             "input": input_data,
@@ -136,7 +139,17 @@ class TrajectoryLogger:
         if executor:
             action_record["executor"] = executor
         self.data["actions"].append(action_record)
+        active = self._active_subtask()
+        if active is not None and action_type not in {"subtask_begin", "subtask_end"}:
+            active["action_refs"].append(action_record["action_id"])
+            counts = active["observed_status_counts"]
+            counts[status] = counts.get(status, 0) + 1
+            artifact = (observation.get("data") or {}).get("artifact")
+            if isinstance(artifact, str) and artifact not in active["artifacts"]:
+                active["artifacts"].append(artifact)
         if action_type not in {
+            "subtask_begin",
+            "subtask_end",
             "architecture_gate",
             "dry_run_skip_tests",
             "run_test",
@@ -145,6 +158,31 @@ class TrajectoryLogger:
             "finish",
         }:
             self.data["cost"]["tool_calls"] += 1
+
+    def _active_subtask(self) -> dict[str, Any] | None:
+        return next((episode for episode in self.data.get("subtask_episodes", [])
+                     if episode.get("status") == "running"), None)
+
+    def begin_subtask(self, goal: str, snapshot: dict[str, Any]) -> str:
+        if not isinstance(goal, str) or not goal.strip() or len(goal) > 2000:
+            raise ValueError("subtask goal must contain 1 to 2000 characters")
+        if self._active_subtask() is not None:
+            raise ValueError("end the current subtask before beginning another")
+        episode = SubtaskEpisode(new_id("subtask"), self.task_id, goal.strip(), deepcopy(snapshot), utc_now())
+        self.data.setdefault("subtask_episodes", []).append(episode.to_dict())
+        return episode.episode_id
+
+    def end_subtask(self, *, claimed_outcome: str, summary: str, snapshot: dict[str, Any]) -> str:
+        active = self._active_subtask()
+        if active is None:
+            raise ValueError("no running subtask")
+        if claimed_outcome not in {"completed", "failed", "needs_human"}:
+            raise ValueError("invalid claimed subtask outcome")
+        if not isinstance(summary, str) or len(summary) > 4000:
+            raise ValueError("subtask summary must be at most 4000 characters")
+        active.update(status="closed", claimed_outcome=claimed_outcome, summary=summary,
+                      state_after=deepcopy(snapshot), ended_at=utc_now())
+        return active["episode_id"]
 
     def set_model_route(self, route: dict[str, Any]) -> None:
         self.data["model_routing"]["selected"] = route
@@ -180,6 +218,10 @@ class TrajectoryLogger:
         self.data["experience_candidates"] = candidates
 
     def finish(self, *, status: str, summary: str) -> dict[str, Any]:
+        active = self._active_subtask()
+        if active is not None:
+            active.update(status="interrupted", ended_at=utc_now())
+            active["uncertainty"].append("Run ended without an explicit subtask boundary; final subtask state is unknown.")
         self.data["end_time"] = utc_now()
         self.data["result"] = {"status": status, "summary": summary}
         return self.data

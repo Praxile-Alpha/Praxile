@@ -943,7 +943,9 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
-                if dry_run and action_type in MUTATING_ACTIONS:
+                if action_type in {"subtask_begin", "subtask_end"}:
+                    observation = self._subtask_boundary(action, logger)
+                elif dry_run and action_type in MUTATING_ACTIONS:
                     observation = {
                         "status": "blocked",
                         "output": f"Dry-run mode blocked `{action_type}`.",
@@ -1055,6 +1057,23 @@ class AgentRuntime:
             )
             self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
             return "needs_human", "Model unavailable; planning trajectory and proposals were generated."
+
+    def _subtask_boundary(self, action: dict[str, Any], logger: TrajectoryLogger) -> dict[str, Any]:
+        decision = self.tools.safety.check_tool_call(action["type"], action,
+            context={"task_id": logger.task_id, "step": len(logger.data["actions"]) + 1})
+        if not decision.allowed:
+            return {"status": "blocked", "output": decision.reason, "data": {}, "risk_level": decision.risk_level}
+        try:
+            snapshot = self.project.snapshot(refresh=True)
+            if action["type"] == "subtask_begin":
+                identity = logger.begin_subtask(action["goal"], snapshot)
+            else:
+                identity = logger.end_subtask(claimed_outcome=action["claimed_outcome"],
+                    summary=action["summary"], snapshot=snapshot)
+        except ValueError as exc:
+            return {"status": "failure", "output": str(exc), "data": {}, "risk_level": "low"}
+        return {"status": "success", "output": "Subtask evidence boundary recorded; outcome remains unverified.",
+                "data": {"subtask_episode_id": identity}, "risk_level": "low"}
 
     def _refresh_snapshot_after_action(
         self,
@@ -1284,6 +1303,8 @@ class AgentRuntime:
             '{"type":"browser_fill","selector":"input[name=query]","value":"example"}\n'
             '{"type":"browser_assert_text","selector":"[role=status]","value":"Saved"}\n'
             '{"type":"browser_capture"}\n'
+            '{"type":"subtask_begin","goal":"Create the requested report"}\n'
+            '{"type":"subtask_end","claimed_outcome":"completed","summary":"Report created; independent acceptance pending"}\n'
             '{"type":"check_deliverables","contract":{"schema_version":"praxile.deliverable_contract.v1","source":"user_request","outputs":[{"path":"output/report.json","media_type":"application/json","required_fields":["summary"]}]}}\n'
             '{"type":"edit_file","path":"relative/path","content":"full new file content"}\n'
             '{"type":"run_command","command":"safe configured test/lint/build command"}\n'
