@@ -188,6 +188,8 @@ class AssetsStoreMixin:
         if not isinstance(metadata, dict):
             raise ValueError("metadata_update requires a metadata object")
         result = dict(metadata)
+        if "experience_layer" in result and result["experience_layer"] not in ("strategic", "procedural", "tool", None):
+            raise ValueError("experience_layer must be strategic, procedural, tool, or null")
         status = str(result.get("status", "active"))
         if status not in ASSET_LIFECYCLE_STATUSES:
             raise ValueError(f"Unsupported asset status: {status}")

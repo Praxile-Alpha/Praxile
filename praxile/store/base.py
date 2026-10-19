@@ -270,6 +270,7 @@ class BaseStore:
               mtime_ns INTEGER,
               size INTEGER,
               status TEXT NOT NULL,
+              experience_layer TEXT,
               usage_count INTEGER NOT NULL DEFAULT 0,
               positive_outcome_count INTEGER NOT NULL DEFAULT 0,
               negative_outcome_count INTEGER NOT NULL DEFAULT 0,
@@ -280,6 +281,11 @@ class BaseStore:
             )
             """
         )
+        asset_columns = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
+        if "experience_layer" not in asset_columns:
+            conn.execute("ALTER TABLE assets ADD COLUMN experience_layer TEXT")
+            conn.execute("UPDATE assets SET mtime_ns = NULL, content_hash = ''")
+        conn.execute("CREATE INDEX IF NOT EXISTS assets_layer_status_idx ON assets(experience_layer, status)")
         try:
             conn.execute(
                 """

@@ -236,8 +236,8 @@ class IndexStoreMixin:
             INSERT OR REPLACE INTO assets
             (path, type, title, content_hash, summary, tags, source_task_id, confidence, mtime_ns, size, status,
              usage_count, positive_outcome_count, negative_outcome_count, last_used_at,
-             created_at, updated_at, last_indexed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_at, updated_at, last_indexed_at, experience_layer)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 metadata["path"],
@@ -258,6 +258,7 @@ class IndexStoreMixin:
                 created_at,
                 now,
                 now,
+                metadata.get("experience_layer"),
             ),
         )
         if self._fts_available(conn):
@@ -404,6 +405,8 @@ class IndexStoreMixin:
             "tags": _tags_for_asset(asset_path, asset_type),
             "source_task_id": source_task_id,
             "confidence": confidence,
+            "experience_layer": lifecycle_metadata.get("experience_layer")
+                if lifecycle_metadata.get("experience_layer") in ("strategic", "procedural", "tool") else None,
             "status": status,
             "content_hash": stable_hash(content + json.dumps(lifecycle_metadata, sort_keys=True, ensure_ascii=False), length=32),
             "mtime_ns": stat.get("mtime_ns"),

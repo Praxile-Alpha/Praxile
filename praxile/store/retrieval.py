@@ -7,22 +7,26 @@ from .common import *  # noqa: F401,F403
 
 
 class RetrievalStoreMixin:
-    def retrieve(self, query: str, *, kinds: list[str] | None = None, limit: int = 6) -> list[dict[str, Any]]:
+    def retrieve(self, query: str, *, kinds: list[str] | None = None, limit: int = 6,
+                 layers: list[str] | None = None) -> list[dict[str, Any]]:
+        if layers is not None and (not isinstance(layers, list) or not layers
+                or any(layer not in ("strategic", "procedural", "tool") for layer in layers)):
+            raise ValueError("layers must be a nonempty list of strategic/procedural/tool")
         self._init_db()
         settings = vector_settings(self.config)
         try:
             with self._connection() as conn:
                 if settings["enabled"] and settings["hybrid_enabled"]:
-                    keyword = self._retrieve_fts(conn, query, kinds=kinds, limit=limit * 2)
-                    vector = self._retrieve_vector(conn, query, kinds=kinds, limit=limit * 2)
+                    keyword = self._retrieve_fts(conn, query, kinds=kinds, limit=limit * 2, layers=layers)
+                    vector = self._retrieve_vector(conn, query, kinds=kinds, limit=limit * 2, layers=layers)
                     return self._merge_retrieval_results(keyword, vector, limit=limit)
                 if settings["enabled"]:
-                    vector = self._retrieve_vector(conn, query, kinds=kinds, limit=limit)
+                    vector = self._retrieve_vector(conn, query, kinds=kinds, limit=limit, layers=layers)
                     if vector:
                         return vector
-                return self._retrieve_fts(conn, query, kinds=kinds, limit=limit)
+                return self._retrieve_fts(conn, query, kinds=kinds, limit=limit, layers=layers)
         except sqlite3.Error:
-            return self._retrieve_fallback(query, kinds=kinds, limit=limit)
+            return self._retrieve_fallback(query, kinds=kinds, limit=limit, layers=layers)
     def _retrieve_vector(
         self,
         conn: sqlite3.Connection,
@@ -30,6 +34,7 @@ class RetrievalStoreMixin:
         *,
         kinds: list[str] | None,
         limit: int,
+        layers: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         settings = vector_settings(self.config)
         try:
@@ -44,6 +49,9 @@ class RetrievalStoreMixin:
         filters = _asset_type_filter(kinds)
         params: list[Any] = [settings["provider"], int(settings.get("dims") or 256)]
         where = "WHERE v.provider = ? AND v.dims = ? AND a.status = 'active'"
+        if layers:
+            where += " AND a.experience_layer IN (%s)" % ",".join("?" for _ in layers)
+            params.extend(layers)
         model = settings.get("model")
         if model is None:
             where += " AND v.model IS NULL"
@@ -171,9 +179,10 @@ class RetrievalStoreMixin:
         *,
         kinds: list[str] | None,
         limit: int,
+        layers: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         if not self._fts_available(conn):
-            return self._retrieve_fallback(query, kinds=kinds, limit=limit)
+            return self._retrieve_fallback(query, kinds=kinds, limit=limit, layers=layers)
         fts_query = _fts_query(query)
         params: list[Any] = []
         where = ""
@@ -183,6 +192,9 @@ class RetrievalStoreMixin:
         else:
             where = "WHERE a.status = 'active'"
         filters = _asset_type_filter(kinds)
+        if layers:
+            where += " AND a.experience_layer IN (%s)" % ",".join("?" for _ in layers)
+            params.extend(layers)
         if filters:
             where += (" AND " if where else "WHERE ") + "a.type IN (%s)" % ",".join("?" for _ in filters)
             params.extend(filters)
@@ -198,7 +210,7 @@ class RetrievalStoreMixin:
         """
         rows = conn.execute(sql, params).fetchall()
         if not rows and fts_query:
-            return self._retrieve_fallback(query, kinds=kinds, limit=limit)
+            return self._retrieve_fallback(query, kinds=kinds, limit=limit, layers=layers)
         results: list[dict[str, Any]] = []
         for row in rows:
             asset_type = row["type"]
@@ -252,16 +264,17 @@ class RetrievalStoreMixin:
             )
         results.sort(key=lambda item: (item["load_priority"], -item["score"], item["path"]))
         return results[:limit]
-    def _retrieve_fallback(self, query: str, *, kinds: list[str] | None = None, limit: int = 6) -> list[dict[str, Any]]:
+    def _retrieve_fallback(self, query: str, *, kinds: list[str] | None = None, limit: int = 6,
+                           layers: list[str] | None = None) -> list[dict[str, Any]]:
         filters = _asset_type_filter(kinds)
         with self._connection() as conn:
-            if filters:
-                rows = conn.execute(
-                    "SELECT * FROM assets WHERE status = 'active' AND type IN (%s)" % ",".join("?" for _ in filters),
-                    filters,
-                ).fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM assets WHERE status = 'active'").fetchall()
+            sql = "SELECT * FROM assets WHERE status = 'active'"
+            params = []
+            for field, values in (("type", filters), ("experience_layer", layers)):
+                if values:
+                    sql += f" AND {field} IN (%s)" % ",".join("?" for _ in values)
+                    params.extend(values)
+            rows = conn.execute(sql, params).fetchall()
         words = [word.lower() for word in re.findall(r"[\w\u4e00-\u9fff]+", query) if len(word) > 1]
         results: list[dict[str, Any]] = []
         for row in rows:

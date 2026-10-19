@@ -25,7 +25,11 @@ R2 增量：`praxile.subtask_episode.v1` 记录本次运行内明确声明的子
 
 预算用尽或元数据非法会记录 abstain；被选择的资产在实际提示词和 trajectory 中保留层标签。冻结边界、architecture gate 和强制 harness rule 继续原控制规则路径，不受可选经验分层预算削弱。关闭表示路由仍使用原 legacy 行为。
 
-此阶段没有新增 SQL 表或另一套 memory，复用资产索引及侧车元数据；尚不支持按层的 SQL 预过滤、自动分层提案。带 TTL 的任务内临时经验和反思建议见下文；自动执行重规划尚未实现。
+没有新增另一套 memory；复用资产索引及侧车元数据。现有 assets 表新增可空 experience_layer 和分层/状态索引，FTS、向量、混合与回退路径均支持 `store.retrieve(query, layers=["procedural", "tool"])`，在排序截断前使用 SQL 筛选。省略 layers 保留旧行为，空列表或非法层名拒绝。运行时默认仍检索全部，再进行原有语义/预算门控，不通过层过滤隐式移除强制规则。
+
+旧数据库原地加列并标记缓存待刷新，不删除资产/使用计数、不自动扫描文件；显式 `praxile index rebuild` 或正常单资产索引更新填充字段。元数据 proposal 更新接受 strategic/procedural/tool/null，非法值拒绝；手工文件中的非法值不被索引为有效层，运行时仍检查原元数据。自动分层提案尚未实现。16 项分层索引/运行时测试和 7 项既有检索回归通过。
+
+带 TTL 的任务内临时经验和反思建议见下文；自动执行重规划尚未实现。
 
 ## 初次激活的观测条件
 
