@@ -217,8 +217,25 @@ python -m praxile.eval.process_supervisor \
 与原监督器测试合计 10 项通过，未使用付费 API。测试不证明远端生成或计费停止，
 因此收据始终保留 `remote_request_cancelled=null`、`remote_usage_known=false`。
 强制终止不会执行 worker 的 finally，内存中的 trajectory/usage 可能未落盘；
-监督收据只证明本地生命周期，不得补写为零费用、模型弃权或成功候选。请求前的
-持久化 checkpoint 和中断后的完整设计记录恢复仍需补齐。
+监督收据只证明本地生命周期，不得补写为零费用、模型弃权或成功候选。
+
+候选设计 CLI 的请求前 checkpoint：`run_candidate_design` 在进入生成器之前先
+原子写入 `request-intent.json` 和初始 trajectory。意图记录为 `outcome_unknown`，
+`request_dispatched=null`、`remote_usage_known=false`；这不是服务端收件证明。
+checkpoint 写入失败时不进入生成器。意图记录保持原样，最终结果以独立的
+`generated.json` 为准，不将它的未知字段用于覆盖后续实际响应的 usage。
+
+`resume` 仅在已有 `generated.json` 时恢复派生文件而不重新请求模型。已有 manifest
+但没有完整生成结果时（包括旧版本没有意图记录的设计），只要有待发送的开发证据，
+即拒绝自动重发并要求新 design ID。它可能保守拒绝实际上尚未发出的请求，避免在
+未知结果下重复消费。没有证据的 NO_ENTRY 路径仍可恢复，不产生请求意图。
+这不阻止一次 router 调用内部配置的 retry/fallback，后者仍需独立冻结预算。
+
+真实进程测试在生成器阻塞期间由 supervisor 强制终止，然后启动新进程尝试 resume：
+意图及初始轨迹可读、无 generated 文件、恢复被拒绝，生成器进入次数保持 1。
+不模拟付费 API，也不宣称恢复了被杀进程的内存响应。原子文件替换覆盖进程中断，
+未提供断电 fsync 保证；native evidence 的独立脚本直调生成器尚未使用这套 CLI
+checkpoint。完整响应恢复与所有入口统一接入仍未完成。
 
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。

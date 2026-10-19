@@ -30,16 +30,32 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
             from .executor_profile import profile_context
             plan["executor_capability"] = profile_context(executor_profile)
         with file_lock(root / "design"):
-            if (root / "manifest.json").exists() and not resume:
+            existed = (root / "manifest.json").exists()
+            if existed and not resume:
                 raise EvalSchemaError("candidate design already exists; resume explicitly")
             _write_once(root / "manifest.json", plan)
             generated = read_json(root / "generated.json", None)
             if generated is not None:
                 return _finish(root, design_id, generated)
+            attempt_path = root / "request-intent.json"
+            if bundle["evidence"] and (existed or attempt_path.exists()):
+                raise EvalSchemaError(
+                    "design has no durable generation; prior request outcome is unknown. "
+                    "Resume cannot resend a model request; use a new design ID")
             trajectory_path = root / "trajectory.json"
             previous = read_json(trajectory_path, None)
             logger = TrajectoryLogger.from_data(previous) if previous is not None else TrajectoryLogger(
                 f"Design development candidates {design_id}", {"purpose": "proposal_composer"})
+            if bundle["evidence"]:
+                # Persist intent before entering any generator/provider code. A kill
+                # may bypass finally, and absence of a response is not zero usage.
+                intent = {"schema_version": "praxile.design_request_intent.v1",
+                          "design_id": design_id, "status": "outcome_unknown",
+                          "request_dispatched": None, "remote_usage_known": False,
+                          "automatic_replay_allowed": False}
+                write_json(attempt_path, intent)
+                logger.data["candidate_design_request_intent"] = intent
+                write_json(trajectory_path, logger.data)
             try:
                 result = design_development_candidates(evidence=bundle["evidence"],
                     development_task_ids=development_task_ids, heldout_task_ids=heldout_task_ids,

@@ -66,3 +66,57 @@ def test_cli_parses_explicit_budget():
         "--scope", "scope.json", "--development-task-id", "d", "--heldout-task-id", "h",
         "--max-output-tokens", "8000"])
     assert args.max_output_tokens == 8000
+
+
+def test_intent_persisted_before_generator_and_failed_run_not_replayed(setup_run, monkeypatch):
+    config, kwargs, calls, root = setup_run
+    def fail(**unused):
+        calls.append("requested")
+        intent = json.loads((root / "request-intent.json").read_text())
+        trajectory = json.loads((root / "trajectory.json").read_text())
+        assert intent["request_dispatched"] is None
+        assert intent["remote_usage_known"] is False
+        assert trajectory["candidate_design_request_intent"] == intent
+        raise TimeoutError("fixture timeout")
+    monkeypatch.setattr(module, "design_development_candidates", fail)
+    with pytest.raises(TimeoutError):
+        module.run_candidate_design(config, None, **kwargs)
+    with pytest.raises(EvalSchemaError, match="new design ID"):
+        module.run_candidate_design(config, None, **kwargs, resume=True)
+    assert calls == ["requested"]
+    assert not (root / "generated.json").exists()
+
+
+def test_legacy_incomplete_manifest_cannot_trigger_paid_replay(setup_run):
+    config, kwargs, calls, root = setup_run
+    module.run_candidate_design(config, None, **kwargs)
+    (root / "generated.json").unlink()
+    (root / "request-intent.json").unlink()
+    with pytest.raises(EvalSchemaError, match="prior request outcome is unknown"):
+        module.run_candidate_design(config, None, **kwargs, resume=True)
+    assert calls == [4000]
+
+
+def test_empty_evidence_resume_does_not_need_request_intent(setup_run, monkeypatch):
+    config, kwargs, calls, root = setup_run
+    monkeypatch.setattr(module, "collect_development_evidence", lambda *a, **k: {"evidence": []})
+    module.run_candidate_design(config, None, **kwargs)
+    (root / "generated.json").unlink()
+    report = module.run_candidate_design(config, None, **kwargs, resume=True)
+    assert report["decision"] == "NO_ENTRY"
+    assert not (root / "request-intent.json").exists()
+    assert calls == []
+
+
+def test_checkpoint_write_failure_prevents_request(setup_run, monkeypatch):
+    config, kwargs, calls, root = setup_run
+    original = module.write_json
+    def write(path, data):
+        if path.name == "trajectory.json":
+            raise OSError("fixture disk failure")
+        return original(path, data)
+    monkeypatch.setattr(module, "write_json", write)
+    with pytest.raises(OSError, match="disk failure"):
+        module.run_candidate_design(config, None, **kwargs)
+    assert calls == []
+    assert (root / "request-intent.json").exists()
