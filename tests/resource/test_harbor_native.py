@@ -200,6 +200,8 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
                     {"task_body_file": "task.txt", "task_body_sha256": "bad"}):
         with pytest.raises(ValueError, match="task body"):
             PraxileAgent(**kwargs, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), **invalid)
+    with pytest.raises(ValueError, match="inherit_task_packages"):
+        PraxileAgent(**kwargs, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), inherit_task_packages="false")
     agent = PraxileAgent(**kwargs, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
     report = {"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
               "trajectory": {"task_id": "fixture", "model_routing": {"calls": [
@@ -215,6 +217,25 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
     agent.populate_context_post_run(context)
     assert context.n_input_tokens == 12
     assert context.n_output_tokens == 7
+
+
+@pytest.mark.parametrize("inherit", [False, True])
+def test_task_dependency_inheritance_is_explicit(tmp_path, inherit):
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    commands = []
+    class Environment:
+        async def exec(self, command, **kwargs):
+            commands.append(command)
+            return SimpleNamespace(return_code=0)
+        async def upload_file(self, *args):
+            pass
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture", inherit_task_packages=inherit)
+    asyncio.run(agent.setup(Environment()))
+    assert any("--system-site-packages" in command for command in commands) is inherit
 
 
 @pytest.mark.slow

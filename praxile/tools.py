@@ -59,6 +59,7 @@ class ToolRegistry:
             {"name": "find_files", "description": "Find project files by path/name substring."},
             {"name": "search", "description": "Search project text after the same sensitive-path checks used by read_file."},
             {"name": "read_file", "description": "Read a project-relative file after safety checks; supports start_line/end_line for long files."},
+            {"name": "read_document", "description": "Extract PDF pages, XLSX rows or DOCX blocks; paginated, read-only, no OCR/recalculation. Use instead of read_file for binary documents."},
             {"name": "read_files", "description": "Read up to 20 project-relative files with per-file safety checks."},
             {"name": "batch", "description": "Run up to 8 read-only actions concurrently."},
             {"name": "browser_open", "description": "Open a URL with the optional Playwright browser adapter."},
@@ -109,6 +110,11 @@ class ToolRegistry:
                 start_line=action.get("start_line"),
                 end_line=action.get("end_line"),
             ).to_dict()
+        if action_type == "read_document":
+            from .documents import read_document
+            return read_document(self.config, self.safety, str(action.get("path", "")),
+                start=action.get("start", 1), limit=action.get("limit", 5),
+                sheet=action.get("sheet"), char_offset=action.get("char_offset", 0)).to_dict()
         if action_type == "read_files":
             raw_paths = action.get("paths", [])
             if not isinstance(raw_paths, list):

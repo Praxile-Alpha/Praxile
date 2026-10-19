@@ -58,7 +58,7 @@ class SafetyPolicy:
             return self.check_command(str(args.get("command", "")))
         if tool_name == "edit_file":
             return self.check_path(str(args.get("path", "")), write=True)
-        if tool_name in {"read_file", "list_dir"}:
+        if tool_name in {"read_file", "read_document", "list_dir"}:
             return self.check_path(str(args.get("path", ".")), write=False)
         if tool_name == "read_files":
             paths = args.get("paths", [])

@@ -145,6 +145,9 @@ class FileSystemEnv:
             return Observation("failure", f"file not found: {path}")
         if not target.is_file():
             return Observation("failure", f"not a file: {path}")
+        if target.suffix.lower() in {".pdf", ".xlsx", ".docx"}:
+            return Observation("failure", "Binary document: use read_document with pagination instead of read_file.",
+                               {"path": path, "suggested_action": "read_document"})
         text = target.read_text(encoding="utf-8", errors="replace")
         lines = text.splitlines()
         total_lines = len(lines)

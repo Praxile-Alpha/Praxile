@@ -24,7 +24,11 @@ class PraxileAgent(BaseAgent):
     def __init__(self, *args, wheel_path: str, wheel_sha256: str,
                  workspace: str, base_url: str, max_steps: int = 50,
                  timeout_seconds: int = 900, credential_file: str | None = None,
-                 task_body_file: str | None = None, task_body_sha256: str | None = None, **kwargs):
+                 task_body_file: str | None = None, task_body_sha256: str | None = None,
+                 inherit_task_packages: bool = False, **kwargs):
+        if type(inherit_task_packages) is not bool:
+            raise ValueError("inherit_task_packages must be a boolean")
+        self.inherit_task_packages = inherit_task_packages
         if bool(task_body_file) != bool(task_body_sha256):
             raise ValueError("task body file and digest must be configured together")
         if task_body_file:
@@ -70,7 +74,10 @@ class PraxileAgent(BaseAgent):
                   "assert sys.version_info >= (3,11), 'Python >=3.11 required'; "
                   f"assert hashlib.sha256(pathlib.Path({remote_wheel!r}).read_bytes()).hexdigest()=={self.wheel_sha256!r}")
         await self._exec(environment, shlex.join(["python3", "-c", verify]))
-        await self._exec(environment, shlex.join(["python3", "-m", "venv", self.remote_root + "/venv"]))
+        venv = ["python3", "-m", "venv"]
+        if self.inherit_task_packages:
+            venv.append("--system-site-packages")
+        await self._exec(environment, shlex.join([*venv, self.remote_root + "/venv"]))
         await self._exec(environment, shlex.join([self.remote_root + "/venv/bin/python", "-m", "pip",
                                                 "install", "--no-index", "--no-deps", remote_wheel]))
 
@@ -137,7 +144,8 @@ class PraxileAgent(BaseAgent):
         command = shlex.join(argv)
         started = time.monotonic()
         record = {"schema_version": "praxile.native_execution.v1", "status": "running",
-                  "wheel_sha256": self.wheel_sha256, "result_available": False}
+                  "wheel_sha256": self.wheel_sha256, "result_available": False,
+                  "inherit_task_packages": self.inherit_task_packages}
         write_json(self.logs_dir / "praxile-execution.json", record)
         try:
             await self._exec(environment, command, timeout_seconds=self.timeout_seconds + 10)

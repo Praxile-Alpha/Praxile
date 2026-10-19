@@ -186,6 +186,12 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+文档读取通路增补：新增 read_document 动作，PDF 页/XLSX 行/DOCX 正文块分页、
+长文本续读、文件快照摘要、受限解析子进程和错误返回已接入工具及 Action Schema。
+read_file 对这三类二进制格式提示改用正式工具。Harbor 可显式继承冻结任务镜像
+依赖，默认关闭并记录选择。当前只完成读取，产物生成、渲染、重算与真实模型复验
+仍缺，专业交付总项不勾选。边界见 DOCUMENT_TOOLS.zh-CN.md。
+
 增量进展（2026-10-19）：新增默认关闭的任务内浏览器会话，navigate/click/fill/精确文本断言/当前状态截图已接入 runtime action 工具链；请求白名单、Socket/Service Worker 限制、错误脱敏与生命周期清理已覆盖。8 项会话单元测试、1 项真实 Chromium 集成测试通过。下载、接管、完整状态断言与恢复未完成，浏览器总项仍不勾选；详见 `BROWSER_SESSIONS.zh-CN.md`。
 
 交付检查增补：新增独立版本化 public deliverable contract 和 `check_deliverables` runtime action，支持 JSON 字段、CSV 结构、UTF-8 文本、文件缺失/大小/路径检查及摘要；不改变 BenchmarkTask V1。12 项测试通过。结果明确不是官方评分或语义质量判断，二进制 Office/PDF opener、状态变化契约和可信来源确认尚缺，总项不勾选；详见 `DELIVERABLE_CHECKS.zh-CN.md`。

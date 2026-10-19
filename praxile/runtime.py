@@ -1408,6 +1408,7 @@ class AgentRuntime:
             '{"type":"search","pattern":"text or regex"}\n'
             '{"type":"read_file","path":"relative/path","start_line":1,"end_line":120}\n'
             '{"type":"read_files","paths":["relative/a.py","relative/b.py"]}\n'
+            '{"type":"read_document","path":"task_folder/reference.pdf","start":1,"limit":5,"char_offset":0}\n'
             '{"type":"batch","actions":[{"type":"read_file","path":"a.py"},{"type":"search","pattern":"needle"}]}\n'
             '{"type":"browser_open","url":"http://localhost:3000"}\n'
             '{"type":"browser_screenshot","url":"http://localhost:3000","name":"home"}\n'

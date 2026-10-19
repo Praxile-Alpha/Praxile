@@ -18,6 +18,7 @@ class ActionSchemaRegistry:
             "search": {"required": {"pattern": str}, "optional": {"limit": int}},
             "read_file": {"required": {"path": str}, "optional": {"max_chars": int, "start_line": int, "end_line": int}},
             "read_files": {"required": {"paths": list}, "optional": {"max_chars_each": int}},
+            "read_document": {"required": {"path": str}, "optional": {"start": int, "limit": int, "sheet": str, "char_offset": int}},
             "batch": {"required": {"actions": list}, "optional": {}},
             "browser_open": {"required": {"url": str}, "optional": {}},
             "browser_screenshot": {"required": {"url": str}, "optional": {"name": str}},
@@ -65,6 +66,10 @@ class ActionSchemaRegistry:
             paths = action.get("paths")
             if isinstance(paths, list) and not all(isinstance(item, str) for item in paths):
                 errors.append("read_files.paths must be a list of strings")
+        if action_type == "read_document":
+            for field, lower, upper in (("start", 1, 100000), ("limit", 1, 20), ("char_offset", 0, 10000000)):
+                if field in action and (type(action[field]) is not int or not lower <= action[field] <= upper):
+                    errors.append(f"read_document.{field} must be an integer in [{lower}, {upper}]")
         if action_type == "finish" and "status" in action and action["status"] not in {"completed", "needs_human", "failed"}:
             errors.append("finish.status must be completed, needs_human, or failed")
         if action_type == "batch":
