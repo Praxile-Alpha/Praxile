@@ -778,3 +778,27 @@ docker build --platform linux/amd64 \
 构建成功后按镜像 ID 启动 `--network none --platform linux/amd64` 临时容器，确认 Python、Node、pytest、openpyxl、pandas、PyYAML 和 NumPy 可用。摘要和实际版本见 [环境记录](results/workbuddy-inventory-environment-20261019.json)。原始依赖要求含版本范围，不能仅凭相同 Dockerfile 保证未来重建得到相同依赖；此次记录的是已构建镜像身份和实际版本，不是完整可复现 lockfile。
 
 此结果仅是环境验收，没有调用 MiniMax、执行任务或取得官方评分，也不是严格 A/B。尚需将固定镜像以显式来源配置接入完整 Harbor Trial，并验证平台与输入快照一致性；不能假设直接 Docker 构建成功就意味着 Harbor 会自动复用该镜像。
+
+### 固定镜像环境适配器
+
+现提供显式选择的 `praxile.adapters.workbuddy_pinned_environment:PinnedWorkBuddyEnvironment`，仅用于安装了 WorkBuddy/Harbor 的隔离环境。继承官方 WorkBuddy Docker 生命周期，不修改任务 TOML 或评分器；复制内存中的 task environment config 后设置预构建镜像。Job 的环境配置示例：
+
+```json
+{
+  "type": "docker",
+  "import_path": "praxile.adapters.workbuddy_pinned_environment:PinnedWorkBuddyEnvironment",
+  "delete": true,
+  "force_build": false,
+  "kwargs": {
+    "pinned_image_id": "sha256:64fd3491c37927734b6f2ebeeeaa9916f929e3d534c4b3e6bb3e39d3ab0165a5",
+    "dockerfile_sha256": "c6bbbb58b5293f0b0d38ac87a28a81981a1b62a381517f6f4ed907a6df17b689",
+    "platform": "linux/amd64"
+  }
+}
+```
+
+示例 ID 仅指本次本地镜像，并非可从 registry 拉取的发布镜像。适配器拒绝 tag、冲突的 task-declared image、force_build、平台不匹配，以及修改镜像/命令/挂载/服务的 Compose 文件。唯一支持的 task Compose 内容是原有 `main.extra_hosts: ["host.docker.internal:host-gateway"]` 映射；启动前复核其摘要。原任务树仍应使用 `--freeze-local-inputs` 完整冻结。
+
+启动前 inspect 本地镜像身份与平台，启动后检查 `uname -m`；成功写入 Trial 根目录的 `praxile-pinned-environment.json`，记录 image ID、Dockerfile/Compose 摘要与实际架构。该记录不是可信构建证明，不证明镜像来自指定 Dockerfile；调用方负责构建来源。生命周期仍归 Harbor 所有，异常时也必须执行 `stop(delete=True)`。
+
+本机 ARM Mac + Docker Desktop + Harbor 0.18 实测：上述真实 Office 镜像经适配器启动，容器内 pandas/openpyxl 检查通过并清理；8 项测试通过，无模型调用。验证范围为环境生命周期，不含完整 Trial、Agent、官方评分或收益结论；Linux daemon 尚未实测。
