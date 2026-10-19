@@ -195,6 +195,31 @@ usage 不能覆盖先前失败尝试可能产生的供应商消耗。
 阻塞读取时仍依赖底层超时，不是即时取消或总墙钟截止。该行为由两套可控传输替身
 验证，不等于外部 provider 的实际计费或远端请求终止证明。
 
+实验进程截止（POSIX）：已有 worker supervisor 也可显式包裹独立设计脚本，
+将模型连接、传输重试及路由 fallback 一起限制在同一个本地进程组的预算内：
+
+```bash
+python -m praxile.eval.process_supervisor \
+  --timeout 120 --status /private/tmp/design-supervision.json \
+  --cancel-file /private/tmp/design-cancel \
+  -- python /absolute/path/to/isolated_design.py
+```
+
+路径是示例，实际运行使用新的实验目录；取消文件存在时不启动 worker。
+截止从监督器开始计时，不在每次 HTTP 重试后重置；到期返回 124，取消返回 143。
+监督器杀死所属进程组并 wait 回收直接子进程，写入 `worker_reaped` 和包含清理的
+`elapsed_seconds`。这不是硬实时保证，进程创建、内核调度和回收仍可能增加延迟。
+它不执行模型调用、不自动重试，也不改变普通 `router.chat()` 的默认行为。
+已有容器 worker 使用该机制；普通候选设计 CLI 尚未自动包裹监督器。
+
+真实回环 HTTP 测试覆盖 urllib/httpx 的阻塞读取、总截止和取消：客户端自身超时
+设为 60 秒，外层 2 秒终止，服务端实际观察连接关闭，并验证子进程已回收。
+与原监督器测试合计 10 项通过，未使用付费 API。测试不证明远端生成或计费停止，
+因此收据始终保留 `remote_request_cancelled=null`、`remote_usage_known=false`。
+强制终止不会执行 worker 的 finally，内存中的 trajectory/usage 可能未落盘；
+监督收据只证明本地生命周期，不得补写为零费用、模型弃权或成功候选。请求前的
+持久化 checkpoint 和中断后的完整设计记录恢复仍需补齐。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有

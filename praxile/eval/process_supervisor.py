@@ -1,4 +1,4 @@
-"""Container-side deadline for native benchmark workers (POSIX only)."""
+"""Process-group deadline for native workers and isolated experiments (POSIX only)."""
 from __future__ import annotations
 
 import argparse
@@ -24,8 +24,10 @@ def supervise(argv: list[str], *, timeout: float, status_path: Path,
     if not argv or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("a command and finite positive timeout are required")
     process = None
+    started = time.monotonic()
     record = {"schema_version": "praxile.worker_supervision.v1", "status": "starting",
-              "timeout_seconds": timeout, "returncode": None}
+              "timeout_seconds": timeout, "returncode": None, "worker_reaped": False,
+              "remote_request_cancelled": None, "remote_usage_known": False}
     previous = {}
     pending_signal = None
     def interrupted(signum, frame):
@@ -48,7 +50,7 @@ def supervise(argv: list[str], *, timeout: float, status_path: Path,
         record["status"] = "running"
         write_json(status_path, record)
         try:
-            deadline = time.monotonic() + timeout
+            deadline = started + timeout
             while True:
                 if cancel_file is not None and cancel_file.exists():
                     raise _Terminated(signal.SIGTERM)
@@ -81,6 +83,8 @@ def supervise(argv: list[str], *, timeout: float, status_path: Path,
                 except ProcessLookupError:
                     pass
                 process.wait()
+                record["worker_reaped"] = True
+            record["elapsed_seconds"] = round(time.monotonic() - started, 6)
             write_json(status_path, record)
         finally:
             for signum, handler in previous.items():
