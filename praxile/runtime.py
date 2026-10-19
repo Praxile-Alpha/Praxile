@@ -820,6 +820,22 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
+                conditional = [item for item in retrieved if item.get("activation_requirements") is not None]
+                if conditional:
+                    snapshot = self.project.snapshot(refresh=True)
+                    snapshot["interop"] = interop_policy(self.config)
+                    observations = {"state": snapshot, "tool_versions": observe_tool_versions()}
+                    checks = [{"path": item.get("path"), **check_conditions(
+                        item["activation_requirements"], observations)} for item in conditional]
+                    rejected = any(check["status"] == "abstained" for check in checks)
+                    logger.data.setdefault("activation_revalidations", []).append({
+                        "at": utc_now(), "phase": "before_model", "observations": observations,
+                        "checks": checks, "action_count": len(logger.data["actions"])})
+                    self._trace("runtime_experience_conditions", task_id=logger.task_id,
+                                rejected=rejected, checks=checks)
+                    if rejected:
+                        self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+                        return "needs_human", "Experience conditions changed or became unknown; start a new run with fresh context."
                 messages = self._compress_messages_if_needed(messages, logger, role="coding_agent")
                 self._emit_progress(
                     progress_callback,
