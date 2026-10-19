@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from .config import Config
+from .browser_probes import observe_probes, validate_probes
 from .environment import Observation
 from .utils import path_is_relative_to, slugify, utc_now
 
@@ -24,6 +25,7 @@ class BrowserEnv:
         self._closed = False
         self._session_context: Any | None = None
         self._session_page: Any | None = None
+        self._observation_probes = validate_probes(config.get("browser", "observation_probes", default={}))
 
     def observe_state(self) -> dict[str, Any]:
         """Inspect existing handles without launching or navigating a browser."""
@@ -48,6 +50,8 @@ class BrowserEnv:
                     host = f"[{host}]"
                 port = parsed.port or (443 if parsed.scheme == "https" else 80)
                 result["origin"] = f"{parsed.scheme}://{host}:{port}"
+            if not self._preflight(page.url):
+                result.update(observe_probes(page, self._observation_probes))
         except Exception:
             # Unknown state must not be reported as a matching observation.
             return {}

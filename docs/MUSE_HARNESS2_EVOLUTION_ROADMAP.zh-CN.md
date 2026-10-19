@@ -223,6 +223,12 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 
 浏览器观测增补：runtime 统一观测入口可读取已有会话存活、去敏 origin 和 Chromium 版本，不自动启动浏览器。22 项针对性测试通过；真实 Chromium 断言已添加，本轮因本地端口沙箱权限及审批服务容量失败未执行，不算验收完成。尚不覆盖 DOM/业务状态、跨进程观测和子任务中途重新选择。
 
+后续 DOM 观测增补：控制面可配置 origin 范围内的 count/visible 探针，返回类型化状态
+及定义摘要，配置对象运行中变更不替换已冻结定义。跨域、歧义、异常及期间导航保留
+unknown，已有条件门控在下次模型请求前停止失效上下文。13 项纯探针测试、运行时
+条件失效/未知回归及 3 项真实 Chromium 测试通过；不宣称 DOM 原子性、跨进程状态
+或视觉质量判断，完整激活项保持未勾选。详见 BROWSER_SESSIONS.zh-CN.md。
+
 ### R2-B 改进实验记录
 
 受控 Context A/B 已增加逐任务 ImprovementEpisode V1，保留冻结预测、候选 digest、配对 trace、观察差异和混杂因素；verdict 限定单对任务结果，不能推断因果，默认 NO_ENTRY、不授予 promotion。缺失数据保留未知。已接实际 A/B analyze/report 持久化，修复分类 progress 误用全任务汇总。可执行 diff、独立行为 verifier、语义对齐及中性 benchmark 接入尚未完成，总项不勾选。详见 `IMPROVEMENT_EPISODES.zh-CN.md`。

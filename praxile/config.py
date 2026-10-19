@@ -221,6 +221,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
             "enabled": False,
             "allow_interactions": False,
             "allow_downloads": False,
+            "observation_probes": {},
             "max_download_bytes": 10000000,
             "adapter": "playwright",
             "dev_server_url": None,
@@ -832,6 +833,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
                 return default
             cur = cur[part]
         return cur
+
+    from .browser_probes import validate_probes
+    try:
+        validate_probes(value_at("browser.observation_probes", {}))
+    except ValueError as exc:
+        errors.append(f"browser.observation_probes: {exc}")
 
     for path in [
         "runtime.max_steps",

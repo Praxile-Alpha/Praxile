@@ -31,6 +31,58 @@ Playwright 会话仍禁用隐式下载，原有安全边界不放宽。
 
 ## 启用
 
+### 用只读 DOM 状态约束经验激活
+
+用户可在 `browser.observation_probes` 中定义最多 16 个 origin 范围内的探针：
+
+```json
+{
+  "save_visible": {
+    "origin": "http://localhost:3000",
+    "selector": "#save-button",
+    "kind": "visible"
+  },
+  "row_count": {
+    "origin": "http://localhost:3000",
+    "selector": "table tbody tr",
+    "kind": "count"
+  }
+}
+```
+
+默认空配置。探针由控制面配置，不是模型 action；没有自定义 JavaScript、表单值或
+页面文本读取。配置校验报告 `browser.observation_probes` 路径；BrowserEnv 创建时
+复制定义，运行中修改配置对象不会悄悄更换同名探针含义。
+
+`observe_state()` 只查看已存在且符合当前域名白名单的交互会话，不启动/导航页面。
+返回 `dom.save_visible`（布尔）、`dom.row_count`（整数）以及规范化探针定义的
+`dom_profile_sha256`。缺失/多匹配的 visible、选择器异常、跨 origin 或观测期间导航
+均不提供匹配值；其中 count=0 是合法观察，不能与 unknown 混淆。
+临时状态不包含 URL 路径、查询参数、输入值或异常原文。
+
+经验侧车可声明：
+
+```json
+{
+  "activation_requirements": {
+    "state_equals": {
+      "browser.dom.save_visible": true,
+      "browser.dom_profile_sha256": "REPLACE_WITH_OBSERVED_PROFILE_SHA256"
+    }
+  }
+}
+```
+
+摘要要求不是强制自动添加；推荐显式绑定，防止后续任务更换选择器定义但复用相同
+经验条件名。原任务语义、anti-scope、工具版本检查仍然生效。已有 runtime 在每次
+模型请求前重查条件，失效/未知时 checkpoint + needs_human，不继续使用旧上下文。
+Deliverable V2 的 state_equals 也能检查这些已有会话状态，但不等同官方评审。
+
+验证：13 项探针单元测试、运行时 DOM 条件失效/未知测试，以及 3 项真实 Chromium
+资源测试通过。真实页面覆盖按钮隐藏前后状态、count 和稳定摘要。
+尚无 DOM 原子快照、跨进程应用状态、完整业务状态机或视觉质量判断；页面可能在
+观测之后变化，这不是替代实际操作权限检查的安全锁。
+
 ### 一次性页面与重定向边界（后续修复）
 
 browser_open/browser_screenshot 与交互会话共用受限 context：显式非空域名白名单、
