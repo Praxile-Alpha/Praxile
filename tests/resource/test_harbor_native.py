@@ -17,6 +17,73 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+@pytest.mark.parametrize("failure", ["timeout", "cancelled", "exit"])
+@pytest.mark.parametrize("result_exists", [False, True])
+def test_failed_execution_preserves_primary_error_and_available_evidence(tmp_path, failure, result_exists):
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        base_url="http://localhost/v1", model_name="fixture", wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
+
+    class Environment:
+        async def upload_file(self, *args):
+            pass
+
+        async def exec(self, *args, **kwargs):
+            if failure == "timeout":
+                raise TimeoutError("secret-exception-text")
+            if failure == "cancelled":
+                raise asyncio.CancelledError("secret-exception-text")
+            return SimpleNamespace(return_code=1)
+
+        async def download_file(self, source, target):
+            target.write_text("partial")
+            if not result_exists:
+                raise FileNotFoundError("secret-download-text")
+            target.write_text(json.dumps({"schema_version": "praxile.native_benchmark_run.v1",
+                "trajectory": {"task_id": "failed-task"}, "experience_mode": "fresh_disabled"}))
+
+    expected = {"timeout": TimeoutError, "cancelled": asyncio.CancelledError, "exit": RuntimeError}[failure]
+    with pytest.raises(expected):
+        asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    text = (tmp_path / "praxile-execution.json").read_text()
+    record = json.loads(text)
+    assert record["status"] == ("cancelled" if failure == "cancelled" else "failed")
+    assert record["error_type"] == expected.__name__
+    assert record["result_available"] is result_exists
+    assert record["elapsed_seconds"] >= 0
+    assert "secret-" not in text
+    assert (tmp_path / "praxile-result.json").exists() is result_exists
+    assert not (tmp_path / "praxile-result.partial.json").exists()
+
+
+def test_successful_process_with_invalid_result_is_collection_failure(tmp_path):
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        base_url="http://localhost/v1", model_name="fixture", wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
+
+    class Environment:
+        async def upload_file(self, *args):
+            pass
+
+        async def exec(self, *args, **kwargs):
+            return SimpleNamespace(return_code=0)
+
+        async def download_file(self, source, target):
+            target.write_text("{}")
+
+    with pytest.raises(ValueError, match="invalid native"):
+        asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["status"] == "collection_failed"
+    assert record["result_available"] is False
+    assert not (tmp_path / "praxile-result.json").exists()
+    assert not (tmp_path / "praxile-result.partial.json").exists()
+
+
 def test_harbor_agent_usage_and_integrity(tmp_path):
     wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"fixture")

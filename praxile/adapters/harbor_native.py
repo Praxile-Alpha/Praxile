@@ -6,12 +6,15 @@ owns container creation, termination, networking, and official verification.
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import shlex
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 
 from harbor.agents.base import BaseAgent
+from ..utils import write_json
 
 
 class PraxileAgent(BaseAgent):
@@ -77,9 +80,55 @@ class PraxileAgent(BaseAgent):
             "--result", self.remote_root + "/result.json", "--model", self.model_name,
             "--base-url", self.base_url, "--max-steps", str(self.max_steps),
         ])
-        await self._exec(environment, command)
-        await environment.download_file(self.remote_root + "/result.json", self.logs_dir / "praxile-result.json")
-        self.populate_context_post_run(context)
+        started = time.monotonic()
+        record = {"schema_version": "praxile.native_execution.v1", "status": "running",
+                  "wheel_sha256": self.wheel_sha256, "result_available": False}
+        write_json(self.logs_dir / "praxile-execution.json", record)
+        try:
+            await self._exec(environment, command)
+        except BaseException as error:
+            record.update(status="cancelled" if isinstance(error, asyncio.CancelledError) else "failed",
+                          error_type=type(error).__name__)
+            # Failure evidence must not replace the primary execution exception.
+            try:
+                await asyncio.wait_for(self._collect_result(environment, context), timeout=15)
+                record["result_available"] = True
+            except (Exception, asyncio.CancelledError) as collection_error:
+                record["collection_error_type"] = type(collection_error).__name__
+            record["elapsed_seconds"] = time.monotonic() - started
+            try:
+                write_json(self.logs_dir / "praxile-execution.json", record)
+            except OSError:
+                pass
+            raise
+        try:
+            await asyncio.wait_for(self._collect_result(environment, context), timeout=15)
+            record.update(status="completed", result_available=True)
+        except BaseException as error:
+            record.update(status="collection_failed", error_type=type(error).__name__)
+            raise
+        finally:
+            record["elapsed_seconds"] = time.monotonic() - started
+            try:
+                write_json(self.logs_dir / "praxile-execution.json", record)
+            except OSError:
+                if record["status"] == "completed":
+                    raise
+
+    async def _collect_result(self, environment, context) -> None:
+        # Never leave a truncated download at the canonical evidence path.
+        temporary = self.logs_dir / "praxile-result.partial.json"
+        try:
+            await environment.download_file(self.remote_root + "/result.json", temporary)
+            result = json.loads(temporary.read_text(encoding="utf-8"))
+            if (not isinstance(result, dict) or result.get("schema_version") != "praxile.native_benchmark_run.v1"
+                    or not isinstance(result.get("trajectory"), dict)
+                    or result.get("experience_mode") != "fresh_disabled"):
+                raise ValueError("invalid native worker result")
+            temporary.replace(self.logs_dir / "praxile-result.json")
+            self.populate_context_post_run(context)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def populate_context_post_run(self, context) -> None:
         result_path = self.logs_dir / "praxile-result.json"

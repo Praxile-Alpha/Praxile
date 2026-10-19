@@ -188,3 +188,11 @@ python -m praxile.eval.workbuddy \
 兼容性注意：Harbor 0.18.0 不从任务 TOML 读取自定义 verifier import_path。生成器在 **job 的 verifier.import_path** 显式设置官方 `workbuddy_bench.judge:CompositeVerifier`，避免落入默认脚本评分器。`dev` 用户仍由 task.toml 控制。官方各任务评分材料和参数不改写；LLM/VLM 评分是否实际启用必须另行验证并报告。
 
 增补验证：31 项解包/清单/job/CLI/上游准备测试通过；真实 Office 50 条通过 Harbor Task/JobConfig 解析，VerifierFactory 实例化类型确认为 CompositeVerifier。尚未完成完整 Harbor job 的真实模型执行与结果归档，不能据此宣称正式评测通过。
+
+## 执行异常证据
+
+原生执行器在 worker 启动前写入 `praxile-execution.json`，分别记录 completed、failed、cancelled、collection_failed。记录包含 wheel 摘要、耗时、异常类型和结果可用性，不复制异常消息或进程输出中的潜在凭据。
+
+worker 超时、取消或非零退出后，仍在最多 15 秒内尝试回收已经存在的最终结果，并保留原始执行异常。下载先进入临时文件，验证版本后才发布为 `praxile-result.json`；残缺下载会被删除。正常进程退出但回收失败也会明确标记，不能当作成功运行。
+
+这不是完整 checkpoint 恢复：进程被强杀而未写出最终结果时，结果保持 unavailable，不把缺失轨迹补成成功证据。setup/upload 阶段错误仍由 Harbor trial 日志记录。容器生命周期继续由 Harbor 管理。
