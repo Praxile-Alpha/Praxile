@@ -10,7 +10,7 @@ from .schema import EvalSchemaError, canonical_json
 def profile_context(profile):
     if (not isinstance(profile, dict)
             or set(profile) != {"schema_version", "executor", "version", "actions"}
-            or profile["schema_version"] != "praxile.executor_action_profile.v1"
+            or profile["schema_version"] not in {"praxile.executor_action_profile.v1", "praxile.executor_action_profile.v2"}
             or profile["executor"] != "praxile"
             or not isinstance(profile["version"], str) or not profile["version"].strip()):
         raise EvalSchemaError("expected a versioned native Praxile executor action profile")
@@ -25,23 +25,47 @@ def profile_context(profile):
     description = {"profile": deepcopy(profile), "interfaces": interfaces,
                    "document_constraints": docx_spec_prompt() if set(names) & {"create_docx", "revise_docx"} else None,
                    "permission_granted": False, "runtime_availability_verified": False}
+    if profile["schema_version"] == "praxile.executor_action_profile.v2":
+        bounds = {
+            "read_document": {"start": {"minimum": 1, "maximum": 100000},
+                              "limit": {"minimum": 1, "maximum": 20},
+                              "char_offset": {"minimum": 0, "maximum": 10000000}},
+            "check_document_layout": {"max_pages": {"minimum": 1, "maximum": 2000}},
+            "revise_docx": {"expected_sha256": {"pattern": "^[0-9a-f]{64}$",
+                "source": "current document observation; refresh before execution"}},
+        }
+        description["action_constraints"] = {name: bounds[name] for name in names if name in bounds}
+        description["constraints_complete"] = False
     description["digest"] = "sha256:" + hashlib.sha256(canonical_json(description).encode()).hexdigest()
     return description
 
 
 def validate_action_examples(examples, capability):
     if not isinstance(examples, list) or not 1 <= len(examples) <= 8:
-        raise EvalSchemaError("profile-constrained draft requires 1..8 action_examples")
+        _invalid_example("invalid_example_list")
     registry = ActionSchemaRegistry()
-    for example in examples:
+    for index, example in enumerate(examples):
         if not isinstance(example, dict) or example.get("type") not in capability["profile"]["actions"]:
-            raise EvalSchemaError("candidate action is not declared by executor profile")
+            _invalid_example("undeclared_action", index)
         valid, errors = registry.validate(example)
         if not valid:
-            raise EvalSchemaError("candidate action schema mismatch: " + "; ".join(errors))
+            schema = registry.schemas[example["type"]]
+            _invalid_example("schema_mismatch", index, action_type=example["type"],
+                error_count=len(errors), missing_required_fields=[key for key in schema["required"] if key not in example],
+                unknown_field_count=len(set(example) - {"type", *schema["required"], *schema["optional"]}))
     return {"profile_digest": capability["digest"], "executor": capability["profile"]["executor"],
             "profile": deepcopy(capability["profile"]), "action_examples": deepcopy(examples),
             "schema_validated": True, "execution_verified": False, "permission_granted": False}
+
+
+def _invalid_example(reason, index=None, **details):
+    messages = {"invalid_example_list": "profile-constrained draft requires 1..8 action_examples",
+                "undeclared_action": "candidate action is not declared by executor profile",
+                "schema_mismatch": "candidate action schema mismatch"}
+    error = EvalSchemaError(messages[reason])
+    error.action_validation_diagnostic = {"schema_version": "praxile.candidate_action_validation.v1",
+        "reason": reason, "example_index": index, **details}
+    raise error
 
 
 def common_parent_capability(candidates):

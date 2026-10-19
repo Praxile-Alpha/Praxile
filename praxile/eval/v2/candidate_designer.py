@@ -177,6 +177,8 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
                 "limitations": ["Caller supplies public development evidence; provenance is not independently attested.",
                                 "Draft quality and composition compatibility require independent execution."]}
     except Exception as error:
+        if getattr(error, "action_validation_diagnostic", None) is not None:
+            record["action_validation_diagnostic"] = error.action_validation_diagnostic
         cause, seen = error, set()
         while cause is not None and id(cause) not in seen:
             seen.add(id(cause))

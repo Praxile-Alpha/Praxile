@@ -40,6 +40,37 @@ def test_profile_digest_changes_with_allowed_actions():
     assert profile_context(first)["digest"] != profile_context(second)["digest"]
 
 
+def test_v2_constraints_match_registry_and_leave_v1_shape_unchanged():
+    from praxile.action_schema import ActionSchemaRegistry
+    old = {**profile(), "actions": ["read_document", "check_document_layout", "revise_docx"]}
+    legacy = profile_context(old)
+    assert set(legacy) == {"profile", "interfaces", "document_constraints", "permission_granted",
+                           "runtime_availability_verified", "digest"}
+    current = profile_context({**old, "schema_version": "praxile.executor_action_profile.v2"})
+    assert current["digest"] != legacy["digest"]
+    assert current["constraints_complete"] is False
+    registry = ActionSchemaRegistry()
+    for kind in ("read_document", "check_document_layout"):
+        for name, bounds in current["action_constraints"][kind].items():
+            for value in (bounds["minimum"], bounds["maximum"]):
+                assert registry.validate({"type": kind, "path": "input.docx", name: value})[0]
+            for value in (bounds["minimum"] - 1, bounds["maximum"] + 1, True):
+                assert not registry.validate({"type": kind, "path": "input.docx", name: value})[0]
+
+
+def test_validation_diagnostic_does_not_export_unknown_names_or_values():
+    sample = {"type": "revise_docx", "PRIVATE_KEY": "PRIVATE_VALUE"}
+    with pytest.raises(EvalSchemaError) as caught:
+        validate_action_examples([sample], profile_context(profile()))
+    diagnostic = caught.value.action_validation_diagnostic
+    assert diagnostic["reason"] == "schema_mismatch"
+    assert diagnostic["example_index"] == 0
+    assert diagnostic["action_type"] == "revise_docx"
+    assert diagnostic["unknown_field_count"] == 1
+    assert set(diagnostic["missing_required_fields"]) == {"path", "document", "expected_sha256"}
+    assert "PRIVATE" not in str(diagnostic) + str(caught.value)
+
+
 def test_native_candidate_cannot_enter_different_executor(tmp_path):
     from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
     from praxile.eval.v2.candidate import ContextCandidate

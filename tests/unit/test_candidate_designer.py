@@ -189,6 +189,9 @@ def test_capability_profile_is_in_prompt_and_schema_checked_on_each_draft():
     kwargs, _ = inputs({"content": json.dumps(value)})
     with pytest.raises(EvalSchemaError, match="not declared"):
         design_development_candidates(**kwargs, executor_profile=profile)
+    diagnostic = kwargs["logger"].data["development_candidate_designs"][0]["action_validation_diagnostic"]
+    assert diagnostic["reason"] == "undeclared_action" and diagnostic["example_index"] == 0
+    assert "estimate_pages" not in json.dumps(diagnostic)
 
 
 @pytest.mark.parametrize("failure", ["unknown_ref", "duplicate", "extra_field", "truncated", "bad_json"])

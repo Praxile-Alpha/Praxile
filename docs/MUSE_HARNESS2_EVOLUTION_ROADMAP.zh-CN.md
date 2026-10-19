@@ -180,6 +180,12 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
+示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏
+校验诊断；另提供 opt-in 工具 profile v2 数值/SHA 约束，保留 v1 摘要兼容性。
+这些后续改动尚无真实模型复验，不能把格式拒绝当成经验质量或性能改善。见
+`results/docx-repair-flash-design-20261019.json`。
+
 文档修订来源审计：投影 v4 增加经 DOCX schema 校验的替换结构统计。已有 seeded
 JobBench compact repair 离线回放四次修订，字符数 4783→3954→3232→2494，表格
 始终 15×6，布局记录仍为两页。可用于审计动作与结果，但内容保持/因果仍未知。

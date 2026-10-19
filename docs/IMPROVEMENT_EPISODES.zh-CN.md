@@ -397,6 +397,28 @@ benchmark 成绩，也不是 held-out 样本。此次没有调用模型或改变
 该升级为后续候选设计提供可审计的动作信息，但仍不输出正文，也未自动生成
 “应该删哪段内容”的经验。原 manifest 不改写；投影版本变化使用新 design ID。
 
+修订来源的真实设计（`5602042`）：10 条 v4 证据、显式公开修订目标、原 v1 工具
+profile，一次 M3.1 Flash low 请求在 19.840 秒返回完整 9000 字符 JSON；4123 input /
+2858 output，其中 726 reasoning。第一个候选在 action_examples 校验失败，未发布
+任何候选，也未执行 probe。现有轨迹只记录阶段，无法追溯具体违规字段；不能猜测
+本次一定是分页范围或 SHA 填写错误。见 `results/docx-repair-flash-design-20261019.json`。
+这是 seeded 修订开发任务，不是原始 benchmark，未发送 rubric，未追加修复请求。
+
+### 能力 Profile V2 与拒绝诊断
+
+新增 opt-in `praxile.executor_action_profile.v2`，其余字段仍为 executor/version/actions。
+v1 输出字段与 digest 构造保持不变，旧候选不被隐式迁移。v2 的 action_constraints
+仅为声明的动作增加已支持的 read_document 数值范围、check_document_layout 页数
+范围和 revise_docx SHA 格式/刷新要求。它不授予权限，constraints_complete=false，
+并不替代 ActionSchemaRegistry、文档校验或运行时安全检查。缺少范围提示是代码
+审计发现，不是此次真实错误的已证明原因；v2 尚未做真实模型验收。
+
+动作示例拒绝时新增 `praxile.candidate_action_validation.v1`，记录固定 reason、
+example_index，以及可确认的 action_type、错误数量、缺少的已知必填字段、未知
+字段数量。不记录未知字段名、未知 action 名或字段值，也不原样落盘底层异常。
+候选设计轨迹保留该诊断，原校验仍拒绝且没有自动修复调用。历史失败不回填。
+边界测试核对 v2 公布的数值上下界与实际注册表一致，验证 v1 形态以及诊断脱敏。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
