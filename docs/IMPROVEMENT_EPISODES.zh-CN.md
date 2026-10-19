@@ -110,6 +110,13 @@ renderer 路径。结果的路径、上限、布尔值、状态须与调用及�
 2 页且未满足 1 页上限；未调用模型、未修改源材料。这仅验证投影器兼容真实
 轨迹，不将该 seeded repair 冒充带完整开发实验 manifest 的 A/B。
 
+修订关联增补：采集器也投影成功 `revise_docx` 的 before/after 字节摘要，验证
+调用的 expected_sha256 与结果一致，不传递 replacement blocks、正文或备份路径。
+布局结果只在相同路径及 source_sha256 对应唯一先前修订时记录 revision_event_id；
+摘要不匹配、未来修订或重复版本生产者保持 unknown，不按相邻步骤推测。
+该引用表示相同字节版本，不证明因果收益、语义保持或视觉质量。对上述冻结轨迹
+离线回放，4/4 布局检查可关联唯一修订，0 因果效果声明，未调用模型。
+
 真实 profile 生成复验仍失败：MiniMax-M3 在 4000 输出 token 内只返回推理块，
 finish_reason=length，没有最终 JSON，未产生候选。见
 results/jobbench-candidate-profile-20261019.json。缺少输出不等于能力约束已有效。

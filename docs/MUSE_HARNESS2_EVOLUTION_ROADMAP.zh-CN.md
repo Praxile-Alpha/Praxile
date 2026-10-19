@@ -290,6 +290,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   后续真实 Docker 离线安装在两版 Harbor 各 1 passed，确认依赖仅存在于 worker
   venv，系统 Python 未受影响，0 模型调用。见 worker-dependency-docker-20261019.json；
   不代表完整文档渲染或任务验收，完整项不勾选。
+  文档过程证据增补：成功修订的 before/after 摘要进入开发证据；布局检查按
+  相同路径和唯一先前版本摘要引用修订事件，歧义/不匹配保持 unknown，不按
+  时间邻近猜测因果。真实 compact repair 轨迹离线回放 4/4 可关联，不包含
+  正文/评分材料，不表示候选收益已验证。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

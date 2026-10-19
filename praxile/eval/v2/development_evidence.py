@@ -5,7 +5,7 @@ import re
 
 from ...utils import read_json
 from .alignment import _identity
-from .document_evidence import project_layout
+from .document_evidence import project_layout, project_revision, revision_layout_links
 from .manifest import ImmutableManifestStore
 from .schema import EvalSchemaError, canonical_json
 
@@ -54,6 +54,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
                or event.run_id != agent_run_id for event in events):
             raise EvalSchemaError("trace events do not belong to the source task")
         calls, counts = {}, Counter()
+        layout_links = revision_layout_links(events)
         for event in events:
             if event.event_id in seen:
                 raise EvalSchemaError("duplicate source event ID")
@@ -67,8 +68,9 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             call = calls[event.tool_call_id]
             identity = _identity(call)
             layout = project_layout(call, event)
-            if layout is not None:
-                identity = layout[0]
+            document = layout or project_revision(call, event)
+            if document is not None:
+                identity = document[0]
             if identity is None:
                 continue
             status = event.payload.get("status")
@@ -82,8 +84,10 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
                          "status": status, "same_parameter_occurrence": counts[identity],
                          "exit_code": exit_code if type(exit_code) is int else None,
                          "call_event_id": call.event_id, "state_equivalence": "unknown"}
-            if layout is not None:
-                projected.update(layout[1])
+            if document is not None:
+                projected.update(document[1])
+            if event.event_id in layout_links:
+                projected.update(layout_links[event.event_id])
             evidence.append({"task_id": row["task_id"], "event_id": event.event_id,
                              "observation": canonical_json(projected)})
             priorities.append(1 if status == "success" else 0)
