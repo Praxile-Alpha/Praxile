@@ -9,6 +9,16 @@
   "test": "tests/resource/test_native_pair_docker.py::test_real_harbor_job_pair_runs_native_workers",
   "results": {"passed": 2, "seconds": 40.65, "trials": 4, "fixture_model_requests": 4},
   "paid_model_calls": 0,
+  "collector_checksum_followup": {
+    "host_base_revision": "b9f304c",
+    "harbor_version": "0.22.0",
+    "passed": 2,
+    "seconds": 45.42,
+    "trials": 4,
+    "verified": "Collector dirhash matches actual Harbor Trial task_checksum; all four before/after input checks per pair unchanged",
+    "paid_model_calls": 0,
+    "limitation": "Fixture verifier is not an official benchmark evaluator; this does not validate real-task score collection end to end"
+  },
   "local_input_snapshot_followup": {
     "host_base_revision": "e16784c",
     "plan_schema": "praxile.native_pair_plan.v2",

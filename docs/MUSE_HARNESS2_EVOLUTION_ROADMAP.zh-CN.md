@@ -357,6 +357,11 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   wheels 和计划文件，变化或不可读取标记 confounded，保留 job_returned 事实。
   12 项执行入口测试覆盖末臂修改和计划删除。瞬时修改后恢复仍无法由摘要证明
   未发生，不视为不可变环境或因果实验验收。
+  官方双臂汇总增补：native_pair_results 校验 v2 计划/执行记录/本地输入，按
+  计划任务调用 JobBench/WorkBuddy 官方导入器，核对候选 digest 与 native 模式。
+  缺 Trial 保留为未完成，未绑定评分保留展示但不进入均值；污染执行拒绝比较，
+  不导出 rubric 正文、不授予晋升。当前为双官方格式 fixture 验证，真实官方任务
+  全链路、多次重复实验统一汇总和来源认证仍待完成，完整项不勾选。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

@@ -18,7 +18,7 @@ def digest(value):
     return hashlib.sha256(encoded(value)).hexdigest()
 
 
-def prepare_pair(job, candidate, *, repository, output_dir):
+def prepare_pair(job, candidate, *, repository, output_dir, require_new_outputs=True):
     """Freeze configuration equality, not the external environment or causality."""
     if not isinstance(job, dict):
         raise ValueError("job must be an object")
@@ -58,7 +58,7 @@ def prepare_pair(job, candidate, *, repository, output_dir):
         config = deepcopy(shared)
         config["job_name"] = name + "-" + arm
         run_path = Path(shared["jobs_dir"]) / config["job_name"]
-        if run_path.exists() or run_path.is_symlink():
+        if require_new_outputs and (run_path.exists() or run_path.is_symlink()):
             raise ValueError("paired job already exists; never overwrite or silently resume")
         if arm == "candidate":
             config["agents"][0]["kwargs"].update(

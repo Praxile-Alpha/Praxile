@@ -30,7 +30,7 @@ def read_json(path):
     return value, hashlib.sha256(raw).hexdigest()
 
 
-def load_pair(root):
+def load_pair(root, *, for_execution=True):
     root = Path(root).resolve(strict=True)
     plan, plan_hash = read_json(root / "manifest.json")
     if not isinstance(plan, dict) or plan.get("schema_version") not in {
@@ -44,7 +44,8 @@ def load_pair(root):
     if not baseline["job_name"].endswith("-baseline"):
         raise ValueError("invalid baseline job identity")
     base = dict(baseline, job_name=baseline["job_name"][:-len("-baseline")])
-    expected, arms = prepare_pair(base, candidate, repository=plan.get("repository"), output_dir=root)
+    expected, arms = prepare_pair(base, candidate, repository=plan.get("repository"), output_dir=root,
+                                  require_new_outputs=for_execution)
     if plan["schema_version"] == "praxile.native_pair_plan.v2":
         expected["schema_version"] = plan["schema_version"]
         expected["local_inputs"] = snapshot_inputs(arms["baseline"])

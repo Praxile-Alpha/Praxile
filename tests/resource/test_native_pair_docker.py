@@ -14,6 +14,7 @@ from praxile.eval.native_pair import encoded, prepare_pair
 from praxile.eval.native_pair_run import run_pair
 from praxile.eval.native_input_snapshot import snapshot_inputs
 from praxile.eval.native_trial_binding import bind_native_trace
+from praxile.eval.native_pair_results import task_checksum
 from praxile.eval.v2.candidate import ContextCandidate
 
 pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.slow]
@@ -94,6 +95,7 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
         trials = list((tmp_path / "jobs" / ("native-pair-" + arm)).glob("*/result.json"))
         assert len(trials) == 1
         trial = json.loads(trials[0].read_text())
+        assert task_checksum(task) == trial["task_checksum"]
         assert trial["exception_info"] is None
         assert trial["verifier_result"]["rewards"] == {"reward": 1.0}
         evidence = {}

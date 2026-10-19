@@ -681,6 +681,31 @@ Harbor 0.18 的对应复验同日完成：使用上游 WorkBuddy
 记录见 `results/native-pair-workbuddy-job-20261019.json`。可在安装上游插件的
 Harbor 0.18 隔离环境，使用同一个带 `PRAXILE_TEST_WHEEL` 的测试命令复验。
 
+## 汇总原生双臂的官方结果
+
+对于带本地输入快照的 v2 plan，在安装对应 Harbor 和 `dirhash` 的隔离环境中：
+
+```sh
+python -m praxile.eval.native_pair_results \
+  --pair-dir /absolute/private/new-pair \
+  --output /absolute/private/pair-comparison.json
+```
+
+入口重新核验计划和本地输入，并要求 execution 状态为 jobs_returned、两臂
+before/after 四次检查均为 unchanged。它按计划任务匹配 Trial，重新计算 task
+checksum，调用原有 JobBench/WorkBuddy 官方导入器，不调用模型或重新评分。
+候选结果必须匹配计划 candidate digest；两臂 native experience mode 必须正确。
+未知/重复任务、错配结果拒绝导入；缺失 Trial 明确保留为未完成项，不从分母清单
+消失。已有官方分数但没有 native 绑定时，保留 official_outcomes 供审计，但排除
+于配对均值。缺评分与有效零分继续由官方导入器区分。
+
+输出只投影数值、身份、摘要与绑定，不复制 rubric/official_details；文件独占
+创建且权限 0600。当前实现一对 job 的描述性比较，不授予 promotion，不认证
+来源或因果效果，也未验证远端模型/judge 的稳定性与完整成本。多次实验的任务级
+统计可使用已有 compare_imports 工具，但不能把未绑定/污染结果绕过本入口后
+当作受控实验。此汇总入口已由两种官方格式 fixture 验证，真实官方任务全链路
+验收仍未完成；不能将前面的恒定分数 Docker fixture 传入此处冒充 benchmark。
+
 ## 官方 Trial 与 Native Trace 的绑定
 
 新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。
