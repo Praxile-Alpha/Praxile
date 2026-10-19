@@ -716,6 +716,26 @@ checksum，调用原有 JobBench/WorkBuddy 官方导入器，不调用模型或�
 
 ## 官方 Trial 与 Native Trace 的绑定
 
+官方 CompositeVerifier 集成复验（2026-10-19）：Harbor 0.18 使用未修改的
+上游 Office shared 插件，在独立 fixture 任务中检查 worker 写入的 report.txt。
+正确内容两臂评分均为 1，错误内容两臂评分均为 0；四个 Trial 均经官方导入器、
+trace 绑定和 native_pair_results 汇总，2 项测试通过（49.98 秒）。共享输入前后
+摘要一致，LLM judge 显式禁用，八次本地 fixture 模型请求，零付费调用。
+
+复验命令需已安装固定上游 WorkBuddy 插件、Harbor 0.18 和测试依赖：
+
+```sh
+PRAXILE_TEST_WORKBUDDY_DATASET=/absolute/prepared-office \
+PRAXILE_TEST_WHEEL=/absolute/praxile.whl \
+python -B -m pytest -q \
+  tests/resource/test_native_pair_docker.py::test_official_composite_verifier_pair_collection \
+  --override-ini=addopts=
+```
+
+不将此称为官方数据集成绩：任务、内容 checker 和模型响应为 fixture；验证的是
+官方评分实现到 Praxile 汇总的连接，不是实际任务收益、LLM/VLM 评审或迁移能力。
+结构化记录见 `results/workbuddy-composite-pair-20261019.json`。
+
 新版适配器将 `source_result_sha256` 写入 Harbor `agent_result.metadata.praxile`。
 JobBench/WorkBuddy 官方导入器据此验证同一 Trial 的
 `agent/praxile-result.json` 与 `agent/praxile-events.json`：核对原始字节摘要、

@@ -4,6 +4,7 @@ import hashlib
 from importlib.metadata import version
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from praxile.eval.native_pair import encoded, prepare_pair
 from praxile.eval.native_pair_run import run_pair
 from praxile.eval.native_input_snapshot import snapshot_inputs
 from praxile.eval.native_trial_binding import bind_native_trace
-from praxile.eval.native_pair_results import task_checksum
+from praxile.eval.native_pair_results import collect_pair, task_checksum
 from praxile.eval.v2.candidate import ContextCandidate
 
 pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.slow]
@@ -24,7 +25,7 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.slow]
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL") or version("harbor") not in {"0.18.0", "0.22.0"},
                    reason="explicit wheel, supported Harbor and Docker required")
 @pytest.mark.parametrize("active", [True, False])
-def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active):
+def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active, official=False, deliver_correct=True):
     workbuddy = version("harbor") == "0.18.0"
     identities = []
     if workbuddy:
@@ -48,6 +49,31 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     (task / "environment/Dockerfile").write_text(
         "FROM python:3.12-slim\nRUN mkdir -p /workspace\nWORKDIR /workspace\n")
     (task / "tests/test.sh").write_text("#!/bin/bash\nmkdir -p /logs/verifier\necho 1 > /logs/verifier/reward.txt\n")
+    if official:
+        for name in tuple(os.environ):
+            if name.startswith("WORKBUDDY_VERIFIER_LLM_"):
+                monkeypatch.delenv(name)
+        source = Path(os.environ["PRAXILE_TEST_WORKBUDDY_DATASET"]).resolve()
+        shutil.copytree(source / "shared", tmp_path / "shared")
+        shutil.copyfile(source / "dataset.toml", tmp_path / "dataset.toml")
+        config_text = (task / "task.toml").read_text()
+        (task / "task.toml").write_text('[task]\nname="workbuddy/task"\n'
+            '[metadata]\nsource_case="fixture-file-delivery"\n' + config_text)
+        (task / "tests/verifier.toml").write_text('schema_version="workbuddy.office.verifier.v1"\n'
+            '[run]\ncwd="/workspace"\ncommand="python /tests/check.py"\n')
+        (task / "tests/check.py").write_text('''from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+output = Path('/workspace/report.txt')
+passed = output.is_file() and output.read_text() == 'fixture delivered'
+logs = Path('/logs/verifier')
+logs.mkdir(parents=True, exist_ok=True)
+suite = ET.Element('testsuite', tests='1', failures=str(int(not passed)), errors='0', skipped='0')
+ET.SubElement(suite, 'testcase', name='delivered_content')
+ET.ElementTree(suite).write(logs / 'results.xml')
+(logs / 'test_output.txt').write_text('1 passed' if passed else '1 failed')
+sys.exit(0 if passed else 1)
+''')
     key = tmp_path / "fixture-key"
     key.write_text("not-a-real-credential")
     key.chmod(0o600)
@@ -55,8 +81,11 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     def forward(broker, body):
         observed.append(b"PAIR_CONTEXT_SENTINEL" in body)
         brokers.append(broker)
-        return {"choices": [{"message": {"content": json.dumps(
-            {"type": "finish", "summary": "fixture complete", "status": "completed"})}}],
+        action = {"type": "finish", "summary": "fixture complete", "status": "completed"}
+        if official and brokers.count(broker) == 1:
+            action = {"type": "edit_file", "path": "report.txt",
+                      "content": "fixture delivered" if deliver_correct else "incorrect fixture content"}
+        return {"choices": [{"message": {"content": json.dumps(action)}}],
             "usage": {"prompt_tokens": 12, "completion_tokens": 7}}
     monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
     candidate = ContextCandidate(candidate_id="pair", version="1", title="Transport check",
@@ -74,6 +103,8 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     if workbuddy:
         job["agents"][0]["import_path"] = "praxile.adapters.harbor_native:WorkBuddyPraxileAgent"
         job["environment"]["import_path"] = "workbuddy_bench.runner.docker_environment:WorkBuddyDockerEnvironment"
+    if official:
+        job["verifier"] = {"import_path": "workbuddy_bench.judge:CompositeVerifier"}
     root = tmp_path / "pair"
     root.mkdir()
     plan, arms = prepare_pair(job, candidate, repository="fixture/repo" if active else "other/repo", output_dir=root)
@@ -87,7 +118,7 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
     assert len(state["input_checks"]) == 4
     assert all(check["status"] == "unchanged" and check["scope"] == "plan_and_local_inputs"
                for check in state["input_checks"])
-    assert observed == [False, active]
+    assert observed == ([False, False, active, active] if official else [False, active])
     assert brokers and all(broker.status()["revoked"] for broker in brokers)
     if workbuddy:
         assert identities == ["dev", "dev"]
@@ -97,7 +128,7 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
         trial = json.loads(trials[0].read_text())
         assert task_checksum(task) == trial["task_checksum"]
         assert trial["exception_info"] is None
-        assert trial["verifier_result"]["rewards"] == {"reward": 1.0}
+        assert trial["verifier_result"]["rewards"]["reward"] == (0.0 if official and not deliver_correct else 1.0)
         evidence = {}
         def read(relative):
             raw = (trials[0].parent / relative).read_bytes()
@@ -111,3 +142,19 @@ def test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, active)
         if arm == "candidate":
             assert native["development_context"]["activation"]["activated"] is active
             assert native["development_context"]["injected"] is active
+    if official:
+        report = collect_pair(root)
+        assert report["comparison"]["sample_count"] == 1
+        assert len(report["bindings"]) == 2
+        assert all(outcome["status"] == "completed" for outcome in report["official_outcomes"])
+        assert all(outcome["scores"][0]["value"] == float(deliver_correct) for outcome in report["official_outcomes"])
+        assert not report["promotion_eligible"]
+
+
+@pytest.mark.timeout(300)
+@pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_WHEEL") or not os.environ.get("PRAXILE_TEST_WORKBUDDY_DATASET")
+                   or version("harbor") != "0.18.0", reason="explicit wheels, upstream dataset, Harbor 0.18 and Docker required")
+@pytest.mark.parametrize("deliver_correct", [True, False])
+def test_official_composite_verifier_pair_collection(tmp_path, monkeypatch, deliver_correct):
+    test_real_harbor_job_pair_runs_native_workers(tmp_path, monkeypatch, True, official=True,
+                                                 deliver_correct=deliver_correct)

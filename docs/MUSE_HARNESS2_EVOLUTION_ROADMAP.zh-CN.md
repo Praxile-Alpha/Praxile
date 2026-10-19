@@ -366,6 +366,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
   shared/verifier。启用该官方评分器的本地快照现覆盖 dataset.toml + 完整 shared/，
   缺失/符号链接拒绝；旧未覆盖计划必须重新准备。真实 Office 材料两次只读快照
   一致（任务19项、共享13项），无模型调用。宿主插件依赖/外部引用仍未完全冻结。
+  官方评分器到汇总集成：未修改的 WorkBuddy CompositeVerifier + Office shared
+  插件执行自建内容 checker，正确/错误交付两组双臂四 Trial 分别得到 1/0，
+  官方导入、native 绑定和配对汇总通过（2 项 Docker 测试）。任务/模型仍为 fixture，
+  不是官方数据集成绩或性能增益，LLM judge 禁用，真实任务和完整隔离恢复仍未完成。
   渲染环境增补：Harbor 配置 renderer 时，在 worker 解释器中限时预检 DOCX/XML/PDF
   依赖及可执行路径，缺依赖在模型调用前失败，不自动修改冻结镜像。0.18/0.22
   各 18 项适配器测试通过，588 项快速单元测试通过。这不是完整 capability profile

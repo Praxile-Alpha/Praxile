@@ -1,0 +1,35 @@
+{
+  "schema_version": "praxile.composite_pair_acceptance.v1",
+  "date": "2026-10-19",
+  "host_base_revision": "fd37a3b",
+  "harbor_version": "0.18.0",
+  "workbuddy_revision": "625b2233093ae4f23e76be28c1f341d41cc70373",
+  "verifier": "workbuddy_bench.judge:CompositeVerifier",
+  "shared_plugin_source": "Unmodified shared directory copied from previously prepared official Office dataset",
+  "shared_file_count": 10,
+  "shared_relative_file_hash_map_sha256": "9f6e0597fc5a1ec2315d66fbc7aa3ecd9280398b599771f55cc6272663320964",
+  "worker_wheel_sha256": "c349f27a120626f6460e22828d7a1247db68c454ba71d4ce5d8ab8ebfbfe3424",
+  "test": "tests/resource/test_native_pair_docker.py::test_official_composite_verifier_pair_collection",
+  "results": {"passed": 2, "seconds": 49.98, "trials": 4, "fixture_model_requests": 8},
+  "correct_delivery_rewards": {"baseline": 1, "candidate": 1},
+  "incorrect_delivery_rewards": {"baseline": 0, "candidate": 0},
+  "paid_model_calls": 0,
+  "llm_judge_enabled": false,
+  "verified": [
+    "Real native file edit followed by finish in non-root worker",
+    "Official CompositeVerifier loads unchanged upstream shared plugin",
+    "Fixture content checker drives positive and zero scores through official scoring engine",
+    "Shared verifier snapshots unchanged before and after each arm",
+    "Official Trial result imports bind native traces and planned candidate",
+    "Pair collector retains valid zero scores as completed evaluations"
+  ],
+  "warnings": ["Four upstream Task.checksum deprecation warnings"],
+  "official_dataset_score": false,
+  "promotion_eligible": false,
+  "limitations": [
+    "Task, model responses and content checker are fixtures, not official benchmark task success",
+    "No LLM/VLM judge, semantic quality or held-out transfer evaluation",
+    "Baseline and candidate have equal scores; no performance improvement claim",
+    "No full-Job interruption recovery or immutable runtime isolation verification"
+  ]
+}
