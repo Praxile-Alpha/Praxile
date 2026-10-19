@@ -91,3 +91,14 @@ XLSX 默认表 22 行。这只证明本地解析可用，不代表完整读取�
 当前已补齐读取和基础结构化 DOCX 新建。XLSX/PDF 写出、渲染检查、公式重算、完整
 产物链路与 JobBench 官方评分仍需后续实现和实测。不能因提取成功而勾选整个
 R1 专业交付能力，也不能宣称 benchmark 得分提升。
+
+## 模型输出截断诊断
+
+OpenAI-compatible 的 `finish_reason` 与 Anthropic 的 `stop_reason` 统一保留为
+`finish_reason`，写入模型响应 trace 和调用成本的路由记录。动作循环遇到
+`length` / `max_tokens` 时，即便文本恰好能解析成 JSON，也不执行其中的动作；
+记录 `failure_kind=output_truncated`，保留已报告 token，并要求返回更短的完整
+动作。其他解析失败仍记录为 `invalid_json_action`，沿用既有重试上限。
+
+缺少终止元数据不推断为截断；此前真实实验未保留该字段，不能追溯断言它们
+就是 token 上限导致的失败。此修改不自动提高预算，也不代表产物质量已通过。

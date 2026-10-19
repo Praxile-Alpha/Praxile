@@ -174,6 +174,7 @@ class OpenAICompatibleProvider:
             raise ModelError(f"Unexpected OpenAI-compatible response shape: {payload}") from exc
         return {
             "content": content,
+            "finish_reason": payload["choices"][0].get("finish_reason") if isinstance(payload["choices"][0].get("finish_reason"), str) else None,
             "raw": payload,
             "usage": payload.get("usage", {}),
             "provider": self.name,
@@ -240,6 +241,7 @@ class AnthropicProvider:
         content = "\n".join(block.get("text", "") for block in content_blocks if block.get("type") == "text")
         return {
             "content": content,
+            "finish_reason": payload.get("stop_reason") if isinstance(payload.get("stop_reason"), str) else None,
             "raw": payload,
             "usage": payload.get("usage", {}),
             "provider": self.name,

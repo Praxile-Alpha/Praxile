@@ -931,20 +931,27 @@ class AgentRuntime:
                     route=response.get("route"),
                     latency_ms=response.get("latency_ms"),
                     usage=response.get("usage", {}),
+                    finish_reason=response.get("finish_reason"),
                 )
                 logger.add_model_cost(
                     response.get("usage", {}),
-                    route={**response.get("route", {}), "latency_ms": response.get("latency_ms")},
+                    route={**response.get("route", {}), "latency_ms": response.get("latency_ms"),
+                           "finish_reason": response.get("finish_reason")},
                 )
-                content = response["content"]
-                action = self._parse_action(content)
+                content = response.get("content")
+                content = content if isinstance(content, str) else ""
+                truncated = response.get("finish_reason") in {"length", "max_tokens"}
+                action = None if truncated else self._parse_action(content)
                 if action is None:
                     invalid_action_count += 1
                     observation = {
                         "status": "failure",
-                        "output": "Model did not return a valid JSON action.",
+                        "output": ("Model output reached its token limit; no partial action was executed."
+                                   if truncated else "Model did not return a valid JSON action."),
                         "data": {
                             "content": shorten(content, 4000),
+                            "finish_reason": response.get("finish_reason"),
+                            "failure_kind": "output_truncated" if truncated else "invalid_json_action",
                             "parse_retry": invalid_action_count,
                             "parse_retry_limit": parse_retry_limit,
                             "invalid_action_fail_fast_count": invalid_action_fail_fast_count,
@@ -964,7 +971,7 @@ class AgentRuntime:
                             "model": response.get("model"),
                             "purpose": "coding",
                             "status": "invalid_action",
-                            "failure_pattern": "model_response_not_json_action",
+                            "failure_pattern": "model_output_truncated" if truncated else "model_response_not_json_action",
                         }
                     )
                     if invalid_action_count >= invalid_action_fail_fast_count:
@@ -973,7 +980,10 @@ class AgentRuntime:
                             f"Stopped after {invalid_action_count} consecutive invalid JSON action response(s); review model output.",
                         )
                     messages.append({"role": "assistant", "content": content})
-                    messages.append({"role": "user", "content": "Return only the final JSON action object; no prose, markdown, or <think> blocks."})
+                    messages.append({"role": "user", "content": (
+                        "Your response hit the output token limit and was not executed. Return a shorter complete action; "
+                        "do not continue a JSON suffix and do not assume the previous action happened. "
+                        if truncated else "") + "Return only the final JSON action object; no prose, markdown, or <think> blocks."})
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     continue
 
