@@ -140,6 +140,7 @@ class RunJobManager:
         self._lock = threading.RLock()
 
     def start(self, payload: dict[str, Any], *, session_id: str | None = None) -> RunJob:
+        payload = {**payload, "deliverable_contract": _public_deliverable_contract(payload)}
         job = RunJob(project_root=self.project_root, payload=payload, session_id=session_id)
         with self._lock:
             self._jobs[job.job_id] = job
@@ -321,6 +322,7 @@ class GatewayApp:
                 test_commands=[str(item) for item in test_commands] if test_commands else None,
                 max_steps=int(payload.get("max_steps")) if payload.get("max_steps") is not None else None,
                 dry_run=bool(payload.get("dry_run", False)),
+                deliverable_contract=_public_deliverable_contract(payload),
             )
             return {
                 "task_id": trajectory["task_id"],
@@ -328,6 +330,8 @@ class GatewayApp:
                 "summary": trajectory["result"]["summary"],
                 "reward": trajectory.get("reward_report", {}).get("overall"),
                 "proposals": trajectory.get("experience_candidates", []),
+                "deliverable_contract_sha256": trajectory.get("deliverable_contract_sha256"),
+                "deliverable_verification": trajectory.get("deliverable_verification"),
             }
         if method == "POST" and path == "/accept":
             proposal_id = payload.get("proposal_id")
@@ -629,7 +633,8 @@ class GatewayApp:
             task = payload.get("task") or payload.get("content")
             if not isinstance(task, str) or not task.strip():
                 raise GatewayError(400, "`task` or `content` is required")
-            _append_chat_message(session, role="user", content=task)
+            _append_chat_message(session, role="user", content=task,
+                                 metadata={"deliverable_contract": _public_deliverable_contract(payload)})
             result = _run_task(config, store, {**payload, "task": task, "session_id": session_id})
             _append_chat_message(
                 session,
@@ -650,7 +655,8 @@ class GatewayApp:
             task = payload.get("task") or payload.get("content")
             if not isinstance(task, str) or not task.strip():
                 raise GatewayError(400, "`task` or `content` is required")
-            _append_chat_message(session, role="user", content=task)
+            _append_chat_message(session, role="user", content=task,
+                                 metadata={"deliverable_contract": _public_deliverable_contract(payload)})
             job = self.jobs.start({**payload, "task": task, "session_id": session_id}, session_id=session_id)
             session["active_job_id"] = job.job_id
             session["updated_at"] = utc_now()
@@ -661,12 +667,13 @@ class GatewayApp:
             last_user = _last_user_message(session)
             if not last_user:
                 raise GatewayError(400, "No user message to retry")
+            payload = _retry_deliverable_payload(payload, last_user)
             task = str(last_user.get("content") or "").strip()
             _append_chat_message(
                 session,
                 role="user",
                 content=task,
-                metadata={"retry_of": last_user.get("message_id")},
+                metadata={"retry_of": last_user.get("message_id"), "deliverable_contract": payload.get("deliverable_contract")},
             )
             result = _run_task(config, store, {**payload, "task": task, "session_id": session_id})
             _append_chat_message(
@@ -689,12 +696,13 @@ class GatewayApp:
             last_user = _last_user_message(session)
             if not last_user:
                 raise GatewayError(400, "No user message to retry")
+            payload = _retry_deliverable_payload(payload, last_user)
             task = str(last_user.get("content") or "").strip()
             _append_chat_message(
                 session,
                 role="user",
                 content=task,
-                metadata={"retry_of": last_user.get("message_id")},
+                metadata={"retry_of": last_user.get("message_id"), "deliverable_contract": payload.get("deliverable_contract")},
             )
             job = self.jobs.start({**payload, "task": task, "session_id": session_id}, session_id=session_id)
             session["active_job_id"] = job.job_id
@@ -1160,6 +1168,23 @@ def _safety_check_tool(config: Config, payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _public_deliverable_contract(payload: dict[str, Any]) -> dict | None:
+    from .services.run_service import normalize_deliverable_contract
+    try:
+        return normalize_deliverable_contract(payload.get("deliverable_contract"))
+    except (ValueError, TypeError, RecursionError) as exc:
+        raise GatewayError(400, "Invalid public deliverable contract; supply a bounded V1/V2 JSON object") from exc
+
+
+def _retry_deliverable_payload(payload: dict[str, Any], last_user: dict[str, Any]) -> dict[str, Any]:
+    original = _public_deliverable_contract(last_user.get("metadata") or {})
+    if "deliverable_contract" in payload:
+        requested = _public_deliverable_contract(payload)
+        if json.dumps(requested, sort_keys=True) != json.dumps(original, sort_keys=True):
+            raise GatewayError(400, "Retry cannot change deliverable requirements; send a new message")
+    return {**payload, "deliverable_contract": original}
+
+
 def _run_task(
     config: Config,
     store: ExperienceStore,
@@ -1194,6 +1219,7 @@ def _run_task(
         max_steps=int(payload.get("max_steps")) if payload.get("max_steps") is not None else None,
         dry_run=bool(payload.get("dry_run", False)),
         spec_files=spec_files or None,
+        deliverable_contract=_public_deliverable_contract(payload),
         cancel_requested=cancel_requested,
         progress_callback=progress_callback,
     )
@@ -1245,6 +1271,9 @@ def _run_detail(trajectory: dict[str, Any], store: ExperienceStore) -> dict[str,
         "summary": (trajectory.get("result") or {}).get("summary"),
         "reward": (trajectory.get("reward_report") or {}).get("overall"),
         "reward_report": trajectory.get("reward_report") or {},
+        "deliverable_contract": trajectory.get("deliverable_contract"),
+        "deliverable_contract_sha256": trajectory.get("deliverable_contract_sha256"),
+        "deliverable_verification": trajectory.get("deliverable_verification"),
         "governance_summary": {
             "reward": (trajectory.get("reward_report") or {}).get("overall"),
             "proposals": len(proposals),

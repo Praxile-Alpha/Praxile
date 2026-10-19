@@ -15,6 +15,29 @@ JSON 文件使用本文 V1 或 V2 契约格式，路径相对项目根目录解�
 可被 Agent 修改的文件。库调用可传 `AgentRuntime.run(..., deliverable_contract=contract)`，
 共用 RunService 透传该参数。Web Console 暂无此输入控件。
 
+Web API 现在支持同一 JSON 对象：同步 `POST /run`、`POST /api/runs`，异步
+`POST /api/runs/jobs`，以及聊天 session 的 message/message-async。示例请求：
+
+```json
+{
+  "task": "生成报告",
+  "deliverable_contract": {
+    "schema_version": "praxile.deliverable_contract.v1",
+    "source": "user_request",
+    "outputs": [{"path": "report.json", "media_type": "application/json"}]
+  }
+}
+```
+
+API 只接受内联对象，不读取请求指定的服务器文件路径；非法或超过 64 KiB
+序列化大小的契约在执行/入队前返回 400。RunService 共用校验和复制逻辑，队列
+保存独立副本，Runtime 保存轨迹/checkpoint；内存中的 job 队列不因此具备进程重启恢复。
+GET run 详情返回冻结契约、摘要和 deliverable_verification，旧 `/run` 返回摘要与复验结果。
+
+聊天记录保存公开契约；retry/retry-async 自动继承最后用户消息的要求，不能通过
+省略参数丢失绑定，也不能显式 null 删除。改变要求须发送新消息。沿用现有 Gateway
+鉴权和权限策略，这不是新权限授权。当前前端尚无契约输入编辑器。
+
 运行时复制并规范化契约，将副本及 SHA-256 写入 trajectory，随既有 checkpoint 保存，
 并将要求提供给模型。check_deliverables 请求不能替换/弱化绑定契约；返回给调用方的
 副本也不能修改内部绑定。resume 自动恢复原契约，显式提供不同契约或更改原任务文本
