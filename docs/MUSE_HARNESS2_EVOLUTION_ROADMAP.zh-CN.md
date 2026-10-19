@@ -219,6 +219,7 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
 - [ ] 以 task 为统计单位做 paired comparison；重复运行嵌套于 task，不能把同一任务的 repetitions 伪装成独立任务扩大显著性。
+  Harness Lab 已修复 repetition 展平问题：先任务内均值再任务级配对，独立样本数为完整任务数，缺失配对整任务标不完整；使用保守 Hoeffding 区间并声明独立任务假设。旧统计报告不能通过质量晋升门禁。9 项测试通过。中性 benchmark 连续评分、任务级成本区间和相关任务簇设计尚未完成，完整项未勾选，详见 `TASK_CLUSTER_STATISTICS.zh-CN.md`。
 - [ ] held-out 下使用冻结经验；另设明确标识的 online-stream 实验，记录顺序，禁止把两种协议合并报分。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。

@@ -114,7 +114,8 @@ def test_harness_lab_executes_repeated_isolated_dev_and_heldout_arms(tmp_path: P
     assert report["repetitions"] == 2
     assert all(report["runtime_coverage"]["covered"].values())
     assert report["dead_mechanisms"] == []
-    assert report["splits"]["heldout"]["sample_count"] == 2
+    assert report["splits"]["heldout"]["sample_count"] == 1
+    assert report["splits"]["heldout"]["observation_count"] == 2
     assert report["splits"]["heldout"]["delta"]["estimate"] == 0.0
     assert report["promotion_eligible"] is False
     assert (config.paths.state / "eval" / "v2" / "harness-lab" / manifest.lab_id / "manifest.json").is_file()

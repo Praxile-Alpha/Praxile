@@ -142,13 +142,16 @@ class PromotionGateEvaluator:
         repetitions = int(report.get("repetitions", 0) or 0)
         lab_ref = EvidenceRef("eval", str(report.get("lab_id") or "harness-lab"))
         evidence = tuple(candidate.source_evidence) + (lab_ref,)
-        quality_passed = bool(report.get("promotion_eligible")) and estimate > 0 and lower >= 0 and not dead
+        task_statistics = (heldout.get("schema_version") == "praxile.task_cluster_statistics.v1"
+            and heldout.get("statistical_unit") == "task" and int(heldout.get("sample_count", 0)) >= 2
+            and heldout.get("incomplete_task_count") == 0)
+        quality_passed = task_statistics and bool(report.get("promotion_eligible")) and estimate > 0 and lower >= 0 and not dead
         regression_passed = bool(invariants.get("valid")) and regressions <= limits.max_regressions and repetitions >= 2
         cost_passed = cost_delta is not None and float(cost_delta) <= limits.max_cost_increase
         approval_ref = "approval_" + hashlib.sha256(reviewer.encode("utf-8")).hexdigest()[:16]
         gates = (
             GateResult("evidence", bool(candidate.source_evidence), evidence, "Candidate and executable Harness Lab evidence are linked."),
-            GateResult("quality", quality_passed, (lab_ref,), f"Held-out delta={estimate}, ci95={interval}, dead_mechanisms={dead}."),
+            GateResult("quality", quality_passed, (lab_ref,), f"Held-out delta={estimate}, ci95={interval}, task_statistics_valid={task_statistics}, dead_mechanisms={dead}."),
             GateResult("regression", regression_passed, (lab_ref,), f"Regressions={regressions}, repetitions={repetitions}, invariants_valid={bool(invariants.get('valid'))}."),
             GateResult("cost", cost_passed, (lab_ref,), f"Mean held-out cost delta={cost_delta!r}, allowed increase={limits.max_cost_increase}."),
             GateResult("human", human_approved, (EvidenceRef("user_feedback", approval_ref, "Explicit promotion review"),), "Human approval recorded." if human_approved else "Human approval is still required."),

@@ -111,6 +111,8 @@ def test_lab_report_drives_all_six_promotion_gates() -> None:
         "invariant_check": {"valid": True},
         "splits": {
             "heldout": {
+                "schema_version": "praxile.task_cluster_statistics.v1",
+                "statistical_unit": "task", "sample_count": 50, "incomplete_task_count": 0,
                 "delta": {"estimate": 0.2, "ci95": [0.01, 0.4]},
                 "regressions": 0,
                 "efficiency": {"cost_delta_mean": -0.1},
@@ -126,3 +128,6 @@ def test_lab_report_drives_all_six_promotion_gates() -> None:
     assert evaluation.decision == "promote"
     assert all(gate.passed for gate in evaluation.gates)
     assert evaluation.rollback_target["promotion_key"] == candidate.promotion_key
+    del report["splits"]["heldout"]["statistical_unit"]
+    legacy = PromotionGateEvaluator().evaluate_lab(candidate, report, reviewer="maintainer", human_approved=True)
+    assert legacy.decision != "promote"

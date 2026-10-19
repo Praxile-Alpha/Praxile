@@ -375,7 +375,9 @@ class ExecutableHarnessLab:
             "dead_mechanisms": required_dead,
             "promotion_eligible": bool(
                 not required_dead
-                and split_stats["heldout"]["delta"]["estimate"] > 0
+                and split_stats["heldout"]["incomplete_task_count"] == 0
+                and split_stats["heldout"]["sample_count"] >= 2
+                and (split_stats["heldout"]["delta"]["estimate"] or 0) > 0
                 and split_stats["heldout"]["delta"]["ci95"][0] >= 0
             ),
             "arms": arms,
@@ -430,57 +432,69 @@ class ExecutorCompatibilityMatrix:
 
 def _statistics(arms: list[dict[str, Any]]) -> dict[str, Any]:
     rows = [row for arm in arms for row in arm["tasks"]]
-    baseline = [row["baseline_resolved"] for row in rows if row["baseline_resolved"] is not None]
-    candidate = [row["candidate_resolved"] for row in rows if row["candidate_resolved"] is not None]
-    base_success = sum(value is True for value in baseline)
-    candidate_success = sum(value is True for value in candidate)
-    base_interval = _wilson(base_success, len(baseline))
-    candidate_interval = _wilson(candidate_success, len(candidate))
-    base_rate = base_success / len(baseline) if baseline else 0.0
-    candidate_rate = candidate_success / len(candidate) if candidate else 0.0
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    repetitions = set()
+    for arm in arms:
+        repetition = arm.get("repetition")
+        if repetition in repetitions:
+            raise EvalSchemaError("duplicate repetition in task-cluster statistics")
+        repetitions.add(repetition)
+        seen = set()
+        for row in arm["tasks"]:
+            task_id = row["task_id"]
+            if task_id in seen:
+                raise EvalSchemaError("duplicate task in one repetition")
+            seen.add(task_id)
+            grouped.setdefault(task_id, []).append(row)
+    paired = []
+    incomplete = []
+    for task_id, observations in sorted(grouped.items()):
+        if len(observations) != len(arms) or any(type(row[key]) is not bool
+                for row in observations for key in ("baseline_resolved", "candidate_resolved")):
+            incomplete.append(task_id)
+            continue
+        base = sum(row["baseline_resolved"] for row in observations) / len(observations)
+        treatment = sum(row["candidate_resolved"] for row in observations) / len(observations)
+        paired.append({"task_id": task_id, "repetitions": len(observations),
+                       "baseline_rate": base, "candidate_rate": treatment, "delta": treatment - base})
+    def summary(key, lower, upper):
+        values = [row[key] for row in paired]
+        estimate = sum(values) / len(values) if values else None
+        # Two-sided Hoeffding bound over independent bounded task-cluster means.
+        margin = (upper - lower) * math.sqrt(math.log(40) / (2 * len(values))) if values else None
+        interval = [lower, upper] if estimate is None else [max(lower, estimate - margin), min(upper, estimate + margin)]
+        return {"estimate": estimate, "ci95": interval}
+    base_summary = summary("baseline_rate", 0.0, 1.0)
+    candidate_summary = summary("candidate_rate", 0.0, 1.0)
     cost_deltas = [float(arm["efficiency"]["candidate_cost"]) - float(arm["efficiency"]["baseline_cost"]) for arm in arms]
     token_deltas = [int(arm["efficiency"]["candidate_tokens"]) - int(arm["efficiency"]["baseline_tokens"]) for arm in arms]
     return {
-        "sample_count": len(rows),
+        "schema_version": "praxile.task_cluster_statistics.v1",
+        "statistical_unit": "task",
+        "interval_method": "two_sided_hoeffding_task_means",
+        "assumptions": ["Task clusters are independent; repetitions within a task may be dependent.",
+                        "Tasks are equally weighted; correlated tasks require a higher-level cluster design."],
+        "sample_count": len(paired),
+        "observation_count": len(rows),
+        "task_count": len(grouped),
+        "incomplete_task_count": len(incomplete),
+        "incomplete_task_ids": incomplete,
+        "paired_task_means": paired,
         "repetition_count": len(arms),
-        "baseline": {"resolved": base_success, "n": len(baseline), "rate": round(base_rate, 4), "ci95": base_interval},
-        "candidate": {"resolved": candidate_success, "n": len(candidate), "rate": round(candidate_rate, 4), "ci95": candidate_interval},
-        "delta": {
-            "estimate": round(candidate_rate - base_rate, 4),
-            "ci95": [round(candidate_interval[0] - base_interval[1], 4), round(candidate_interval[1] - base_interval[0], 4)],
-        },
+        "baseline": {"n": len(paired), "rate": base_summary["estimate"], "ci95": base_summary["ci95"]},
+        "candidate": {"n": len(paired), "rate": candidate_summary["estimate"], "ci95": candidate_summary["ci95"]},
+        "delta": summary("delta", -1.0, 1.0),
         "gains": sum(row["transition"] == "improved" for row in rows),
         "regressions": sum(row["transition"] == "regressed" for row in rows),
         "unknown": sum(row["transition"] == "unknown" for row in rows),
         "efficiency": {
             "cost_delta_mean": round(sum(cost_deltas) / len(cost_deltas), 8) if cost_deltas else None,
-            "cost_delta_ci95": _mean_ci(cost_deltas),
+            "cost_delta_ci95": None,
             "token_delta_mean": round(sum(token_deltas) / len(token_deltas), 2) if token_deltas else None,
-            "token_delta_ci95": _mean_ci(token_deltas),
+            "token_delta_ci95": None,
+            "scope": "descriptive repetition totals; no independent-task cost interval available",
         },
     }
-
-
-def _wilson(successes: int, total: int) -> list[float]:
-    if not total:
-        return [0.0, 1.0]
-    z = 1.959963984540054
-    p = successes / total
-    denominator = 1 + z * z / total
-    center = (p + z * z / (2 * total)) / denominator
-    margin = z * math.sqrt((p * (1 - p) + z * z / (4 * total)) / total) / denominator
-    return [round(max(0.0, center - margin), 4), round(min(1.0, center + margin), 4)]
-
-
-def _mean_ci(values: list[float | int]) -> list[float] | None:
-    if not values:
-        return None
-    average = sum(float(item) for item in values) / len(values)
-    if len(values) == 1:
-        return [round(average, 4), round(average, 4)]
-    variance = sum((float(item) - average) ** 2 for item in values) / (len(values) - 1)
-    margin = 1.959963984540054 * math.sqrt(variance / len(values))
-    return [round(average - margin, 4), round(average + margin, 4)]
 
 
 def _token_total(report: Mapping[str, Any]) -> int:
