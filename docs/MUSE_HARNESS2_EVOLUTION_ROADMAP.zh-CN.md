@@ -346,6 +346,10 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 受控 Context A/B 已增加逐任务 ImprovementEpisode V1，保留冻结预测、候选 digest、配对 trace、观察差异和混杂因素；verdict 限定单对任务结果，不能推断因果，默认 NO_ENTRY、不授予 promotion。缺失数据保留未知。已接实际 A/B analyze/report 持久化，修复分类 progress 误用全任务汇总。可执行 diff、独立行为 verifier、语义对齐及中性 benchmark 接入尚未完成，总项不勾选。详见 `IMPROVEMENT_EPISODES.zh-CN.md`。
 
 - [ ] `ImprovementEpisode` 记录基线、候选、组件 diff、行为预测、probe、观察差异、混杂因素与后续决定。
+  组件证据增补：Context A/B 从冻结 manifest 生成精确 /context JSON Patch 及
+  前后内容摘要，随 episode 持久化并支持重新分析；不导出其他 settings。
+  这是配置差异，不是可执行脚本/hook diff，也不证明实际表示或行为收益；
+  独立 probe 生命周期和跨组件支持未完成，完整项仍不勾选。
 - [ ] 每项修改 verdict 支持 helped/hurt/no_observed_effect/confounded；区分行为改善与最终任务成功。
   增补冻结的重复操作测量：从 control-plane 操作事件引用复算 search/read_file/
   run_command 同参数重复次数，生成独立 behavior_probe 与行为方向 verdict。

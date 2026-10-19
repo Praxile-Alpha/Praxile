@@ -122,6 +122,11 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     episode = report["improvement_episodes"][0]
     assert episode["schema_version"] == "praxile.improvement_episode.v1"
     assert episode["candidate"]["digest"] == candidate.digest
+    diff = episode["component_diff"]["configuration_evidence"]
+    assert diff["status"] == "recorded" and diff["changed"] is True
+    assert diff["json_patch"][0] == {"op": "test", "path": "/context", "value": []}
+    assert diff["json_patch"][1]["value"][0]["content"] == candidate.context_item["content"]
+    assert not diff["runtime_application_verified"]
     assert episode["baseline"]["trace_id"]
     assert episode["candidate"]["trace_id"]
     assert not episode["promotion_eligible"]
@@ -148,6 +153,7 @@ def test_controlled_ab_runs_one_clean_context_variable_and_persists_diagnoses(tm
     assert (root / "diagnoses" / "baseline" / "owner__repo-1.json").is_file()
 
     reanalyzed = experiment.analyze("p0-c-fixture")
+    assert reanalyzed["improvement_episodes"][0]["component_diff"] == episode["component_diff"]
     assert reanalyzed["capability"]["protocol_digest"] == protocol.digest
 
     assert reanalyzed["diagnoses"]["baseline"][0]["diagnosis_id"] == (

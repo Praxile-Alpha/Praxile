@@ -16,6 +16,7 @@ from .candidate import ContextCandidate
 from .capability import CapabilityProtocol
 from .heldout import HeldoutUseLedger
 from .improvement import improvement_episodes
+from .component_diff import context_component_diff
 from .subtask_alignment import align_subtasks
 from .representation import ExperienceRepresentationRouter
 from .proxy import ProxyEvalRegistry
@@ -235,7 +236,8 @@ class ControlledABExperiment:
             "diagnoses": diagnoses,
             "comparison": comparison,
             "improvement_episodes": improvement_episodes(experiment_id, candidate, baseline_report,
-                candidate_report, comparison, invariant_check),
+                candidate_report, comparison, invariant_check,
+                component_diff=context_component_diff(baseline_manifest, candidate_manifest)),
         }
         if capability_protocol is not None:
             proxy_result = None

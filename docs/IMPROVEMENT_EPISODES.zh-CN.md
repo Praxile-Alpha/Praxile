@@ -5,7 +5,12 @@
 每项记录包含：
 
 - baseline/candidate run ID、manifest digest、trace ID；候选 ID 和 digest。
-- component_diff：指向冻结候选的类型和 digest，是否确有注入；当前是候选引用，不是可执行补丁。
+- component_diff：冻结候选类型、digest 与注入标记；configuration_evidence 从两份
+  manifest 保存精确上下文差异、前后 SHA-256 和 test/replace JSON Patch。
+  该补丁作用于 policy 的 /context，可重放配置差异；不是代码或 hook 补丁，
+  不导出 settings 等其他配置。缺失上下文不是空上下文，标记 unavailable。
+  Patch 包含候选原文，随私有实验报告存储，公开前需审查；不能仅凭配置差异
+  证明选中表示实际到达执行器或产生行为收益。旧调用没有 manifest 时证据为 null。
 - behavior_prediction：冻结候选原有 expected_effect，不从实验结果倒推预测。
 - probe：配对执行的 trace 引用；没有伪造未执行的局部 probe。
 - observed_difference：官方 resolved 状态变化、双方确实提供的工具调用/延迟/可比较成本差异，以及原 progress 记录。

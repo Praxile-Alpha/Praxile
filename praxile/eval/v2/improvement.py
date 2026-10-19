@@ -5,7 +5,8 @@ import math
 from .behavior_probe import probe_repetition
 
 
-def improvement_episodes(experiment_id, candidate, baseline, treatment, comparison, invariant_check):
+def improvement_episodes(experiment_id, candidate, baseline, treatment, comparison, invariant_check,
+                         *, component_diff=None):
     left = {row["task_id"]: row for row in baseline.get("tasks", [])}
     right = {row["task_id"]: row for row in treatment.get("tasks", [])}
     episodes = []
@@ -56,6 +57,7 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
             "candidate": {"run_id": treatment.get("eval_run_id"), "manifest_digest": treatment.get("manifest_digest"),
                           "trace_id": b.get("trace_id"), "candidate_id": candidate.candidate_id, "digest": candidate.digest},
             "component_diff": {"type": candidate.candidate_type, "candidate_digest": candidate.digest,
+                               "configuration_evidence": deepcopy(component_diff),
                                "source": "frozen experiment candidate", "applied": bool(isinstance(activation, Mapping)
                                                                                 and activation.get("injected_context_items"))},
             "behavior_prediction": deepcopy(dict(candidate.expected_effect)),
