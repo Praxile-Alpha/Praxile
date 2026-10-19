@@ -100,6 +100,18 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 
 ### 从轨迹生成文件
 
+真实 profile 生成复验仍失败：MiniMax-M3 在 4000 输出 token 内只返回推理块，
+finish_reason=length，没有最终 JSON，未产生候选。见
+results/jobbench-candidate-profile-20261019.json。缺少输出不等于能力约束已有效。
+
+模型角色可显式添加 request_options，例如
+`{"thinking":{"type":"disabled"}}`。支持字段仅 thinking（type=enabled/disabled）、
+reasoning_effort（none/minimal/low/medium/high）和 reasoning_split（boolean）；
+只为主 OpenAI-compatible provider 透传，不覆盖模型、消息、token 上限或权限。
+默认不设置，非兼容 provider 或跨目标 fallback 不静默忽略/移植。具体模型支持
+哪些字段、是否遵守由其 API 决定；这里仅通过配置与传输 fixture 测试，尚未对
+MiniMax 验证关闭推理是否可用。角色配置仍进入实验配置摘要。
+
 可选 `--executor-profile native-profile.json` 为生成器提供版本化原生动作范围：
 
 ```json

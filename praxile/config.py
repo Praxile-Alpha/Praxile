@@ -987,6 +987,12 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
             if not isinstance(role_config, dict):
                 errors.append(f"model_roles.{role_name}: expected object")
                 continue
+            if "request_options" in role_config:
+                from .model_options import validate_request_options
+                try:
+                    validate_request_options(role_config["request_options"])
+                except ValueError as error:
+                    errors.append(f"model_roles.{role_name}.request_options: {error}")
             provider_name = role_config.get("provider")
             model_name = role_config.get("model")
             if provider_name == "local" and role_name == "embedding":

@@ -396,6 +396,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   一致或工具已可用。后组合增补：同摘要父 profile 可组合，重新验证组合样例；
   混合/错配/伪造 profile 拒绝，cycle 也复核自定义回调，不能丢约束或取并集。
   单元与默认隔离链路回归不等于原生能力组合实际执行验收，真实复验未完成。
+  profile 真实复验（2026-10-19）：MiniMax 单次 1297 input / 4000 output，
+  52.284 秒，仅推理块、无最终 JSON，length 截断被拒绝，未生成/执行候选。
+  新增角色级受限 request_options 透传与校验，默认不启用、不覆盖预算；
+  仅配置/传输测试通过，模型端支持和后续有效草案未验收。证据见
+  results/jobbench-candidate-profile-20261019.json，完整项继续不勾选。
   两阶段组合增补：Python API 支持两组开发 probe 后调用组合器，模型输入只
   含父候选与白名单任务 verdict；组合/弃权先冻结，恢复不重复生成，组合独立
   重跑。fixture 验证执行、恢复和弃权；CLI 已接 compose-after-probes 与

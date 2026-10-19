@@ -150,6 +150,8 @@ class OpenAICompatibleProvider:
         }
         if request.get("max_tokens"):
             body["max_tokens"] = request["max_tokens"]
+        from .model_options import validate_request_options
+        body.update(validate_request_options(request.get("request_options", {})))
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -490,6 +492,11 @@ class ModelRouter:
             started = time.monotonic()
             try:
                 provider, model = self._provider_for_target(candidate["target"], purpose=purpose)
+                from .model_options import validate_request_options
+                role_config = self.config.get("model_roles", self._role_name_for_purpose(purpose), default={})
+                options = validate_request_options(role_config.get("request_options", {}) if isinstance(role_config, dict) else {})
+                if options and (not isinstance(provider, OpenAICompatibleProvider) or candidate["target"] != primary_route["target"]):
+                    raise ModelError("role request_options require the primary OpenAI-compatible route; cannot silently ignore or transfer them")
                 response = self._provider_chat(
                     provider,
                     {
@@ -499,6 +506,7 @@ class ModelRouter:
                         "max_tokens": max_tokens,
                         "timeout": timeout_seconds,
                         "cancel_requested": cancel_requested,
+                        **({"request_options": options} if options else {}),
                     },
                     cancel_requested=cancel_requested,
                 )
