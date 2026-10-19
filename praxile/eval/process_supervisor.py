@@ -6,6 +6,7 @@ import math
 import os
 import signal
 import subprocess
+import time
 from pathlib import Path
 
 from ..utils import write_json
@@ -16,7 +17,8 @@ class _Terminated(BaseException):
         self.signum = signum
 
 
-def supervise(argv: list[str], *, timeout: float, status_path: Path) -> int:
+def supervise(argv: list[str], *, timeout: float, status_path: Path,
+              cancel_file: Path | None = None) -> int:
     if os.name != "posix":
         raise RuntimeError("native worker supervision requires POSIX")
     if not argv or not math.isfinite(timeout) or timeout <= 0:
@@ -36,6 +38,8 @@ def supervise(argv: list[str], *, timeout: float, status_path: Path) -> int:
         for signum in (signal.SIGTERM, signal.SIGINT):
             previous[signum] = signal.signal(signum, interrupted)
         write_json(status_path, record)
+        if cancel_file is not None and cancel_file.exists():
+            raise _Terminated(signal.SIGTERM)
         # Defer interruption until assignment without passing a blocked signal
         # mask into the worker or its descendants.
         process = subprocess.Popen(argv, start_new_session=True)
@@ -44,7 +48,18 @@ def supervise(argv: list[str], *, timeout: float, status_path: Path) -> int:
         record["status"] = "running"
         write_json(status_path, record)
         try:
-            code = process.wait(timeout=timeout)
+            deadline = time.monotonic() + timeout
+            while True:
+                if cancel_file is not None and cancel_file.exists():
+                    raise _Terminated(signal.SIGTERM)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(argv, timeout)
+                try:
+                    code = process.wait(timeout=min(.1, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
             record.update(status="completed" if code == 0 else "failed", returncode=code)
         except subprocess.TimeoutExpired:
             code = 124
@@ -77,10 +92,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, required=True)
     parser.add_argument("--status", type=Path, required=True)
+    parser.add_argument("--cancel-file", type=Path)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     argv = args.command[1:] if args.command[:1] == ["--"] else args.command
-    raise SystemExit(supervise(argv, timeout=args.timeout, status_path=args.status))
+    raise SystemExit(supervise(argv, timeout=args.timeout, status_path=args.status,
+                              cancel_file=args.cancel_file))
 
 
 if __name__ == "__main__":

@@ -117,6 +117,38 @@ def test_native_worker_is_supervised_and_deadline_evidence_is_retained(tmp_path)
     assert not (tmp_path / "praxile-supervision.partial.json").exists()
 
 
+@pytest.mark.parametrize("request_fails", [False, True])
+def test_host_cancellation_requests_worker_stop_without_replacing_primary_error(tmp_path, request_fails):
+    from types import SimpleNamespace
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        base_url="http://localhost/v1", model_name="fixture",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())
+    class Environment:
+        requested = False
+        async def upload_file(self, *args):
+            pass
+        async def exec(self, command, **kwargs):
+            if "praxile.eval.process_supervisor" in command:
+                raise asyncio.CancelledError("primary cancellation")
+            assert ".touch()" in command
+            self.requested = not request_fails
+            return SimpleNamespace(return_code=1 if request_fails else 0)
+        async def download_file(self, source, target):
+            if source.endswith("/supervision.json") and self.requested:
+                target.write_text(json.dumps({"schema_version": "praxile.worker_supervision.v1",
+                                              "status": "cancelled", "returncode": 143}))
+            else:
+                raise FileNotFoundError()
+    with pytest.raises(asyncio.CancelledError, match="primary cancellation"):
+        asyncio.run(agent.run("public task", Environment(), AgentContext()))
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["worker_cancel"]["requested"] is not request_fails
+    assert record["worker_cancel"]["termination_confirmed"] is not request_fails
+    assert record["status"] == "cancelled"
+
+
 def test_harbor_agent_usage_and_integrity(tmp_path):
     wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"fixture")
@@ -214,6 +246,27 @@ HTTPServer(('127.0.0.1',18888),Handler).serve_forever()
             local_status = paths.agent_dir / "timeout-smoke.json"
             await environment.download_file(status_path, local_status)
             assert json.loads(local_status.read_text())["status"] == "timed_out"
+            cancel_path = agent.remote_root + "/cancel-smoke"
+            running = asyncio.create_task(environment.exec(shlex.join([
+                python, "-m", "praxile.eval.process_supervisor", "--timeout", "30",
+                "--status", agent.remote_root + "/supervision.json",
+                "--cancel-file", cancel_path, "--", python, "-c", program]), timeout_sec=40))
+            try:
+                record = {}
+                async with asyncio.timeout(10):
+                    while True:
+                        await agent._record_supervision(environment, record)
+                        if record.get("worker_supervision", {}).get("status") == "running":
+                            break
+                        await asyncio.sleep(.1)
+                await agent._cancel_worker(environment, cancel_path, record)
+                assert record["worker_cancel"] == {"requested": True, "termination_confirmed": True}
+                assert record["worker_supervision"]["status"] == "cancelled"
+                assert (await asyncio.wait_for(running, timeout=5)).return_code == 143
+            finally:
+                if not running.done():
+                    running.cancel()
+                await asyncio.gather(running, return_exceptions=True)
         finally:
             await environment.stop(delete=True)
 

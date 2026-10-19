@@ -56,3 +56,31 @@ def test_termination_reaps_worker_and_reports_cancellation(tmp_path):
         if process.poll() is None:
             process.kill()
         process.communicate(timeout=5)
+
+
+@pytest.mark.parametrize("before_start", [False, True])
+def test_cancellation_marker_prevents_or_stops_execution(tmp_path, before_start):
+    status = tmp_path / "status.json"
+    marker = tmp_path / "cancel"
+    started = tmp_path / "worker-started"
+    argv = command(status, f"from pathlib import Path; import time; Path({str(started)!r}).touch(); time.sleep(60)", 30)
+    argv[argv.index("--"):argv.index("--")] = ["--cancel-file", str(marker)]
+    if before_start:
+        marker.touch()
+    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        if not before_start:
+            deadline = time.monotonic() + 5
+            while not started.exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert started.exists()
+            marker.touch()
+        process.communicate(timeout=5)
+        assert process.returncode == 143
+        assert json.loads(status.read_text())["status"] == "cancelled"
+        if before_start:
+            assert not started.exists()
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.communicate(timeout=5)

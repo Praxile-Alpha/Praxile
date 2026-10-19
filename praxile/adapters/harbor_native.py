@@ -14,7 +14,7 @@ import time
 from pathlib import Path, PurePosixPath
 
 from harbor.agents.base import BaseAgent
-from ..utils import write_json
+from ..utils import new_id, write_json
 
 
 class PraxileAgent(BaseAgent):
@@ -74,9 +74,11 @@ class PraxileAgent(BaseAgent):
             public = Path(directory) / "instruction.txt"
             public.write_text(instruction, encoding="utf-8")
             await environment.upload_file(public, self.remote_root + "/instruction.txt")
+        cancel_file = self.remote_root + "/" + new_id("cancel")
         command = shlex.join([
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.process_supervisor",
-            "--timeout", str(self.timeout_seconds), "--status", self.remote_root + "/supervision.json", "--",
+            "--timeout", str(self.timeout_seconds), "--status", self.remote_root + "/supervision.json",
+            "--cancel-file", cancel_file, "--",
             self.remote_root + "/venv/bin/python", "-m", "praxile.eval.native_worker",
             "--workspace", self.workspace, "--instruction", self.remote_root + "/instruction.txt",
             "--result", self.remote_root + "/result.json", "--model", self.model_name,
@@ -91,6 +93,8 @@ class PraxileAgent(BaseAgent):
         except BaseException as error:
             record.update(status="cancelled" if isinstance(error, asyncio.CancelledError) else "failed",
                           error_type=type(error).__name__)
+            if isinstance(error, asyncio.CancelledError):
+                await self._cancel_worker(environment, cancel_file, record)
             # Failure evidence must not replace the primary execution exception.
             try:
                 await asyncio.wait_for(self._collect_result(environment, context), timeout=15)
@@ -119,8 +123,30 @@ class PraxileAgent(BaseAgent):
                 if record["status"] == "completed":
                     raise
 
+    async def _cancel_worker(self, environment, cancel_file, record) -> None:
+        record["worker_cancel"] = {"requested": False, "termination_confirmed": False}
+        try:
+            result = await asyncio.wait_for(environment.exec(shlex.join([
+                self.remote_root + "/venv/bin/python", "-c",
+                f"from pathlib import Path; Path({cancel_file!r}).touch()"]), timeout_sec=5), timeout=6)
+            if result.return_code != 0:
+                raise RuntimeError("worker cancellation request failed")
+            record["worker_cancel"]["requested"] = True
+            async def confirm():
+                while True:
+                    await self._record_supervision(environment, record)
+                    if record.get("worker_supervision", {}).get("status") in {
+                            "completed", "failed", "cancelled", "timed_out"}:
+                        record["worker_cancel"]["termination_confirmed"] = True
+                        return
+                    await asyncio.sleep(.1)
+            await asyncio.wait_for(confirm(), timeout=6)
+        except (Exception, asyncio.CancelledError) as error:
+            record["worker_cancel"]["error_type"] = type(error).__name__
+
     async def _record_supervision(self, environment, record) -> None:
         temporary = self.logs_dir / "praxile-supervision.partial.json"
+        record.pop("worker_supervision", None)
         try:
             await asyncio.wait_for(environment.download_file(
                 self.remote_root + "/supervision.json", temporary), timeout=5)
@@ -134,10 +160,13 @@ class PraxileAgent(BaseAgent):
                 "status": supervision["status"],
                 "returncode": supervision.get("returncode") if type(supervision.get("returncode")) is int else None,
             }
-        except (Exception, asyncio.CancelledError) as error:
+        except Exception as error:
             record["supervision_collection_error_type"] = type(error).__name__
         finally:
-            temporary.unlink(missing_ok=True)
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     async def _collect_result(self, environment, context) -> None:
         # Never leave a truncated download at the canonical evidence path.

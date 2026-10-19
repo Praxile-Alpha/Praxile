@@ -34,6 +34,25 @@ native worker 正常完成、supervision 状态回收，以及独立超时任务
 编辑未作为源码功能证据。上述摘要标识实际构建产物，不承诺从同一 commit 重建字节一致。
 Linux 原生宿主、官方任务镜像、真实模型、即时取消及强杀恢复仍需单独验收。
 
+### 取消握手（后续实现）
+
+每次 run 分配新的取消标记路径，supervisor 在启动前和运行中（最多约 100ms
+轮询间隔，不含系统调度延迟）检查标记。宿主 run 收到 CancelledError 后，通过
+既有 Harbor exec 写入标记，再限时查询 supervisor 的终态。请求最多等待 6 秒，
+确认最多等待 6 秒，确认超时不会无限等待或覆盖原取消异常。
+`worker_cancel.requested` 和 `termination_confirmed` 分开记录；终态由 supervisor
+完成进程组回收后写入。它是运行状态观察，不是防篡改安全证明。
+
+通道不可用时记录 error_type 和未确认状态，不宣称已停止，也不接管 Harbor 的
+容器所有权。脱离进程组的恶意后代、supervisor 被 SIGKILL 和容器强杀恢复仍未覆盖。
+
+验证：6 项本地进程测试；Harbor 0.18/0.22 各 11 项契约测试和各 2 项真实
+Docker 测试通过。契约测试验证 run 取消进入握手与原异常保留；容器测试直接调用
+同一取消 helper，确认 supervisor/后代退出、返回 143、终态回收。尚未注入 Harbor
+trial 顶层取消、Docker daemon 失联或宿主进程强杀，不能把它算作完整灾备验收。
+本次 wheel SHA-256：`01a076ca0221f530a5bdab8a9165e68985d3c773c0631d6cd0f305a9ba78ac0b`，
+环境/镜像同上，两个真实容器测试耗时分别为 23.19s / 23.30s。
+
 - 基础 Praxile 不依赖 Harbor。WorkBuddy 的 Harbor 0.18.0 与 JobBench 的 0.22.0 必须使用独立 Python 环境，不能在同一环境互相升级。
 - 环境必须提供 Python >=3.11、venv 和任务工具。宿主 Harbor 环境要求 Python >=3.12。
 - `workspace` 必须是明确存在的绝对路径。执行前存在 `.praxile`（含符号链接）会被拒绝，防止跨 arm 经验、规则或配置污染。
