@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 
-from ...json_utils import parse_json_object
+from ...action_protocol import decode_action
 from .candidate import ContextCandidate
 from .schema import EvalSchemaError, canonical_json
 
@@ -63,9 +63,13 @@ def design_development_candidates(*, evidence, development_task_ids, heldout_tas
             max_tokens=4000, timeout=60, temperature=0, cancel_requested=cancel_requested)
         logger.add_model_cost(response.get("usage", {}), route={**response.get("route", {}),
             "purpose": "proposal_composer", "latency_ms": response.get("latency_ms")})
+        result, decoding = decode_action(response.get("content", ""))
+        record["response_decode"] = decoding
+        record["finish_reason"] = response.get("finish_reason")
         if response.get("finish_reason") in {"length", "max_tokens"}:
             raise EvalSchemaError("truncated candidate design response")
-        result = parse_json_object(response.get("content", ""))
+        if result is None:
+            raise EvalSchemaError("candidate design response is not a complete JSON object")
         if result == {"decision": "abstain"}:
             record["status"] = "abstained"
             return {"decision": "NO_ENTRY", "candidates": [], "composition": None,

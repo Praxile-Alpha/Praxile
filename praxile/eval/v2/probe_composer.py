@@ -1,7 +1,7 @@
 """Model composition using whitelisted development probe feedback only."""
 import hashlib
 
-from ...json_utils import parse_json_object
+from ...action_protocol import decode_action
 from .candidate import ContextCandidate
 from .schema import EvalSchemaError, canonical_json
 
@@ -55,9 +55,13 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
             max_tokens=2500, timeout=60, temperature=0, cancel_requested=cancel_requested)
         logger.add_model_cost(response.get("usage", {}), route={**response.get("route", {}),
             "purpose": "proposal_composer", "latency_ms": response.get("latency_ms")})
+        value, decoding = decode_action(response.get("content", ""))
+        record["response_decode"] = decoding
+        record["finish_reason"] = response.get("finish_reason")
         if response.get("finish_reason") in {"length", "max_tokens"}:
             raise EvalSchemaError("truncated composition")
-        value = parse_json_object(response.get("content", ""))
+        if value is None:
+            raise EvalSchemaError("composition response is not a complete JSON object")
         if value == {"decision": "abstain"}:
             record["status"] = "abstained"
             return None

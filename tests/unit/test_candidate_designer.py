@@ -52,6 +52,22 @@ def test_abstention_is_normal_no_entry():
     assert result["decision"] == "NO_ENTRY" and not result["candidates"]
 
 
+def test_reasoning_json_is_not_mistaken_for_final_candidate():
+    kwargs, _ = inputs({"content": '<think>{"decision":"propose"} private thought</think>\n{"decision":"abstain"}'})
+    result = design_development_candidates(**kwargs)
+    assert result["decision"] == "NO_ENTRY"
+    decode = kwargs["logger"].data["development_candidate_designs"][0]["response_decode"]
+    assert decode["reasoning_blocks_removed"] == 1
+    assert "private thought" not in json.dumps(decode)
+
+
+def test_unclosed_reasoning_never_becomes_a_candidate():
+    kwargs, _ = inputs({"content": '<think>{"decision":"abstain"}'})
+    with pytest.raises(EvalSchemaError):
+        design_development_candidates(**kwargs)
+    assert kwargs["logger"].data["development_candidate_designs"][0]["response_decode"]["reason"] == "unclosed_reasoning"
+
+
 @pytest.mark.parametrize("failure", ["unknown_ref", "duplicate", "extra_field", "truncated", "bad_json"])
 def test_invalid_drafts_never_become_candidates_and_usage_is_kept(failure):
     value = proposal()

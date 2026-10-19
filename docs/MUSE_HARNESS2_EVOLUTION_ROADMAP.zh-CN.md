@@ -384,6 +384,12 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   CLI design-context 已接此证据入口：冻结输入/范围/去敏角色配置，保存生成
   轨迹与候选文件，不自动执行；恢复重建缺失候选而不重复已保存的模型生成。
   fixture 验证 CLI 生成、文件恢复及变更输入拒绝，真实模型质量仍未验收。
+  真实生成验收（2026-10-19）：MiniMax-M3 从四条公开页数检查生成草案，首次
+  RobustJSONError；补共享 reasoning/JSON 解码与摘要诊断后复验生成两个候选
+  和组合。合计两次请求，1680 input / 3742 output tokens，无 rubric/正文发送。
+  审查发现任意页边距、未实现估页和无证据达标保证等能力错配，未执行/未晋升。
+  下一步需执行器 capability 约束与独立内容保持验证，不能据此勾选质量验收。
+  证据见 results/jobbench-candidate-design-20261019.json。
   两阶段组合增补：Python API 支持两组开发 probe 后调用组合器，模型输入只
   含父候选与白名单任务 verdict；组合/弃权先冻结，恢复不重复生成，组合独立
   重跑。fixture 验证执行、恢复和弃权；CLI 已接 compose-after-probes 与

@@ -57,6 +57,11 @@ task_id/verdict/has_confounders，禁止把整份报告、评分细则或自由�
 模型用量留在传入 TrajectoryLogger。调用方负责持久化该日志并冻结正确的
 composer_identity；身份声明不是模型配置的独立认证。
 
+生成与组合共用已有响应解码器：完整前导 think 块可移除，未闭合/嵌套拒绝，
+保留响应 SHA-256、长度、解析错误原因/偏移而不保存推理正文。真实 MiniMax
+页数修订证据生成复验已产生合法草案，但能力匹配和内容保持未获验收，见
+results/jobbench-candidate-design-20261019.json；不要把合法 JSON 当有效经验。
+
 此模式已通过 fixture 的实际两阶段执行、重跑及弃权恢复测试。真实模型有效性、
 机制因果归因和完整 R2-C 验收仍未完成。
 

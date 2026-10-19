@@ -1,0 +1,53 @@
+{
+  "schema_version": "praxile.public_candidate_design_smoke.v1",
+  "date": "2026-10-19",
+  "base_revision": "6c76c64",
+  "model": "MiniMax-M3",
+  "source": "Four public layout-check observations from seeded JobBench document repair; not held-out evaluation",
+  "source_result_sha256": "2a3049dc84e2eb9582867211816e1674a88031a4050367412ad772c6df0ccece",
+  "official_rubric_sent": false,
+  "document_body_sent": false,
+  "attempts": [
+    {
+      "status": "failed",
+      "error_type": "RobustJSONError",
+      "exact_parse_cause": "unknown: initial response diagnostics were not recorded",
+      "model_calls": 1,
+      "input_tokens": 840,
+      "output_tokens": 2344,
+      "elapsed_seconds": 20.097,
+      "receipt_sha256": "9241aec666bc5836aa5f8024a4e181a98483ece019de0806b532804ff259c13c"
+    },
+    {
+      "status": "drafted",
+      "patch": "shared response decoding and diagnostics",
+      "designer_source_sha256": "d40890b2119b641864f62e61d63f07c9973daa776a1187d91b32ae5fb28e27b2",
+      "model_calls": 1,
+      "input_tokens": 840,
+      "output_tokens": 1398,
+      "elapsed_seconds": 12.945,
+      "reasoning_blocks_removed": 1,
+      "candidate_count": 2,
+      "composition_count": 1,
+      "receipt_sha256": "df3de669690184435debcabfe1afca16f2240753f063d7c2ecf53d58076c1f11",
+      "generated_sha256": "e7e53a369a91998cae4c710c50d3d6f64ea7bc661887ac0d2f373a204b91ed28",
+      "trajectory_sha256": "fe1249a05f3c2388ab0ac804fb81c7ede9fe5835d75ffd687042a09430db22cf"
+    }
+  ],
+  "review_findings": [
+    "Candidate suggests arbitrary margins/fonts, while current worker exposes fixed layouts.",
+    "Candidate suggests in-memory page estimation without an implemented estimator.",
+    "Composition guarantees page-limit compliance without execution evidence.",
+    "Content trimming may remove required content; preservation has not been verified."
+  ],
+  "cost_usd": null,
+  "experiments_started": false,
+  "promotion_eligible": false,
+  "performance_improvement_claimed": false,
+  "next_requirement": "Constrain candidate generation and validation by executor capabilities; independently test content and layout preservation.",
+  "limitations": [
+    "Two sequential diagnostic requests, not a controlled A/B performance experiment.",
+    "The second response proves parsing compatibility, not the first failure's exact cause.",
+    "Draft schema and evidence references passed; behavioral quality and executability did not receive acceptance."
+  ]
+}
