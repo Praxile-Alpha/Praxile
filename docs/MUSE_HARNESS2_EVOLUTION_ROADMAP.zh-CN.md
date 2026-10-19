@@ -214,6 +214,11 @@ typed-actions-001 的最终 v2 说明真实验收通过：首次生成两候选�
 `results/docx-typed-actions-20261019/`。候选固定条目数及占位示例有内容保持风险；
 尚未执行或晋升，完整 R2 闭环仍不勾选。
 
+独立执行前置修复：Harbor adapter/worker/凭据代理现已显式传递并固定
+model_request_options（如 reasoning_effort=low），防止设计器和执行器采用
+不同默认推理设置。代理拒绝 worker 覆盖参数；返回记录不一致则拒收。
+通过单元及 Harbor adapter 测试，真实 M3.1 候选任务 A/B 尚未开始。
+
 修订来源设计复验：`5602042` 的 M3.1 Flash low 返回完整 JSON，但首个候选动作
 示例校验失败，未发布候选或执行 probe。原记录不能定位具体字段，新增有界脱敏
 校验诊断；另提供 opt-in 工具 profile v2 数值/SHA 约束，保留 v1 摘要兼容性。

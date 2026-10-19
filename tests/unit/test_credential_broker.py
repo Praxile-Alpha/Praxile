@@ -19,6 +19,36 @@ def request(broker, **changes):
         "messages": [{"role": "user", "content": "hello"}], **changes})
 
 
+def test_controller_options_injected_and_worker_cannot_override():
+    options = {"reasoning_effort": "low", "reasoning_split": True}
+    with ChatCredentialBroker(key="fixture", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=2, output_budget=20, max_output=10, request_options=options) as value:
+        bodies = []
+        value._forward = lambda body: bodies.append(json.loads(body)) or {"choices": []}
+        options["reasoning_effort"] = "max"
+        for changes in ({"reasoning_effort": "max"}, {"reasoning_split": 1}, {"thinking": {"type": "enabled"}}):
+            with pytest.raises(BrokerDenied):
+                request(value, **changes)
+        assert value.status()["remaining_calls"] == 2
+        request(value)
+        request(value, reasoning_effort="low", reasoning_split=True)
+        assert len(bodies) == 2
+        assert all(body["reasoning_effort"] == "low" and body["reasoning_split"] is True for body in bodies)
+
+
+def test_worker_cannot_introduce_unconfigured_options(broker):
+    with pytest.raises(BrokerDenied):
+        request(broker, reasoning_effort="low")
+    assert broker.status()["remaining_calls"] == 2
+
+
+@pytest.mark.parametrize("options", [{"max_tokens": 999}, {"messages": []}, {"reasoning_effort": "invalid"}])
+def test_controller_rejects_unbounded_or_invalid_options(options):
+    with pytest.raises(ValueError):
+        ChatCredentialBroker(key="fixture", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=1, output_budget=10, request_options=options)
+
+
 def test_scoped_calls_and_output_reservations(broker):
     assert request(broker)["choices"]
     assert request(broker)["choices"]

@@ -48,7 +48,9 @@ class ChatCredentialBroker:
 
     def __init__(self, *, key: str, endpoint: str, model: str, max_calls: int,
                  output_budget: int, max_output: int = 4096, ttl_seconds: int = 900,
-                 request_timeout: int = 60):
+                 request_timeout: int = 60, request_options: dict | None = None):
+        from ..model_options import validate_request_options
+        self._request_options = validate_request_options({} if request_options is None else request_options)
         url = urlsplit(endpoint)
         if (url.scheme != "https" or not url.hostname or url.username or url.password
                 or url.query or url.fragment or not url.path.endswith("/chat/completions")):
@@ -108,8 +110,12 @@ class ChatCredentialBroker:
     def chat(self, authorization: str, payload: dict) -> dict:
         self._authorize(authorization)
         allowed = {"model", "messages", "max_tokens", "max_completion_tokens", "temperature", "stream"}
+        allowed.update(self._request_options)
         if not isinstance(payload, dict) or set(payload) - allowed or payload.get("model") != self.model:
             raise BrokerDenied("request outside model capability")
+        for key, value in self._request_options.items():
+            if key in payload and json.dumps(payload[key], sort_keys=True) != json.dumps(value, sort_keys=True):
+                raise BrokerDenied("request options differ from fixed model capability")
         if payload.get("stream", False) is not False:
             raise BrokerDenied("streaming is not supported")
         messages = payload.get("messages")
@@ -130,7 +136,7 @@ class ChatCredentialBroker:
         temperature = payload.get("temperature", 1)
         if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:
             raise BrokerDenied("invalid temperature")
-        body = json.dumps({**payload, output_field: maximum}, allow_nan=False).encode()
+        body = json.dumps({**payload, **self._request_options, output_field: maximum}, allow_nan=False).encode()
         if len(body) > 1024 * 1024:
             raise BrokerDenied("request too large")
         if not self._flight.acquire(blocking=False):

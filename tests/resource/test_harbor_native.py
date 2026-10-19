@@ -17,6 +17,40 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch):
+    import shlex
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    options = {"reasoning_effort": "low"}
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture", model_request_options=options)
+    options["reasoning_effort"] = "max"
+    commands = []
+    class Environment:
+        async def exec(self, command, **kwargs):
+            commands.append(shlex.split(command))
+            return SimpleNamespace(return_code=0)
+        async def upload_file(self, source, destination):
+            pass
+        async def download_file(self, remote, local):
+            local.write_text(json.dumps({"schema_version": "praxile.native_benchmark_run.v1",
+                "trajectory": {}, "experience_mode": "fresh_disabled",
+                "model_request_options": {"reasoning_effort": "max"}}))
+    monkeypatch.setattr(agent, "_collect_result", AsyncMock())
+    monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
+    asyncio.run(agent.run("synthetic task", Environment(), AgentContext()))
+    argv = commands[0]
+    assert json.loads(argv[argv.index("--model-request-options-json") + 1]) == {"reasoning_effort": "low"}
+    record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["model_request_options"] == {"reasoning_effort": "low"}
+    with pytest.raises(ValueError, match="request options differ"):
+        asyncio.run(PraxileAgent._collect_result(agent, Environment(), AgentContext()))
+    assert not (tmp_path / "praxile-result.json").exists()
+
+
 def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, monkeypatch):
     import shlex
     from types import SimpleNamespace

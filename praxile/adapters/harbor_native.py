@@ -31,9 +31,12 @@ class PraxileAgent(BaseAgent):
                  output_directory: str | None = None, renderer_executable: str = "",
                  deliverable_contract: dict | None = None,
                  dependency_wheels: list[dict] | None = None,
+                 model_request_options: dict | None = None,
                  development_candidate_file: str | None = None,
                  development_candidate_sha256: str | None = None,
                  development_only: bool = False, repository: str | None = None, **kwargs):
+        from ..model_options import validate_request_options
+        self.model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
         from ..services.run_service import normalize_deliverable_contract
         public_contract = normalize_deliverable_contract(deliverable_contract)
         self._public_contract_json = (json.dumps(public_contract, sort_keys=True, separators=(",", ":"))
@@ -205,7 +208,7 @@ class PraxileAgent(BaseAgent):
             max_calls=min(self.max_steps + 10, 1000), max_output=6000,
             output_budget=min((self.max_steps + 10) * 6000, 10_000_000),
             ttl_seconds=self.timeout_seconds + 60,
-            request_timeout=self.model_timeout_seconds + 10)
+            request_timeout=self.model_timeout_seconds + 10, request_options=self.model_request_options)
         remote = self.remote_root + "/" + new_id("capability")
         try:
             _, port = broker.start()
@@ -258,6 +261,8 @@ class PraxileAgent(BaseAgent):
         ]
         if capability_file:
             argv.extend(["--capability-file", capability_file])
+        if self.model_request_options:
+            argv.extend(["--model-request-options-json", json.dumps(self.model_request_options, sort_keys=True)])
         if self.task_body_file:
             argv.extend(["--task-body-file", self.task_body_file, "--task-body-sha256", self.task_body_sha256])
         if self.output_directory is not None:
@@ -282,6 +287,8 @@ class PraxileAgent(BaseAgent):
                   "renderer_executable": self.renderer_executable,
                   "public_contract_sha256": self.public_contract_sha256,
                   "model_timeout_seconds": self.model_timeout_seconds}
+        if self.model_request_options:
+            record["model_request_options"] = self.model_request_options
         if self.development_context_identity is not None:
             record["development_context_identity"] = self.development_context_identity
         write_json(self.logs_dir / "praxile-execution.json", record)
@@ -376,6 +383,8 @@ class PraxileAgent(BaseAgent):
                     or result.get("experience_mode") != ("development_candidate"
                         if self.development_context_identity is not None else "fresh_disabled")):
                 raise ValueError("invalid native worker result")
+            if result.get("model_request_options", {}) != self.model_request_options:
+                raise ValueError("native worker model request options differ from controller")
             if self.development_context_identity is not None:
                 development = result.get("development_context")
                 activation = development.get("activation") if isinstance(development, dict) else None

@@ -820,3 +820,23 @@ docker build --platform linux/amd64 \
 `workbuddy_results.import_trial()` 新增独立 `output_retention`：读取原生执行器显式的 `output_directory`，校验 Harbor manifest 的 source/destination/service、宿主文件类型和路径，并计算文件摘要。状态包括 `not_requested`、`missing_manifest`、`not_collected`、`missing_files`、`empty`、`retained`。扫描最多 10000 条、256 MiB，拒绝符号链接和特殊文件。非法证据拒绝导入，缺失证据不伪造零分；官方分数原样保存。
 
 Pair report 只导出留存状态、文件数量及摘要，不导出文件名和正文。`content_verified=false` 明确表示“保留了这些字节”不是“内容正确”；post-verifier 文件也不证明执行器结束瞬间的内容或来源可信。候选晋升仍需独立门禁，该审计不自动授权 promotion。
+
+## 固定模型推理参数
+
+Agent kwargs 可显式指定 `model_request_options`，例如：
+
+```json
+{"model_request_options": {"reasoning_effort": "low"}}
+```
+
+复用模型层白名单，仅允许 reasoning_effort、thinking、reasoning_split；不能
+覆盖消息、模型、端点或 token 预算。未配置时保持旧行为。Adapter 深拷贝并验证，
+传入 worker 的 coding_agent 角色；execution/result 记录显式参数，返回参数与
+控制面不一致时拒收。配对 job manifest 已包含完整 kwargs，因此两侧参数被冻结。
+
+使用凭据代理时，参数由宿主再次注入：worker 可以省略或提交完全相同的值，
+不能改成更高推理档、增加未配置字段或用数字伪装布尔值。实际服务是否支持并
+遵守参数仍需真实调用验证，配置传递测试不能代替该证据。
+
+本轮在启动 M3.1 Flash 候选执行前发现并修复此缺口；尚未进行带此配置的真实
+任务 A/B。之前只在候选设计器中配置 low，不能据此声称隔离 worker 也使用 low。

@@ -58,7 +58,9 @@ def load_task_input(root: Path, instruction: str, relative_path: str, expected_s
 
 
 def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, model_timeout_seconds: int = 30,
-                     renderer_executable: str = "") -> Config:
+                     renderer_executable: str = "", model_request_options: dict | None = None) -> Config:
+    from ..model_options import validate_request_options
+    model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
     root = root.resolve(strict=True)
     if not root.is_dir() or (root / ".praxile").exists() or (root / ".praxile").is_symlink():
         raise ValueError("native benchmark worker requires a workspace without .praxile state")
@@ -80,6 +82,8 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
         "models": [{"name": model, "role": "strong_coding", "supports_tools": False}],
     }}
     data["model_roles"]["coding_agent"] = {"provider": "benchmark", "model": model}
+    if model_request_options:
+        data["model_roles"]["coding_agent"]["request_options"] = model_request_options
     validate_config(data)
     return Config(data, ProjectPaths(root))
 
@@ -88,7 +92,7 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                model_timeout_seconds: int = 30, output_directory: str | None = None,
                renderer_executable: str = "", deliverable_contract: dict | None = None,
                development_candidate: dict | None = None, repository: str | None = None,
-               development_only: bool = False) -> dict[str, Any]:
+               development_only: bool = False, model_request_options: dict | None = None) -> dict[str, Any]:
     from ..services.run_service import normalize_deliverable_contract
     deliverable_contract = normalize_deliverable_contract(deliverable_contract)
     context_plan = None
@@ -103,7 +107,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
         if path.is_absolute() or ".." in path.parts or not path.parts:
             raise ValueError("output directory must be workspace-relative")
     config = benchmark_config(root, model=model, base_url=base_url, max_steps=max_steps,
-                              model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable)
+                              model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable,
+                              model_request_options=model_request_options)
     runtime = AgentRuntime(config)
     try:
         options = {"experimental_context": context_plan["content"]} if context_plan and context_plan["content"] else {}
@@ -117,6 +122,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                 close()
     result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": trajectory,
               "official_evaluation": "not_run", "experience_mode": "fresh_disabled"}
+    if model_request_options:
+        result["model_request_options"] = config.data["model_roles"]["coding_agent"]["request_options"]
     if context_plan is not None:
         result["development_context"] = {key: value for key, value in context_plan.items() if key != "content"}
         result["experience_mode"] = "development_candidate"
@@ -136,6 +143,7 @@ def main() -> None:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--max-steps", type=int, required=True)
     parser.add_argument("--model-timeout-seconds", type=int, default=30)
+    parser.add_argument("--model-request-options-json", default="{}")
     parser.add_argument("--output-directory")
     parser.add_argument("--renderer-executable", default="")
     parser.add_argument("--deliverable-contract-file", type=Path)
@@ -148,6 +156,9 @@ def main() -> None:
     parser.add_argument("--development-only", action="store_true")
     parser.add_argument("--repository")
     args = parser.parse_args()
+    from ..structured_response import parse_submission_object
+    from ..model_options import validate_request_options
+    model_request_options = validate_request_options(parse_submission_object(args.model_request_options_json))
     if bool(args.development_candidate) != bool(args.development_candidate_sha256):
         parser.error("development candidate file and digest must be configured together")
     candidate = None
@@ -172,7 +183,8 @@ def main() -> None:
                         model=args.model, base_url=args.base_url, max_steps=args.max_steps,
                         model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory,
                         renderer_executable=args.renderer_executable, deliverable_contract=contract,
-                        development_candidate=candidate, repository=args.repository, development_only=args.development_only)
+                        development_candidate=candidate, repository=args.repository, development_only=args.development_only,
+                        model_request_options=model_request_options)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

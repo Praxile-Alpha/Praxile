@@ -84,3 +84,11 @@ HTTP capability 只能限制此入口的用途与预算，不能约束拥有 cap
 日志不含提示词、响应正文、API key 或临时 capability。Harbor 在撤销和关闭后
 写入 `praxile-broker-usage.json`，包括取消/错误路径；独立 judge 调用方可保存相同
 status 快照。旧实验未保存的数据不能追溯补成已知；在途请求尚未返回时总量不完整。
+
+## 控制面固定请求参数
+
+`ChatCredentialBroker(request_options={"reasoning_effort": "low"}, ...)` 可冻结模型
+推理参数，复用白名单校验，拒绝 messages/max_tokens 等越界字段。宿主注入固定
+值；来访请求仅可省略或原样携带，修改或添加未配置参数在准入前拒绝，不占用
+调用额度。默认空配置仍拒绝 worker 自行引入推理参数。嵌套值深拷贝，外部修改
+初始化字典不会改变代理权限。此限制不扩大文本消息或工具调用权限。
