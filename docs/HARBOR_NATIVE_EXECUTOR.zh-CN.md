@@ -196,3 +196,23 @@ python -m praxile.eval.workbuddy \
 worker 超时、取消或非零退出后，仍在最多 15 秒内尝试回收已经存在的最终结果，并保留原始执行异常。下载先进入临时文件，验证版本后才发布为 `praxile-result.json`；残缺下载会被删除。正常进程退出但回收失败也会明确标记，不能当作成功运行。
 
 这不是完整 checkpoint 恢复：进程被强杀而未写出最终结果时，结果保持 unavailable，不把缺失轨迹补成成功证据。setup/upload 阶段错误仍由 Harbor trial 日志记录。容器生命周期继续由 Harbor 管理。
+
+## WorkBuddy 官方结果导入
+
+```sh
+python -m praxile.eval.workbuddy_results \
+  --dataset /absolute/office-prepared \
+  --revision DATASET_COMMIT \
+  --inventory-sha256 PREPARED_INVENTORY_SHA256 \
+  --task-id EXACT_TASK_ID \
+  --trial /absolute/jobs/JOB/TRIAL \
+  --output /absolute/private-results/workbuddy-trial.json
+```
+
+重新校验冻结数据（包括共享 verifier），从任务目录计算 Harbor checksum，与 trial 身份比较。核对 `result.json`、`verifier/reward.json`、`verifier/score.json` 的数值和评分器配置；保留官方 reward、逐项 verdicts/judges、diagnostics 和元数据，不用 Praxile 的自评分替代。
+
+`no_pass` 的零分可成为 completed evaluation；`judge_error` 标记 judge_unavailable，`build_error` 标记 infra_error，缺评分文件不补零。completed 只表示评分完成，不表示任务成功。非致命 judge error/abstain/review 单独列为 judge_issues；缺失模型身份、usage 或隔离模式保持 unknown/缺失，不推断已启用 LLM/VLM。执行器 finished/timed_out 与评分状态分开。
+
+导入结果可能含私有 rubric、诊断信息及上游异常文本，必须保存在控制面私有目录；输出仅允许新建，权限 0600，不能直接送给演化主体或作为公开报告。摘要及配置一致性校验不提供数字签名，也不能证明评分器未被执行环境篡改。后续真实任务验收仍须验证隔离和来源可信度。
+
+验证：16 项结果导入测试（含上游 ArtifactWriter 输出兼容），与清单/准备/job 测试合计 47 项通过；没有把 fixture 结果冒充真实 benchmark 成绩。
