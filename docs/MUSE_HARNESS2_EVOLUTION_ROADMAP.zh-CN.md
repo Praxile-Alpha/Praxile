@@ -378,6 +378,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
+  轨迹用量完整性增补：`cost.usage_evidence` 区分已知 token 小计与完整总量，
+  按 purpose 记录覆盖率；字段缺失、类型非法、别名冲突和旧轨迹缺失调用均不补零。
+  旧 `prompt_tokens/completion_tokens` 字段仅保留已知小计兼容语义。该证据仅覆盖
+  TrajectoryLogger 记录的调用，未记录的失败请求、独立 judge 和离线演化不能据此
+  声称已纳入总成本；金额保持 null，完整账本总项仍不勾选。
   A/B 汇总修复：缺失/非法 token、工具次数、延迟、费用及进展计数不再补零；
   缺一侧则差值 unknown，缺一任务则总量 unknown，并报告完整配对覆盖率。
   效率证据不足时不宣称节省，客观任务结果单独保留。完整全角色成本及中性

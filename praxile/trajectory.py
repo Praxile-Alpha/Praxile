@@ -5,6 +5,7 @@ from copy import deepcopy
 
 from .utils import new_id, utc_now, shorten
 from .subtasks import SubtaskEpisode
+from .usage_evidence import token_value, summarize_usage
 
 
 class TrajectoryLogger:
@@ -209,18 +210,19 @@ class TrajectoryLogger:
 
     def add_model_cost(self, usage: dict[str, Any], *, route: dict[str, Any] | None = None, status: str = "success") -> None:
         self.data["cost"]["model_calls"] += 1
-        self.data["cost"]["prompt_tokens"] += int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0)
-        self.data["cost"]["completion_tokens"] += int(
-            usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0
-        )
+        self.data["cost"]["prompt_tokens"] += token_value(usage, "prompt_tokens", "input_tokens") or 0
+        self.data["cost"]["completion_tokens"] += token_value(usage, "completion_tokens", "output_tokens") or 0
         call = {
             "status": status,
-            "usage": usage,
+            "usage": deepcopy(usage),
             "created_at": utc_now(),
         }
         if route:
-            call.update(route)
+            call.update({key: deepcopy(value) for key, value in route.items()
+                         if key not in {"usage", "status", "created_at"}})
         self.data["model_routing"]["calls"].append(call)
+        self.data["cost"]["usage_evidence"] = summarize_usage(
+            self.data["model_routing"]["calls"], self.data["cost"]["model_calls"])
 
     def add_model_performance(self, event: dict[str, Any]) -> None:
         self.data["model_routing"]["performance"].append({"created_at": utc_now(), **event})
