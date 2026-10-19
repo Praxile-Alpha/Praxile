@@ -81,7 +81,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         "source_result_sha256": digest, "task_id": task,
         "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
         "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
-        "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 3, "provenance_attested": False,
+        "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 4, "provenance_attested": False,
         "promotion_eligible": False,
         "limitations": ["Development membership is explicitly supplied by the caller, not independently attested.",
             "No task correctness, evaluator score, raw command/output or causal claim is projected."]}

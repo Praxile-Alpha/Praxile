@@ -7,6 +7,43 @@ import pytest
 from praxile.eval.v2.document_evidence import project_layout, project_revision, revision_layout_links
 
 
+def test_revision_exposes_validated_structure_without_text():
+    call, result = revision_events()
+    call.payload["action"]["document"] = {"layout": "compact", "blocks": [
+        {"type": "heading", "text": "PRIVATE", "level": 1},
+        {"type": "paragraph", "text": "PRIVATE"},
+        {"type": "bullet", "text": "PRIVATE"},
+        {"type": "table", "rows": [["PRIVATE", "PRIVATE"], ["PRIVATE", "PRIVATE"]]},
+        {"type": "page_break"}]}
+    facts = project_revision(call, result)[1]
+    structure = facts["replacement_structure"]
+    assert structure["requested_layout"] == "compact"
+    assert structure["block_counts"] == {"heading": 1, "paragraph": 1, "bullet": 1, "table": 1, "page_break": 1}
+    assert structure["text_characters"] == 49
+    assert (structure["table_rows"], structure["table_cells"], structure["maximum_table_columns"]) == (2, 4, 2)
+    assert structure["content_preservation_verified"] is False
+    assert "PRIVATE" not in json.dumps(facts)
+    assert facts["semantic_quality_verified"] is False
+
+
+@pytest.mark.parametrize("document", [{"blocks": ["bad"]}, {"blocks": []},
+    {"blocks": [{"type": "paragraph", "text": "x"}], "layout": "invented"},
+    {"blocks": [{"type": "table", "rows": [["a"], ["b", "c"]]}]}])
+def test_invalid_structure_is_unknown_not_invented(document):
+    call, result = revision_events()
+    call.payload["action"]["document"] = document
+    facts = project_revision(call, result)[1]
+    assert facts["replacement_structure"] is None
+    assert facts["before_sha256"] == "a" * 64
+
+
+def test_omitted_layout_is_not_inferred_from_current_defaults():
+    from praxile.eval.v2.document_evidence import project_document_structure
+    facts = project_document_structure({"blocks": [{"type": "paragraph", "text": ""}]})
+    assert facts["requested_layout"] is None
+    assert facts["text_characters"] == 0
+
+
 def revision_events():
     call = SimpleNamespace(type="TOOL_CALL", tool_call_id="revision", event_id="revision-call",
         payload={"action": {"type": "revise_docx", "path": "private.docx",

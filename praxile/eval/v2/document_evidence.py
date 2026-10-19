@@ -130,9 +130,36 @@ def project_revision(call, result):
     return ("revise_docx", digest), {
         "before_sha256": before, "after_sha256": after,
         "bytes_changed": before != after,
+        "replacement_structure": project_document_structure(document),
         "visual_quality_verified": False, "semantic_quality_verified": False,
         "official_evaluation": False,
     }
+
+
+def project_document_structure(document):
+    """Count validated replacement structure without exposing prose or cell values."""
+    from ...document_spec import validate_docx_spec
+    try:
+        validate_docx_spec(document)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    counts = {kind: 0 for kind in ("paragraph", "heading", "bullet", "table", "page_break")}
+    characters, rows, cells, max_columns = 0, 0, 0, 0
+    for block in document["blocks"]:
+        counts[block["type"]] += 1
+        if block["type"] == "table":
+            rows += len(block["rows"])
+            for row in block["rows"]:
+                cells += len(row)
+                max_columns = max(max_columns, len(row))
+                characters += sum(len(cell) for cell in row)
+        else:
+            characters += len(block.get("text", ""))
+    return {"schema_version": "praxile.document_structure.v1",
+            "requested_layout": document.get("layout"),
+            "block_counts": counts, "text_characters": characters,
+            "table_rows": rows, "table_cells": cells, "maximum_table_columns": max_columns,
+            "scope": "replacement_spec_only", "content_preservation_verified": False}
 
 
 def revision_layout_links(events):

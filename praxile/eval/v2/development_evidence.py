@@ -139,7 +139,7 @@ def collect_development_evidence(state_root, event_store, *, experiment_id, arm,
             "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
             "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
             "selection": "failure_priority_with_same_task_dependency_closure",
-            "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 3,
+            "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 4,
             "limitations": ["Local manifest membership is not an external provenance attestation.",
                             "No raw outputs, evaluator scores or task correctness claims are projected."]}
 

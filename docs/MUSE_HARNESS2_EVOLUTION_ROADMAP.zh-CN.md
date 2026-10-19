@@ -180,6 +180,11 @@ Agent 入口取消复验：两个 Harbor 版本各 4 项真实容器测试通过
 
 ### R0-C JobBench Adapter
 
+文档修订来源审计：投影 v4 增加经 DOCX schema 校验的替换结构统计。已有 seeded
+JobBench compact repair 离线回放四次修订，字符数 4783→3954→3232→2494，表格
+始终 15×6，布局记录仍为两页。可用于审计动作与结果，但内容保持/因果仍未知。
+未调用模型，未生成候选，未将 seeded repair 混入原始 benchmark 或 held-out。
+
 最新真实复验（0ba84dd）：同一 easy technical-writers 任务完成两份可解析
 DOCX，14 次模型调用，1 次 length 截断被拒绝后恢复。独立原版官方 verifier
 得到 73/82、reward=0.8902（9 项通过 8 项）；摘要和冻结权重校验一致。

@@ -379,6 +379,24 @@ evidence_sufficiency_verified=false。它只记录验证后实际输入的存在
 这一来源的重复设计请求暂止，后续应先解决动作语义证据或选择有独立验证的
 新开发 Episode，而非对同一组稀疏状态信号继续增加模型调用次数。
 
+### 修订动作的结构证据
+
+projection_version=4 为成功且版本匹配的 revise_docx 增加 replacement_structure。
+先通过现有 validate_docx_spec 校验，随后只统计请求中的布局枚举、各类型 block
+数量、文本字符数、表格总行数/单元格数/最大列数。正文、单元格值、文件名不导出。
+它描述 replacement_spec_only，不证明渲染结果或内容保持。未显式提供 layout 时为
+null；不符合现有 schema 的历史 spec 只保留已成立的字节版本证据，结构为 null。
+
+真实 seeded compact repair 来源 `2a3049dc...` 离线重放得到 10 条投影证据。
+四次修订均显式 compact，表格始终 15 行、6 列、90 单元格；文本字符数依次为
+4783、3954、3232、2494，heading 数为 3、3、1、1，paragraph 数为 10、4、4、4。
+既有独立布局记录仍均为两页，因此只能证明这些内容结构与输出页数被观察到，
+不能说 compact 无效、语义完整或原因已确定。它是 seeded repair，不是原始
+benchmark 成绩，也不是 held-out 样本。此次没有调用模型或改变源产物。
+
+该升级为后续候选设计提供可审计的动作信息，但仍不输出正文，也未自动生成
+“应该删哪段内容”的经验。原 manifest 不改写；投影版本变化使用新 design ID。
+
 生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
 同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
 旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
