@@ -100,6 +100,17 @@ run manifest、report digest、任务名单和 trace 的任务归属。clean/hel
 
 ### 从轨迹生成文件
 
+生成器 v2 支持结构化弃权说明：固定 reason code 与 missing_evidence 枚举，
+同时落入 trajectory/generated/report；标为 model_self_report、verified=false。
+旧 `{decision: abstain}` 仍接受但 reason=unspecified；任意附加文本、凭据或私有
+rubric 请求不属于该协议。诊断不触发自动取数/重试/晋升。设计 manifest 的
+implementation 已升级，旧设计不能混用新提示词继续生成；应使用新 design ID。
+
+2026-10-19 关联证据复验（v2 诊断实现前）：8 条修订/布局证据仍返回 NO_ENTRY，
+2359 input / 297 output、5.031 秒，0 候选。不能推断具体弃权原因，也不能把
+增加证据量视为质量改善。公开记录见 `results/jobbench-candidate-linked-20261019.json`。
+新诊断仅完成 fixture 验证，未追加真实调用。
+
 开发实验采集器现支持 `check_document_layout` 的结构化结果：只投影页数、
 调用参数中的上限、是否满足上限和调用引用；参数使用摘要，不暴露路径、正文或
 renderer 路径。结果的路径、上限、布尔值、状态须与调用及页数一致，否则跳过。

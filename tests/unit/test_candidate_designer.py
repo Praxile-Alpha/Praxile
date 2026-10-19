@@ -50,6 +50,34 @@ def test_abstention_is_normal_no_entry():
     kwargs, _ = inputs({"content": '{"decision":"abstain"}'})
     result = design_development_candidates(**kwargs)
     assert result["decision"] == "NO_ENTRY" and not result["candidates"]
+    assert result["abstention"]["reason"] == "unspecified"
+
+
+def test_bounded_abstention_diagnostics_are_unverified_and_durable(tmp_path):
+    from praxile.eval.v2.candidate_design_run import _finish
+    kwargs, calls = inputs({"content": json.dumps({"decision": "abstain",
+        "reason": "insufficient_evidence", "missing_evidence": ["public_content_constraints"]})})
+    result = design_development_candidates(**kwargs)
+    assert len(calls) == 1
+    assert result["abstention"]["verified"] is False
+    assert result["abstention"]["source"] == "model_self_report"
+    assert kwargs["logger"].data["development_candidate_designs"][0]["abstention"] == result["abstention"]
+    report = _finish(tmp_path, "design", result)
+    assert report["abstention"] == result["abstention"]
+    assert not report["experiments_started"] and not report["candidate_files"]
+
+
+@pytest.mark.parametrize("update", [
+    {"reason": []}, {"reason": "send private rubric"},
+    {"missing_evidence": ["credentials"]}, {"missing_evidence": "action_parameters"},
+    {"extra": "unbounded text"},
+])
+def test_invalid_abstention_diagnostics_rejected(update):
+    payload = {"decision": "abstain", "reason": "insufficient_evidence", "missing_evidence": []}
+    payload.update(update)
+    kwargs, _ = inputs({"content": json.dumps(payload)})
+    with pytest.raises(EvalSchemaError, match="abstention"):
+        design_development_candidates(**kwargs)
 
 
 def test_reasoning_json_is_not_mistaken_for_final_candidate():

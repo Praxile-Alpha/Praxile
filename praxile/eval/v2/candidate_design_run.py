@@ -18,7 +18,7 @@ def run_candidate_design(config, event_store, *, design_id, experiment_id, arm,
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
-                "source_evidence": bundle, "designer": {**identity, "implementation": "praxile.candidate_designer.v1"},
+                "source_evidence": bundle, "designer": {**identity, "implementation": "praxile.candidate_designer.v2"},
                 "development_task_ids": sorted(set(development_task_ids)),
                 "heldout_task_ids": sorted(set(heldout_task_ids)), "applies_to": applies_to}
         if executor_profile is not None:
@@ -58,5 +58,7 @@ def _finish(root, design_id, result):
     report = {"schema_version": "praxile.candidate_design_report.v1", "design_id": design_id,
               "decision": result["decision"], "candidate_files": files, "promotion_eligible": False,
               "experiments_started": False}
+    if result.get("abstention") is not None:
+        report["abstention"] = result["abstention"]
     write_json(root / "report.json", report)
     return report
