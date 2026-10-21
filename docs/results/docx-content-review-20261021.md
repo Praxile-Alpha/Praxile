@@ -179,3 +179,24 @@ and 5969 output tokens; money remains unknown. It excludes prior development,
 design, execution and review attempts and does not independently attest provider
 billing or hidden retry usage. No complete baseline/candidate semantic pair was
 evaluated under this allocation. No candidate was promoted.
+
+## Fresh paired review attempt
+
+A later run independently reviewed both retained first-pair artifacts with the
+same source, sixteen requirements, model/options, review-code identity, unit
+citation protocol and `[1800,1400,1800,3000]` allocation. Both artifact hashes were
+checked against the six-arm receipt. No earlier review result was reused as an
+arm. This remains a one-task, post-hoc development comparison; allocation had
+already been tuned on development observations.
+
+Baseline completed three groups, then its fourth transport call timed out at
+90113 ms, leaving that call's usage unknown. Candidate completed one group, then
+its second returned `length` with invalid function arguments at its allocation.
+Both arms abstained; no retry or increased budget followed. The
+[paired receipt](docx-content-pair-20261021.json) records `inconclusive` because
+neither review is complete. Earlier successful candidate review is not substituted.
+
+The new comparator checks plan identities, conditions, group/combined consistency
+and requirement coverage, but does not authenticate callers or calibrate semantic
+judgments. It cannot turn these partial results into a score or a promotion. This
+negative repeat shows that one completed review did not establish reliability.

@@ -1,0 +1,459 @@
+{
+  "schema_version": "praxile.public_paired_content_trial.v1",
+  "scope": "post_hoc_paired_review_not_heldout",
+  "judge_identity": {
+    "model": "MiniMax-M3.1-Flash",
+    "request_options": {
+      "reasoning_effort": "low"
+    },
+    "review_code_sha256": "d3cd0740558fbaff890177d76c292275103fbcb69277d34a08ac32b0e2c66d40",
+    "batch_code_sha256": "354601b10792014cc92b9dff5d3c495776c4457a281ed4aa24524745d83dda3f",
+    "transport_retries": 0,
+    "timeout_per_call": 90
+  },
+  "judge_identity_sha256": "998bfba9e5a37028ed444982a49a17cf5d685e14558a13cbea1b39c743c499d7",
+  "artifacts": {
+    "baseline": "3588ee4c7161c016b09143c1f6fae550be5ae668404f81940ab3d228d0b9b616",
+    "candidate": "8fbfb30529ffb05e88cde200831acb33b93ed37de28cc9066e393562e820d62b"
+  },
+  "reports": {
+    "baseline": {
+      "schema_version": "praxile.content_review_batch.v1",
+      "plan": {
+        "schema_version": "praxile.content_review_batch_plan.v1",
+        "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+        "output_text_sha256": "13dc58622d3979010a21a596eb454ebcef880fcbbeeecd07a19aa4b31da310b8",
+        "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd",
+        "role": "content_review_judge",
+        "private": false,
+        "response_mode": "function",
+        "citation_mode": "units",
+        "allocation_policy": "explicit",
+        "total_output_tokens": 8000,
+        "timeout_per_call": 90,
+        "groups": [
+          {
+            "ids": [
+              "packet-row-1",
+              "packet-row-2",
+              "packet-row-3",
+              "packet-row-4"
+            ],
+            "max_tokens": 1800
+          },
+          {
+            "ids": [
+              "packet-row-5",
+              "packet-row-6",
+              "packet-row-7",
+              "packet-row-8"
+            ],
+            "max_tokens": 1400
+          },
+          {
+            "ids": [
+              "packet-row-9",
+              "packet-row-10",
+              "packet-row-11",
+              "packet-row-12"
+            ],
+            "max_tokens": 1800
+          },
+          {
+            "ids": [
+              "packet-row-13",
+              "packet-row-14",
+              "roles",
+              "dates"
+            ],
+            "max_tokens": 3000
+          }
+        ]
+      },
+      "plan_sha256": "25a39e93a8a62eb7adce923eacab03a8fd4dda3c0f4f29884aa81bcaad67d71b",
+      "status": "abstained",
+      "groups": [
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "4273de04190cfd761f6ca02d52c1e1b63d33c90057f95067c6e0debd7ea6e017",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "13dc58622d3979010a21a596eb454ebcef880fcbbeeecd07a19aa4b31da310b8",
+          "requirements_sha256": "7758a928d8e96cb00cd43f28e01f830c88aa34d438b2a42dbcaa4623522c982a",
+          "status": "reviewed",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 1800,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": true,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "991f80c8f2f95da4f32e6488ed47e455f0c4ecc089d6f3b381a2cb1e8562953e",
+          "output_budget_reached": false,
+          "response_sha256": "030960bd841e1169a9c06392572406eaca30bc1855f2180da1b1c03dad0edb68",
+          "finish_reason": "tool_calls",
+          "response_checkpoint_completed": true,
+          "expected_items": 4,
+          "returned_items": 4,
+          "judgment_source": "llm",
+          "all_declared_requirements_preserved": true,
+          "verdict_counts": {
+            "preserved": 4
+          }
+        },
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "541cc95638859416090ad4e55dee6bdc072e2e76a76c2b21a4333aea60c41e34",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "13dc58622d3979010a21a596eb454ebcef880fcbbeeecd07a19aa4b31da310b8",
+          "requirements_sha256": "1caa623dea65e42c4ff962ec47747133bed6dd45b02f5826586e948ad694d085",
+          "status": "reviewed",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 1400,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": true,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "4d2f799a0988f279ef4882420db32a9fee6eec26202efb1acbe943ed71fced80",
+          "output_budget_reached": false,
+          "response_sha256": "118b888324db71581e51b66537b41ec587df3d26010d14c492b4b60f23ba54e5",
+          "finish_reason": "tool_calls",
+          "response_checkpoint_completed": true,
+          "expected_items": 4,
+          "returned_items": 4,
+          "judgment_source": "llm",
+          "all_declared_requirements_preserved": false,
+          "verdict_counts": {
+            "preserved": 3,
+            "missing": 1
+          }
+        },
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "2bd3193753fedfe686d21fcec881fa9f1b46501f47c0c6c1d91933fb5ecb001f",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "13dc58622d3979010a21a596eb454ebcef880fcbbeeecd07a19aa4b31da310b8",
+          "requirements_sha256": "fe5e3b0748855955ae6c5a3d50746edfe99ab669a16298fe1d09f437d31ff9d8",
+          "status": "reviewed",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 1800,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": true,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "335a342503e8ad2ee77d5d6d302c9d84c377f3235da442948a1795e1c4c709d0",
+          "output_budget_reached": false,
+          "response_sha256": "567910037f2d62f493411916880050511f26fc39cb99287b74fb7e49700b835e",
+          "finish_reason": "tool_calls",
+          "response_checkpoint_completed": true,
+          "expected_items": 4,
+          "returned_items": 4,
+          "judgment_source": "llm",
+          "all_declared_requirements_preserved": true,
+          "verdict_counts": {
+            "preserved": 4
+          }
+        },
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "118514fe258491027450fbc1d8b48c8b7301d2e9f97c6a048fb1b43ecc9a900d",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "13dc58622d3979010a21a596eb454ebcef880fcbbeeecd07a19aa4b31da310b8",
+          "requirements_sha256": "0d4f9d738f7a804b6b58891a357b670c9305ce8e129e7c55e9784896f5400406",
+          "status": "abstained",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 3000,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": false,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "fb0986ff76becdd6276f0c7fbe61dcf896c8863b1a63b5087c16e41bdbcdeda1",
+          "failure_stage": "request",
+          "failure_category": "model_unavailable",
+          "transport_failure": {
+            "scope": "nearest_transport_cause_only",
+            "attempt_count": 1,
+            "attempts": [
+              {
+                "status": "timeout",
+                "status_code": null,
+                "elapsed_ms": 90113
+              }
+            ],
+            "usage_unknown": true
+          }
+        }
+      ],
+      "logical_requests": 4,
+      "allocated_output_tokens_requested": 8000,
+      "unreviewed_ids": [
+        "packet-row-13",
+        "packet-row-14",
+        "roles",
+        "dates"
+      ],
+      "official_evaluation": false,
+      "promotion_eligible": false,
+      "content_preservation_verified": false,
+      "requirement_coverage_verified": false,
+      "usage_evidence": {
+        "calls": 4,
+        "recorded_calls": 3,
+        "known_tokens": {
+          "prompt_tokens": 12741,
+          "completion_tokens": 3165
+        },
+        "reported_calls": {
+          "prompt_tokens": 3,
+          "completion_tokens": 3
+        },
+        "complete_tokens": {
+          "prompt_tokens": null,
+          "completion_tokens": null
+        },
+        "schema_version": "praxile.trajectory_usage.v1",
+        "by_purpose": {
+          "content_review_judge": {
+            "calls": 3,
+            "recorded_calls": 3,
+            "known_tokens": {
+              "prompt_tokens": 12741,
+              "completion_tokens": 3165
+            },
+            "reported_calls": {
+              "prompt_tokens": 3,
+              "completion_tokens": 3
+            },
+            "complete_tokens": {
+              "prompt_tokens": 12741,
+              "completion_tokens": 3165
+            }
+          }
+        },
+        "unattributed_calls": 1,
+        "cost_usd": null,
+        "scope": "batch_logical_requests_recorded_by_logger",
+        "transport_retry_usage_verified": false
+      },
+      "failed_group_index": 3
+    },
+    "candidate": {
+      "schema_version": "praxile.content_review_batch.v1",
+      "plan": {
+        "schema_version": "praxile.content_review_batch_plan.v1",
+        "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+        "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+        "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd",
+        "role": "content_review_judge",
+        "private": false,
+        "response_mode": "function",
+        "citation_mode": "units",
+        "allocation_policy": "explicit",
+        "total_output_tokens": 8000,
+        "timeout_per_call": 90,
+        "groups": [
+          {
+            "ids": [
+              "packet-row-1",
+              "packet-row-2",
+              "packet-row-3",
+              "packet-row-4"
+            ],
+            "max_tokens": 1800
+          },
+          {
+            "ids": [
+              "packet-row-5",
+              "packet-row-6",
+              "packet-row-7",
+              "packet-row-8"
+            ],
+            "max_tokens": 1400
+          },
+          {
+            "ids": [
+              "packet-row-9",
+              "packet-row-10",
+              "packet-row-11",
+              "packet-row-12"
+            ],
+            "max_tokens": 1800
+          },
+          {
+            "ids": [
+              "packet-row-13",
+              "packet-row-14",
+              "roles",
+              "dates"
+            ],
+            "max_tokens": 3000
+          }
+        ]
+      },
+      "plan_sha256": "83b50feb48906773d73dc88e8e04190b6e4bf59091a24b8490cb7c0fa3ec7d51",
+      "status": "abstained",
+      "groups": [
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "3216e6753cf39ae3dc7ee5e6f90a0f143b0b5d0667f0734ba6865e6f417dd5eb",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+          "requirements_sha256": "7758a928d8e96cb00cd43f28e01f830c88aa34d438b2a42dbcaa4623522c982a",
+          "status": "reviewed",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 1800,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": true,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "43114550a80ab460bd38406d03702d6a2ebafccfc9aa3e01c13fa9a9583c1b6b",
+          "output_budget_reached": false,
+          "response_sha256": "b5612d8d09df387b6a5e936396f64acab2562194f680ec906ccbceec5348b1ae",
+          "finish_reason": "tool_calls",
+          "response_checkpoint_completed": true,
+          "expected_items": 4,
+          "returned_items": 4,
+          "judgment_source": "llm",
+          "all_declared_requirements_preserved": true,
+          "verdict_counts": {
+            "preserved": 4
+          }
+        },
+        {
+          "schema_version": "praxile.content_review.v1",
+          "scope": "caller_supplied_text",
+          "role": "content_review_judge",
+          "input_sha256": "e0b17ef89a530350554d6909ed7f80028bb98d892040976273dedccc77a1d21a",
+          "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+          "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+          "requirements_sha256": "1caa623dea65e42c4ff962ec47747133bed6dd45b02f5826586e948ad694d085",
+          "status": "abstained",
+          "official_evaluation": false,
+          "promotion_eligible": false,
+          "content_preservation_verified": false,
+          "requirement_coverage_verified": false,
+          "max_tokens": 1400,
+          "timeout_seconds": 90,
+          "logical_requests": 1,
+          "usage_available": true,
+          "transport_attempts_verified": false,
+          "response_mode": "function",
+          "citation_mode": "units",
+          "response_contract_sha256": "55647038679e55406e0e49012b2cd4e9581775245bdf61ed10ed015f2fdc891f",
+          "submission_error_code": "submission_arguments_invalid",
+          "finish_reason": "length",
+          "output_budget_reached": true,
+          "failure_stage": "request",
+          "failure_category": "model_response_error"
+        }
+      ],
+      "logical_requests": 2,
+      "allocated_output_tokens_requested": 3200,
+      "unreviewed_ids": [
+        "packet-row-5",
+        "packet-row-6",
+        "packet-row-7",
+        "packet-row-8",
+        "packet-row-9",
+        "packet-row-10",
+        "packet-row-11",
+        "packet-row-12",
+        "packet-row-13",
+        "packet-row-14",
+        "roles",
+        "dates"
+      ],
+      "official_evaluation": false,
+      "promotion_eligible": false,
+      "content_preservation_verified": false,
+      "requirement_coverage_verified": false,
+      "usage_evidence": {
+        "calls": 2,
+        "recorded_calls": 2,
+        "known_tokens": {
+          "prompt_tokens": 7223,
+          "completion_tokens": 3137
+        },
+        "reported_calls": {
+          "prompt_tokens": 2,
+          "completion_tokens": 2
+        },
+        "complete_tokens": {
+          "prompt_tokens": 7223,
+          "completion_tokens": 3137
+        },
+        "schema_version": "praxile.trajectory_usage.v1",
+        "by_purpose": {
+          "content_review_judge": {
+            "calls": 2,
+            "recorded_calls": 2,
+            "known_tokens": {
+              "prompt_tokens": 7223,
+              "completion_tokens": 3137
+            },
+            "reported_calls": {
+              "prompt_tokens": 2,
+              "completion_tokens": 2
+            },
+            "complete_tokens": {
+              "prompt_tokens": 7223,
+              "completion_tokens": 3137
+            }
+          }
+        },
+        "unattributed_calls": 0,
+        "cost_usd": null,
+        "scope": "batch_logical_requests_recorded_by_logger",
+        "transport_retry_usage_verified": false
+      },
+      "failed_group_index": 1
+    }
+  },
+  "comparison": {
+    "schema_version": "praxile.content_review_comparison.v1",
+    "scope": "descriptive_requirement_comparison",
+    "status": "inconclusive",
+    "provenance_verified": false,
+    "semantic_accuracy_verified": false,
+    "official_evaluation": false,
+    "promotion_eligible": false,
+    "baseline_plan_sha256": "25a39e93a8a62eb7adce923eacab03a8fd4dda3c0f4f29884aa81bcaad67d71b",
+    "candidate_plan_sha256": "83b50feb48906773d73dc88e8e04190b6e4bf59091a24b8490cb7c0fa3ec7d51",
+    "reason": "incomplete_review"
+  },
+  "process_exit_code": 0,
+  "promotion_eligible": false
+}
