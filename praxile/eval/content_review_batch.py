@@ -7,7 +7,7 @@ from .content_review import _digest, _validate_inputs, review_content
 def review_content_batched(router, logger, *, source_text, output_text, requirements,
                            total_output_tokens, batch_size=4, timeout_per_call=90,
                            role="content_review_judge", private=True,
-                           response_mode="function", response_checkpoint=None):
+                           response_mode="function", response_checkpoint=None, citation_mode="quote"):
     """Stop on first abstention; never recycle unused allowance or retry groups.
 
     This caps requested output tokens across logical calls, not input tokens,
@@ -19,6 +19,8 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         raise ValueError("invalid batch or total output budget")
     expected = _validate_inputs(source_text, output_text, requirements, role, private,
                                 1, timeout_per_call, response_mode, response_checkpoint)
+    if citation_mode not in ("quote", "units"):
+        raise ValueError("unsupported citation mode")
     frozen = list(expected.values())
     groups = [frozen[i:i + batch_size] for i in range(0, len(frozen), batch_size)]
     base, remainder = divmod(total_output_tokens, len(groups))
@@ -29,6 +31,7 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         "source_text_sha256": _digest(source_text), "output_text_sha256": _digest(output_text),
         "requirements_sha256": _digest(json.dumps(frozen, sort_keys=True)),
         "role": role, "private": private, "response_mode": response_mode,
+        "citation_mode": citation_mode,
         "total_output_tokens": total_output_tokens, "timeout_per_call": timeout_per_call,
         "groups": [{"ids": [item["id"] for item in group], "max_tokens": budget}
                    for group, budget in zip(groups, budgets)]}
@@ -50,7 +53,8 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         record["allocated_output_tokens_requested"] += budget
         result = review_content(router, logger, source_text=source_text, output_text=output_text,
             requirements=group, role=role, private=private, max_tokens=budget,
-            timeout=timeout_per_call, response_mode=response_mode, response_checkpoint=checkpoint)
+            timeout=timeout_per_call, response_mode=response_mode, response_checkpoint=checkpoint,
+            citation_mode=citation_mode)
         record["groups"].append(result)
         if result["status"] != "reviewed":
             record.update(status="abstained", failed_group_index=index)

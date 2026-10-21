@@ -120,3 +120,24 @@ passed or failed. No complete top-level result, official score or promotion was
 issued. Next work is a source-bound citation interface that can represent multiple
 literal spans without trusting model-reconstructed prose, followed by calibrated
 evaluation. This trial does not complete content quality acceptance.
+
+## Source-bound unit citation trial
+
+An explicit `citation_mode=units` trial retained the four-by-2000 output budget,
+same text snapshots and requirements. The controller supplied lossless 512-code-
+point spans whose IDs contain the entire output-text digest and start offset.
+Models selected IDs; the controller reconstructed cited text. Multiple spans are
+represented separately rather than stitched into a fabricated continuous quote.
+
+Three groups returned twelve items with valid IDs and complete local coverage.
+The fourth logical request failed with `model_response_error` before a normalized
+response or usage was available. The exact malformed-envelope/function issue is
+not established. The run therefore abstained with four unreviewed requirements;
+it did not combine twelve valid items into a complete result. No retries ran.
+
+The [unit-citation receipt](docx-review-units-20261021.json) reports the known
+subtotal for three responses: 10909 input / 4470 output tokens. The fourth call's
+usage and full run cost are unknown. This confirms the citation interface worked
+for three responses, not semantic correctness, reliability, or a quality gain
+over earlier stochastic calls. Complete and calibrated content acceptance remains
+unfinished. Raw checkpoints and reconstructed source text remain private.
