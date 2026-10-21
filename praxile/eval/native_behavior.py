@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .v2.native_development_evidence import collect_native_evidence
+from .v2.document_read_alignment import align_document_reads
 
 
 def summarize_native_behavior(path, *, expected_sha256, development_task_ids, heldout_task_ids):
@@ -48,6 +49,8 @@ def compare_native_behavior(baseline_path, candidate_path, *, baseline_sha256,
     left, right = counts["baseline"], counts["candidate"]
     return {"schema_version": "praxile.native_behavior_comparison.v1",
         "scope": "descriptive_projected_operation_counts", "arms": arms,
+        "document_read_alignment": align_document_reads(
+            arms["baseline"]["timeline"], arms["candidate"]["timeline"]),
         "deltas": [{"operation": op, "status": status,
                     "baseline": left.get((op, status), 0),
                     "candidate": right.get((op, status), 0),

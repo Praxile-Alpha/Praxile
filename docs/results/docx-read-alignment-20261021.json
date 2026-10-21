@@ -1,0 +1,220 @@
+{
+  "schema_version": "praxile.public_document_read_alignment.v1",
+  "independent_task_count": 1,
+  "causal_effect_verified": false,
+  "promotion_eligible": false,
+  "pairs": [
+    {
+      "candidate": "first",
+      "source_result_sha256": {
+        "baseline": "b0ffaef609974c371323d96ac3406a041b92f310168caf1670c726d84269a092",
+        "candidate": "3d2242d19522df7e43bbdba59b9fbb9738ebd4502a76325a66991484daedb600"
+      },
+      "alignment": {
+        "schema_version": "praxile.document_read_alignment.v1",
+        "strategy": "unique_recorded_selection_version_and_shape",
+        "pairs": [],
+        "unpaired": [
+          {
+            "parameter_sha256": "45c50418e1fc6751fc4eea904fd70dec446a63b21971108068ab8cbd8ff2fd2a",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "109684ef6a144b85451fc7b100f268c37101005eeeada5b1a577e57d15d7d2bc",
+            "baseline_event_ids": [],
+            "candidate_event_ids": [
+              "event_95629801120b02df2fc1"
+            ],
+            "reason": "no_exact_counterpart"
+          },
+          {
+            "parameter_sha256": "6353fea1e7b866a01f6e45ee9d07575cea40e17166ac26b13a50ce57b5e88ee4",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "c332dc87c8f943baddd735c514911f650ad0eee502404d13470067932fcff635",
+            "baseline_event_ids": [],
+            "candidate_event_ids": [
+              "event_6e7e03d635f02a2dfe10"
+            ],
+            "reason": "no_exact_counterpart"
+          },
+          {
+            "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "9b6276a57b1639d1a3d93b93b4ef22eab08d9a8db532987dc4f8fe9d1b1f8e6a",
+            "baseline_event_ids": [
+              "event_75c70586277076fa7db5"
+            ],
+            "candidate_event_ids": [],
+            "reason": "no_exact_counterpart"
+          },
+          {
+            "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "b06511ed117334f933e3ab8ef73a55ff372e8373e46f3d625f6b48ecb044ba29",
+            "baseline_event_ids": [
+              "event_534c85956926f256e6df"
+            ],
+            "candidate_event_ids": [],
+            "reason": "no_exact_counterpart"
+          }
+        ],
+        "unsupported": {
+          "baseline": [
+            "event_2414ed30f9470a5c60a9",
+            "event_dbd0b50aced15542603e",
+            "event_91eae18f866e0daa920b",
+            "event_ad9a320c704ea7419cf0",
+            "event_8ef00c37b6d13dc66a6f",
+            "event_cc243f07c99bbd3e1c08",
+            "event_a3a76f9f6247d77316c3",
+            "event_e629e82e7e873f875257"
+          ],
+          "candidate": [
+            "event_8b4331425bba198bda16",
+            "event_f12a2ca1f2dc51409918",
+            "event_729000c36d112ae10bf4",
+            "event_7ef4530718e7e8ebcd66",
+            "event_bfcc33d8b95532c1fcf0",
+            "event_8a03626ffdb2cc4eba7b",
+            "event_86e30f0f349a6df00b23"
+          ]
+        },
+        "semantic_equivalence_verified": false,
+        "causal_alignment": false,
+        "limitations": [
+          "Digests are recorded evidence, not independent file authentication.",
+          "Extractor versions, returned prose and full environment state are not compared.",
+          "Repeated reads are never paired by order; missing counterparts remain unknown.",
+          "Only successful document reads are supported; revisions and checks are not aligned."
+        ]
+      }
+    },
+    {
+      "candidate": "second",
+      "source_result_sha256": {
+        "baseline": "e3e9c0e9af3114a87dc1d0a1e10a209439b74e1a1c49740a77503301cd97528d",
+        "candidate": "bb1c0b536432d750b42c474702191593b041c9b7f2582121fc9f42d1a79eee8f"
+      },
+      "alignment": {
+        "schema_version": "praxile.document_read_alignment.v1",
+        "strategy": "unique_recorded_selection_version_and_shape",
+        "pairs": [
+          {
+            "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "b06511ed117334f933e3ab8ef73a55ff372e8373e46f3d625f6b48ecb044ba29",
+            "baseline_event_id": "event_f23a9a5157ff1eb34b70",
+            "candidate_event_id": "event_b3e112c5eab68fd920a7",
+            "recorded_version_relation": "same_bytes_digest",
+            "state_equivalence": "unknown"
+          }
+        ],
+        "unpaired": [
+          {
+            "parameter_sha256": "4fed65149b68c7bf51a5a280d8c9bca9a070d774a711360ef084a2fb891cc950",
+            "source_sha256": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+            "read_shape_sha256": "46d388d066e1aa57c1bd1bc3860c37120c98553e4f86a2dadb7c475e32671e99",
+            "baseline_event_ids": [
+              "event_62b6bf7c6432e42bb079"
+            ],
+            "candidate_event_ids": [],
+            "reason": "no_exact_counterpart"
+          },
+          {
+            "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "9b6276a57b1639d1a3d93b93b4ef22eab08d9a8db532987dc4f8fe9d1b1f8e6a",
+            "baseline_event_ids": [
+              "event_1415fc0df069e30f087a"
+            ],
+            "candidate_event_ids": [],
+            "reason": "no_exact_counterpart"
+          }
+        ],
+        "unsupported": {
+          "baseline": [
+            "event_00e8afe2c20d3f0cb107",
+            "event_03c743f63d0f57927fa1",
+            "event_484ae862fc307dfca12a",
+            "event_983074e21d56408af8e4",
+            "event_dfd98c5e68c93e39ca07"
+          ],
+          "candidate": [
+            "event_c73400fd38e9a2cc60db",
+            "event_7ca550616180ac06eb27",
+            "event_ed4bb90f3d285125bab1",
+            "event_91c9a8889293e235affa"
+          ]
+        },
+        "semantic_equivalence_verified": false,
+        "causal_alignment": false,
+        "limitations": [
+          "Digests are recorded evidence, not independent file authentication.",
+          "Extractor versions, returned prose and full environment state are not compared.",
+          "Repeated reads are never paired by order; missing counterparts remain unknown.",
+          "Only successful document reads are supported; revisions and checks are not aligned."
+        ]
+      }
+    },
+    {
+      "candidate": "composition",
+      "source_result_sha256": {
+        "baseline": "815d0739fb98d11f33cee48a08265d7bda91ed6432c7ebb2b37a0decd0ea78c8",
+        "candidate": "f9a459a54ffa3a1231d46d53dcbe1b87d6079462df9096c6fddb4e0ec1a491c6"
+      },
+      "alignment": {
+        "schema_version": "praxile.document_read_alignment.v1",
+        "strategy": "unique_recorded_selection_version_and_shape",
+        "pairs": [
+          {
+            "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "b06511ed117334f933e3ab8ef73a55ff372e8373e46f3d625f6b48ecb044ba29",
+            "baseline_event_id": "event_7ecc16d3bb0a634782ac",
+            "candidate_event_id": "event_af43c438b8c999a73eba",
+            "recorded_version_relation": "same_bytes_digest",
+            "state_equivalence": "unknown"
+          }
+        ],
+        "unpaired": [
+          {
+            "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "9b6276a57b1639d1a3d93b93b4ef22eab08d9a8db532987dc4f8fe9d1b1f8e6a",
+            "baseline_event_ids": [],
+            "candidate_event_ids": [
+              "event_7fcb6151d4598700b0d3"
+            ],
+            "reason": "no_exact_counterpart"
+          },
+          {
+            "parameter_sha256": "e1c43fe4ee54e466522fd38725af1c54f46344b1e7cd0ec2e85f739c576171c3",
+            "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+            "read_shape_sha256": "5186fb28d2f14d951a4d67988e4594c01ebca451f4e11cd99c631993dd56c9ef",
+            "baseline_event_ids": [
+              "event_c5dd301058d0366dac78"
+            ],
+            "candidate_event_ids": [],
+            "reason": "no_exact_counterpart"
+          }
+        ],
+        "unsupported": {
+          "baseline": [],
+          "candidate": [
+            "event_8a49358e5684a3de314d",
+            "event_2ac70ef5c03dcb863ca8",
+            "event_56d0f9583d8f234f3592",
+            "event_c0e700aa36300c2b103f",
+            "event_097a47534e978d4b140f"
+          ]
+        },
+        "semantic_equivalence_verified": false,
+        "causal_alignment": false,
+        "limitations": [
+          "Digests are recorded evidence, not independent file authentication.",
+          "Extractor versions, returned prose and full environment state are not compared.",
+          "Repeated reads are never paired by order; missing counterparts remain unknown.",
+          "Only successful document reads are supported; revisions and checks are not aligned."
+        ]
+      }
+    }
+  ]
+}

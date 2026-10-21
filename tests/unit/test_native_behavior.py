@@ -53,6 +53,23 @@ def test_unsupported_results_are_explicit_not_silently_counted_as_coverage(tmp_p
     assert "PRIVATE" not in json.dumps(report)
 
 
+def test_native_comparison_includes_document_version_alignment(tmp_path):
+    left, right = tmp_path / "left.json", tmp_path / "right.json"
+    action = {"step": 1, "action_type": "read_document",
+        "input": {"path": "private.docx", "start": 1, "limit": 20},
+        "status": "success", "observation": {"data": {
+            "path": "private.docx", "source_sha256": "c" * 64,
+            "unit_kind": "block", "total_units": 1, "units": ["PRIVATE"]}}}
+    a, b = write_run(left, [action]), write_run(right, [{**action, "step": 7}])
+    report = compare_native_behavior(left, right, baseline_sha256=a, candidate_sha256=b,
+        development_task_ids=["left", "right"], heldout_task_ids=[])
+    alignment = report["document_read_alignment"]
+    assert len(alignment["pairs"]) == 1
+    assert alignment["pairs"][0]["source_sha256"] == "c" * 64
+    assert report["semantic_alignment_verified"] is False
+    assert "private.docx" not in str(report) and "PRIVATE" not in str(report)
+
+
 @pytest.mark.parametrize("override", [
     {"heldout_task_ids": ["candidate"]}, {"candidate_sha256": "0" * 64},
     {"development_task_ids": ["baseline"]},
