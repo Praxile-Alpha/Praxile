@@ -536,6 +536,13 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+能力环境真实复验（2026-10-21）：cae4353 的固定 worker 依赖及 xlsx_values.v1
+预检在 Office 库存任务中通过；产物 opener 从 unsupported 变为 passed，
+check_deliverables 成功，产物留存/摘要一致和资源清理已核实。官方仍 13/15，
+模型仍通过 Shell 生成表格，没有调用 create_xlsx/revise_xlsx；不能声明质量或
+效率提升，不晋升经验。不同依赖环境不是严格 A/B，完整 R1 总项不勾选。
+见 results/workbuddy-capability-baseline-20261021.md。
+
 worker 能力预检增补（2026-10-21）：Harbor Native 可显式 required_capabilities
 声明 xlsx_values.v1；离线安装后用 worker 解释器真实写出/读取/opener/值回读，
 失败在模型和凭据代理启动前停止，跳过 setup 的 run 也拒绝。声明进入 worker
