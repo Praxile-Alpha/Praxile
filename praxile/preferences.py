@@ -27,6 +27,20 @@ def is_preference_proposal(proposal):
             or any(is_preference_asset({"path": path}) for path in (proposal.get("target_files") or [])))
 
 
+def capability_evidence_view(evidence):
+    """Filter structured preference signals without modifying original evidence."""
+    view = dict(evidence)
+    assets = evidence.get("loaded_assets") or []
+    def preference(item):
+        return is_preference_asset(item if isinstance(item, dict) else {"path": item})
+    view["loaded_assets"] = [item for item in assets if not preference(item)]
+    view["excluded_preference_assets"] = [item for item in assets if preference(item)]
+    for field in ("accepted_proposals", "rejected_proposals"):
+        view[field] = [item for item in (evidence.get(field) or [])
+                       if not isinstance(item, dict) or not is_preference_proposal(item)]
+    return view
+
+
 def compose_preference(config, *, key, text, applies_when, source_reference):
     if not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key):
         raise ValueError("preference key must be a bounded lowercase identifier")

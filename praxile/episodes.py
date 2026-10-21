@@ -12,6 +12,8 @@ class EpisodeBuilder:
 
     @staticmethod
     def build(evidence: dict[str, Any]) -> list[dict[str, Any]]:
+        from .preferences import capability_evidence_view
+        evidence = capability_evidence_view(evidence)
         episodes: list[dict[str, Any]] = []
 
         task_id = evidence.get("task_id", "unknown")
@@ -166,6 +168,8 @@ class EpisodeBuilder:
                 "expected_future_use": "Use when consolidating noisy memories, skills, failures, or project patterns.",
             })
 
+        for episode in episodes:
+            episode["excluded_preference_assets"] = evidence["excluded_preference_assets"]
         return episodes
 
 

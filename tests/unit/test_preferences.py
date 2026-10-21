@@ -43,3 +43,42 @@ def test_capability_judge_does_not_call_model_for_preferences(tmp_path):
         {"loaded_assets": [{"path": path, "score": 1, "used_in_prompt": True}]}, "success", [path])
     assert results == []
     router.chat.assert_not_called()
+
+
+def test_episode_keeps_preference_exclusion_separate_from_capability():
+    import copy
+    from praxile.episodes import EpisodeBuilder
+    preference = {"path": ".praxile/memory/preferences/brief.md"}
+    evidence = {"task_id": "t", "outcome": "completed", "touched_files": ["a.py"],
+                "failure_signatures": ["ValueError"], "loaded_assets": [preference],
+                "accepted_proposals": [{"experience_purpose": "personalization", "title": "Brief"}]}
+    original = copy.deepcopy(evidence)
+    episode, = EpisodeBuilder.build(evidence)
+    assert episode["loaded_assets"] == []
+    assert episode["excluded_preference_assets"] == [preference]
+    assert episode["accepted_proposals"] == []
+    assert evidence == original
+
+
+def test_pattern_miner_filters_old_episode_preferences_before_semantic_judge():
+    import copy
+    from praxile.patterns import PatternMiner
+    episodes = [{"episode_id": str(i), "category": "test_failure_repair",
+                 "failure_signature": "ValueError", "affected_files": ["a.py"],
+                 "loaded_assets": [".praxile/memory/preferences/brief.md", ".praxile/memory/project.md"]}
+                for i in range(2)]
+    original = copy.deepcopy(episodes)
+    class Judge:
+        calls = 0
+        def judge_pair(self, left, right, score):
+            self.calls += 1
+            for episode in (left, right):
+                assert episode["loaded_assets"] == [".praxile/memory/project.md"]
+                assert "excluded_preference_assets" not in episode
+            return None
+    judge = Judge()
+    patterns = PatternMiner.mine_from_episodes(episodes, semantic_judge=judge)
+    assert judge.calls
+    assert all(".praxile/memory/preferences/brief.md" not in item["loaded_assets"] for item in patterns)
+    assert episodes == original
+    assert PatternMiner.mine_from_episodes([{"experience_purpose": "personalization"}]) == []

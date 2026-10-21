@@ -34,7 +34,15 @@ class PatternMiner:
         min_similarity: float = PATTERN_CANDIDATE_THRESHOLD,
         semantic_judge: PatternSemanticJudge | None = None,
     ) -> list[dict[str, Any]]:
-        feedback_context = feedback_context or {}
+        from .preferences import capability_evidence_view, is_preference_proposal
+        episodes = [capability_evidence_view(episode) for episode in episodes
+                    if episode.get("experience_purpose") != "personalization"]
+        for episode in episodes:
+            episode.pop("excluded_preference_assets", None)
+        feedback_context = dict(feedback_context or {})
+        for field in ("accepted_proposals", "rejected_proposals"):
+            feedback_context[field] = [item for item in feedback_context.get(field, [])
+                                       if not is_preference_proposal(item)]
         if not episodes:
             return []
         pair_cache: dict[tuple[int, int], dict[str, Any]] = {}

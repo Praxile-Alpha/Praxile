@@ -38,6 +38,12 @@ excluded_preference_assets；被拒偏好提案也不进入通用规则反思。
 重复/过期/冲突/低价值资产扫描同样排除该目录，避免把偏好按任务计数提炼成
 通用能力或建议淘汰。用户仍可通过专属提案、人工审批和回滚修改自己的偏好。
 
+EpisodeBuilder 现在从能力证据视图中去除结构化偏好资产和偏好提案，将排除清单
+另存 excluded_preference_assets，原始 RunEvidence 不变。PatternMiner 在消费
+旧 episode 时重复执行该过滤，偏好路径不进入 loaded-assets overlap、聚合
+来源或语义 pair judge；明确标为 personalization 的整条 episode 不参与能力
+模式挖掘，accepted/rejected 偏好提案也不作为模式置信度反馈。不改写旧文件。
+
 ## 尚未完成
 
 - 这是项目内 namespace，不是多用户访问控制。共享同一项目状态的用户仍可读到
@@ -45,7 +51,8 @@ excluded_preference_assets；被拒偏好提案也不进入通用规则反思。
 - 旧 user.md 不自动迁移；已有 memory append、普通 memory_update 路径不强制
   重分类，仍需用户审阅内容。
 - 当前分流覆盖能力 judge、SQLite outcome credit、Reflect 与 Consolidation 的
-  直接资产输入；通用资产 usage 的任务结果、轨迹级模式挖掘和其他晋升入口仍需
-  分别审计。独立运行摘要不能替代实验测量，也不能
+  直接资产输入，以及 episode/pattern 的结构化偏好字段；通用资产 usage 的任务
+  结果和其他晋升入口仍需分别审计。未标记的自然语言偏好、已压缩丢失来源的
+  历史摘要不能据此自动识别或清洗。独立运行摘要不能替代实验测量，也不能
   据此认定完整 R2 偏好条目完成。
 - 没有自动挖掘偏好、真实模型偏好遵循率测试、偏好专属 Web 编辑器或满意度指标。
