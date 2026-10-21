@@ -536,6 +536,13 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+表格值断言增补（2026-10-21）：公开 deliverable structure 支持 cell_values，
+限时快照 parser 只返回所需单元格，类型敏感比较，公式/错误值不视为重算通过。
+修复过小工作表维度可隐藏数据的观察缺口。真实 XLSX + fixture 模型验证错值
+门禁失败、修订和复验完成；24 项文档资源测试、1366 项 fast tests 通过。只验证
+调用方给出的明确值，不从隐藏 rubric 推导；公式重算/视觉/完整语义仍未实现，
+专业能力总项不勾选。见 DELIVERABLE_CHECKS.zh-CN.md。
+
 表格修订闭环增补（2026-10-21）：revise_xlsx 使用完整值型 workbook 规格和当前
 摘要，生成后持锁复核、二进制备份、替换，支持摘要保护回滚；接入 schema、权限、
 dry-run、快照与 executor profile。真实文件 + fixture 模型通过 required_sheets

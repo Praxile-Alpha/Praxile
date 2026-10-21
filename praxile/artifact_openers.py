@@ -15,7 +15,7 @@ MEDIA = {
 }
 
 
-def inspect_document(path: Path, kind: str) -> dict:
+def inspect_document(path: Path, kind: str, cell_refs=()) -> dict:
     if kind not in MEDIA.values():
         return {"status": "unsupported", "reason": "unknown_document_format"}
     if kind != "pdf":
@@ -42,13 +42,34 @@ def inspect_document(path: Path, kind: str) -> dict:
         from openpyxl import load_workbook
         book = load_workbook(path, read_only=True, data_only=False, keep_links=False)
         try:
+            from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
+            requested = {}
+            for ref in cell_refs:
+                column, row = coordinate_from_string(ref["cell"])
+                requested[(ref["sheet"], row, column_index_from_string(column))] = {
+                    **ref, "status": "missing_sheet" if ref["sheet"] not in book.sheetnames else "observed", "value": None}
             cells = 0
             for sheet in book:
-                for row in sheet.iter_rows():
+                # Do not trust producer-supplied dimensions to hide requested cells.
+                sheet.reset_dimensions()
+                for row_number, row in enumerate(sheet.iter_rows(), 1):
                     cells += len(row)
                     if cells > 1_000_000:
                         return {"status": "failed", "reason": "cell_limit"}
+                    for column_number, cell in enumerate(row, 1):
+                        observation = requested.get((sheet.title, row_number, column_number))
+                        if observation is None:
+                            continue
+                        if cell.data_type in {"f", "e"}:
+                            observation.update(status="formula_or_error_unverified", value=None)
+                        elif cell.value is None or type(cell.value) in (int, float, bool) or (
+                                isinstance(cell.value, str) and len(cell.value) <= 2000):
+                            observation["value"] = cell.value
+                        else:
+                            observation.update(status="unsupported_value", value=None)
             details = {"sheets": book.sheetnames, "cells_visited": cells, "formulas_recalculated": False}
+            if cell_refs:
+                details["cell_values"] = list(requested.values())
         finally:
             book.close()
     elif kind == "docx":
@@ -84,7 +105,7 @@ def main() -> None:
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (1_000_000_000, 1_000_000_000))
     try:
-        result = inspect_document(Path(sys.argv[1]), sys.argv[2])
+        result = inspect_document(Path(sys.argv[1]), sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else ())
     except ImportError:
         result = {"status": "unsupported", "reason": "install_praxile_documents_extra"}
     except Exception as exc:

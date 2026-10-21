@@ -22,7 +22,7 @@ STRUCTURE_FIELDS = {
     "pdf": {"min_pages": "pages"},
     "pptx": {"min_slides": "slides"},
     "docx": {"min_tables": "tables", "required_headings": "headings", "max_pages": "pages"},
-    "xlsx": {"required_sheets": "sheets"},
+    "xlsx": {"required_sheets": "sheets", "cell_values": "cell_values"},
     "text/csv": {"min_rows": "data_rows"},
 }
 
@@ -32,6 +32,10 @@ def _structure_checks(requirement: dict, observed: dict) -> list[dict]:
     checks = []
     for name, expected in requirement.get("structure", {}).items():
         actual = observed.get(mapping[name])
+        if name == "cell_values":
+            from .spreadsheet_assertions import check_cells
+            checks.extend(check_cells(expected, actual))
+            continue
         if name.startswith(("min_", "max_")):
             passed = type(actual) is int and (actual >= expected if name.startswith("min_") else actual <= expected)
             checks.append({"requirement": name, "expected": expected, "actual": actual, "passed": passed})
@@ -94,7 +98,10 @@ def validate_contract(value: object) -> list[dict]:
         if not isinstance(structure, dict) or set(structure) - set(allowed):
             raise EvalSchemaError("unsupported structure constraint for deliverable format")
         for name, expected in structure.items():
-            if name == "max_pages":
+            if name == "cell_values":
+                from .spreadsheet_assertions import validate_cells
+                validate_cells(expected)
+            elif name == "max_pages":
                 if type(expected) is not int or not 1 <= expected <= 2000:
                     raise EvalSchemaError("max_pages must be an integer in [1, 2000]")
             elif name.startswith("min_"):
@@ -184,8 +191,10 @@ def verify_deliverables(root: Path, contract: dict, *, max_bytes: int = 10_000_0
                     source = Path(directory) / ("artifact." + MEDIA[media])
                     source.write_bytes(content)
                     try:
+                        refs = [{"sheet": item["sheet"], "cell": item["cell"]}
+                                for item in requirement.get("structure", {}).get("cell_values", [])]
                         child = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("artifact_openers.py")),
-                                                str(source), MEDIA[media]], capture_output=True, timeout=15)
+                                                str(source), MEDIA[media], json.dumps(refs)], capture_output=True, timeout=15)
                     except subprocess.TimeoutExpired:
                         result.update(status="failed", reason="document_parser_timeout")
                         continue

@@ -199,12 +199,35 @@ Office ZIP 最多 2000 成员、声明解压后最多 50 MB；拒绝重复成员
 | 格式 | 结构约束 |
 |---|---|
 | CSV | `min_rows`，不含表头 |
-| XLSX | `required_sheets`，精确工作表名称 |
+| XLSX | `required_sheets`，精确工作表名称；`cell_values`，公开的 literal 单元格要求 |
 | DOCX | `required_headings`、`min_tables`；标题取正文 Heading1–Heading9 段落，去除首尾空白后精确匹配 |
 | PPTX | `min_slides` |
 | PDF | `min_pages` |
 
 例如 XLSX 输出项可声明 `"structure":{"required_sheets":["Summary","Details"]}`。没有这些工作表时即使文件能打开，仍会得到 `status=failed`、`reason=user_structure_requirement_unmet`，并保留 `opened=true` 和具体缺失项。无效字段、类型不符或格式不支持的约束在解析契约时拒绝，不静默忽略。
+
+值型工作簿可增加调用方公开断言：
+
+```json
+{"path":"inventory.xlsx","media_type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","structure":{"cell_values":[{"sheet":"Inventory","cell":"A2","value":2}]}}
+```
+
+每个输出最多 100 个不重复 sheet/cell，地址使用大写 A1 表示法，不接受范围、
+绝对引用或公式。值支持 null、布尔、字符串（最多 2000 字符）、有限数字
+（绝对值不超过 1e15）。数字 2 和 2.0 相等，文本 "2"、布尔 true 与数字 2 不等。
+不做近似比较或容差推断。要求必须来自调用方冻结的公开契约，不从隐藏 rubric
+提取；模型不能在结束时自行改写要求。
+
+限时 parser 读取同一摘要快照，只返回被请求单元格的值/状态。不存在的工作表
+失败；存在工作表中的空单元格可匹配 null。忽略生产者自报维度并扫描实际行，
+保留百万 cell 上限，避免缩小维度隐藏数据。日期等不支持类型、过长文本、公式
+和错误单元格均未验证，不能因为缓存公式结果碰巧相符而通过。字符串公式文本
+若确为 literal 字符串，只按文本比较。报告保持 formulas_recalculated=false。
+
+逐项结果进入 structure_checks，错误值触发既有完成门禁并可在剩余步数内修订。
+真实 XLSX + fixture 模型验证错误值 → finish 被拒 → revise_xlsx → 复验通过。
+这只证明显式指定值满足要求，不证明其他单元格正确、公式重算、视觉质量或
+完整业务语义。不要在公开导出报告时无条件披露这些单元格内容。
 
 `required_fields` 仍用于 JSON 顶层键/CSV 表头，不能用它表达 Office 任意结构。DOCX 页数需要渲染，尚不支持；标题检查不覆盖表格内文本、页眉页脚、自定义标题样式或语义等价标题。结构检查不替代内容评审。
 
