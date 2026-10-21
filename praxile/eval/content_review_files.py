@@ -122,6 +122,10 @@ def check_execution_conditions(result, left_manifest, right_manifest, *, same_ou
         status = "mismatch"
         differences.append("execution_binding_presence")
     else:
+        if ("artifact_set_sha256" in left) != ("artifact_set_sha256" in right):
+            differences.append("artifact_set_presence")
+        elif same_output and left.get("artifact_set_sha256") != right.get("artifact_set_sha256"):
+            differences.append("artifact_set_sha256")
         for key in ("task_fingerprint", "source_sha256", "evaluator_sha256", *(["output_sha256"] if same_output else [])):
             if left[key] != right[key]:
                 differences.append(key)

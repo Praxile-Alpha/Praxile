@@ -40,8 +40,8 @@ def _reader(root):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("evidence root must be a directory, not a link")
     info = root.stat()
-    def read(path):
-        return read_artifact(root, path, root_identity=(info.st_dev, info.st_ino), max_bytes=1024**2)
+    def read(path, *, max_bytes=1024**2):
+        return read_artifact(root, path, root_identity=(info.st_dev, info.st_ino), max_bytes=max_bytes)
     return read
 
 
@@ -91,8 +91,9 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     record = next(item for item in records if item["path"] == output_path)
     if record.get("status") != "collected":
         raise ValueError("selected output not collected")
-    output_raw = read("outputs/" + output_path)
-    source_raw = read("inputs/" + source_path)
+    from .owned_artifact_set import verify_artifact_set
+    source_raw, output_raw, artifact_set_sha256 = verify_artifact_set(
+        task, records, read, source_path=source_path, output_path=output_path)
     trajectory_raw = read("agent/praxile-result.json")
     if (record.get("sha256") != _sha(output_raw) or type(record.get("bytes")) is not int
             or record["bytes"] != len(output_raw) or source.content_digest != "sha256:" + _sha(source_raw)
@@ -129,7 +130,7 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     binding = {"task_fingerprint": task.fingerprint.removeprefix("sha256:"),
         "execution_sha256": _sha(report_raw), "trajectory_sha256": _sha(trajectory_raw),
         "source_sha256": _sha(source_raw), "output_sha256": _sha(output_raw),
-        "evaluator_sha256": _sha(evaluator_raw)}
+        "evaluator_sha256": _sha(evaluator_raw), "artifact_set_sha256": artifact_set_sha256}
     if extraction is not None:
         binding["output_extraction"] = extraction
     if source_extraction is not None:

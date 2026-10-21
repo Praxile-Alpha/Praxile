@@ -19,9 +19,9 @@ def validate_execution_binding(value, *, output_text=None, source_text=None):
         return None
     fields = {"task_fingerprint", "execution_sha256", "trajectory_sha256", "source_sha256",
               "output_sha256", "evaluator_sha256"}
-    if (not isinstance(value, dict) or not fields <= set(value) <= fields | {"output_extraction", "source_extraction"}
+    if (not isinstance(value, dict) or not fields <= set(value) <= fields | {"output_extraction", "source_extraction", "artifact_set_sha256"}
             or any(not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
-                   for key, digest in value.items() if key in fields)):
+                   for key, digest in value.items() if key in fields | {"artifact_set_sha256"})):
         raise ValueError("invalid execution evidence binding")
     result = dict(value)
     for side, text in (("output", output_text), ("source", source_text)):

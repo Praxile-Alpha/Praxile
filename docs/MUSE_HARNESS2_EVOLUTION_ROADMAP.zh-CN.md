@@ -404,6 +404,13 @@ PDF 摘要验证后由限时 pypdf worker 提取，记录解析版本/代码/文
 持久化校验已有测试；官方评分、视觉质量和真实 judge 校准仍缺，完整项不勾选。
 详见 OWNED_CONTENT_REVIEW.zh-CN.md。
 
+R0/R1 多文件交付核对增补（2026-10-21）：独立内容评审不再仅检查所选文件。
+先核对全部冻结输入和全部 collected 输出（含 optional）的摘要/字节数，再读取
+私有 evaluator；缺 required、未知状态、篡改或超限拒绝调用 judge。集合摘要
+进入 execution_binding，同产物 judge 比较要求集合相同，A/B 允许候选输出变化，
+但新旧校验范围不混比。未选择文件不发送给模型；此为清单内一致性，不是全量
+内容质量、原子快照或独立 OS 评审隔离。完整交付与正式评分项继续不勾选。
+
 ### R0-C JobBench Adapter
 
 工具 profile v2 真实设计返回完整文本但 JSON 解析失败（未进入动作校验），无候选。

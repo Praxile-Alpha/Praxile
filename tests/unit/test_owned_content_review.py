@@ -51,7 +51,7 @@ def test_binding_uses_verified_bytes_and_does_not_reveal_locations(tmp_path):
     assert inputs["source_text"] == "retain the source"
     assert inputs["output_text"] == "draft output"
     assert inputs["requirements"][0]["requirement"] == "PRIVATE_JUDGE_REQUIREMENT"
-    assert len(binding) == 6
+    assert len(binding) == 7
     assert all(len(value) == 64 for value in binding.values())
     assert "rubric.json" not in json.dumps(binding)
 
@@ -183,3 +183,59 @@ def test_source_bytes_verified_before_extraction(tmp_path, monkeypatch, profile)
     with pytest.raises(ValueError, match="digest mismatch"):
         prepare_owned_review(task, **options, source_format=profile)
     extract.assert_not_called()
+
+
+@pytest.mark.parametrize("damage", ["none", "input", "output", "optional", "size", "missing", "unknown_status"])
+def test_all_declared_artifacts_verified_before_judge(tmp_path, monkeypatch, damage):
+    task, options = setup(tmp_path)
+    root = options["execution_dir"]
+    task = replace(task, inputs=task.inputs + (InputArtifact("extra-input.txt", "extra-source", "sha256:" + sha(b"input")),),
+        outputs=task.outputs + (OutputContract("extra.txt", "text/plain"), OutputContract("optional.txt", "text/plain", required=False)))
+    (root / "inputs/extra-input.txt").write_bytes(b"input")
+    (root / "outputs/extra.txt").write_bytes(b"output")
+    (root / "outputs/optional.txt").write_bytes(b"optional")
+    path = root / "execution.json"
+    report = json.loads(path.read_text())
+    report["task_fingerprint"] = task.fingerprint
+    report["public_inputs"] = [{"path": "inputs/" + item.path, "content_digest": item.content_digest} for item in task.inputs]
+    report["outputs"] += [
+        {"path": "extra.txt", "required": True, "status": "collected", "bytes": 6, "sha256": sha(b"output")},
+        {"path": "optional.txt", "required": False, "status": "collected", "bytes": 8, "sha256": sha(b"optional")}]
+    if damage in {"input", "output", "optional"}:
+        filename = {"input": "inputs/extra-input.txt", "output": "outputs/extra.txt", "optional": "outputs/optional.txt"}[damage]
+        (root / filename).write_bytes(b"tampered")
+    elif damage == "size":
+        report["outputs"][1]["bytes"] = 5
+    elif damage == "missing":
+        (root / "outputs/extra.txt").unlink()
+    elif damage == "unknown_status":
+        report["outputs"][2]["status"] = "ignored"
+    path.write_text(json.dumps(report))
+    judge = Mock()
+    monkeypatch.setattr("praxile.eval.owned_content_review.run_content_review", judge)
+    if damage != "none":
+        with pytest.raises((OSError, ValueError)):
+            review_owned_output(None, task, **options, run_id="multi", total_output_tokens=100)
+        judge.assert_not_called()
+    else:
+        inputs, first = prepare_owned_review(task, **options)
+        assert inputs["source_text"] == "retain the source" and inputs["output_text"] == "draft output"
+        assert set(inputs) == {"source_text", "output_text", "requirements"}
+        (root / "outputs/optional.txt").unlink()
+        report["outputs"][2] = {"path": "optional.txt", "required": False, "status": "unavailable"}
+        path.write_text(json.dumps(report))
+        _, second = prepare_owned_review(task, **options)
+        assert first["artifact_set_sha256"] != second["artifact_set_sha256"]
+
+
+def test_artifact_collection_change_affects_same_output_comparison_only():
+    from praxile.eval.content_review_files import check_execution_conditions
+    fields = {key: "a" * 64 for key in ("task_fingerprint", "source_sha256", "evaluator_sha256", "output_sha256")}
+    left = {"execution_binding": dict(fields, artifact_set_sha256="b" * 64)}
+    right = {"execution_binding": dict(fields, artifact_set_sha256="c" * 64)}
+    assert check_execution_conditions({"status": "compared"}, left, right)["status"] == "compared"
+    result = check_execution_conditions({"status": "compared", "rows": ["invalid"]}, left, right, same_output=True)
+    assert result["status"] == "inconclusive" and "rows" not in result
+    assert result["execution_conditions"]["different_fields"] == ["artifact_set_sha256"]
+    del right["execution_binding"]["artifact_set_sha256"]
+    assert check_execution_conditions({"status": "compared"}, left, right)["status"] == "inconclusive"
