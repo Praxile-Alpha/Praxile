@@ -50,7 +50,7 @@ def test_invalid_package_is_not_treated_as_empty_document():
         extract_docx_body(raw.getvalue())
 
 
-def test_real_docx_source_and_output_bind_to_frozen_execution(tmp_path):
+def test_real_docx_source_and_output_bind_to_frozen_execution(tmp_path, capsys):
     from praxile.eval.contracts import BenchmarkTask, EnvironmentSpec, EvaluatorReference, InputArtifact, OutputContract
     from praxile.eval.owned_content_review import prepare_owned_review
     docx = pytest.importorskip("docx")
@@ -96,3 +96,20 @@ def test_real_docx_source_and_output_bind_to_frozen_execution(tmp_path):
     assert binding["output_sha256"] == sha(output)
     validate_execution_binding(binding, source_text=inputs["source_text"], output_text=inputs["output_text"])
     assert binding["source_extraction"]["text_sha256"] != binding["output_extraction"]["text_sha256"]
+    from praxile.config import Config
+    from praxile.eval.owned_review_cli import main
+    config = Config.load(tmp_path / "judge")
+    config.data["model_roles"]["content_review_judge"] = {"provider": "fixture", "model": "judge"}
+    config.data["model_providers"] = {"fixture": {"type": "openai_compatible", "base_url": "http://127.0.0.1:1",
+                                                "models": [{"name": "judge", "supports_tools": True}]}}
+    config.write()
+    task_path = tmp_path / "task.json"
+    task_path.write_text(json.dumps(task.to_dict()))
+    assert main(["--project", str(config.paths.root), "--task", str(task_path),
+        "--execution-dir", str(execution), "--evaluator-root", str(private),
+        "--source-path", "source.docx", "--output-path", "output.docx",
+        "--source-format", "docx_body", "--output-format", "docx_body",
+        "--run-id", "preflight", "--total-output-tokens", "100"]) == 0
+    printed = capsys.readouterr().out
+    assert "Deadline: Friday" not in printed and "Keep deadline" not in printed
+    assert not (config.paths.state / "eval").exists()

@@ -4,6 +4,37 @@
 独立 `content_review_judge`。它是开发期内容评审，不是 WorkBuddy/JobBench 官方
 evaluator；不能据其报告直接 promotion。
 
+## 命令入口
+
+下面的命令默认只预检，judge-project 使用自己的 `.praxile/config.json`：
+
+```sh
+python -m praxile.eval.owned_review_cli \
+  --project /path/to/judge-project \
+  --task /path/to/frozen-task.json \
+  --execution-dir /path/to/harbor-lease-ID \
+  --evaluator-root /path/to/private-evaluator \
+  --source-path source.docx --source-format docx_body \
+  --output-path answer.docx --output-format docx_body \
+  --run-id docx-review-001 --total-output-tokens 4000
+```
+
+预检会读取并验证真实文件，DOCX 会启动本地解析子进程；不会初始化 judge 项目、
+创建评审运行目录、实例化模型路由或发送请求。输出仅有摘要、格式和预算，不含
+文档正文、私有 requirements、文件来源路径或 endpoint。必须提前显式配置
+content_review_judge，且 judge 项目不能位于执行目录内。
+
+加 `--execute` 才执行评审。默认仅允许 loopback endpoint；使用云 judge 还需
+`--public`，这明确允许把源正文、产物正文和评审要求发送给配置的服务。仅加
+`--public` 不会执行。Key 由 provider 的 api_key_env 提供，不作为 CLI 参数。
+
+预检与评审共用 batch planner，校验来源引用、文本边界、分组和输出配额。
+当前评审文本每侧最多 64000 字符，比抽取器的 200000 字符上限更严格；超限拒绝，
+不截断。total-output-tokens 约束逻辑调用的请求输出额度，不是输入 token、总费用
+或网络层重试预算。预检不证明服务连通、工具协议支持或 run ID 尚未使用；执行时
+独占创建 run ID，重复 ID 拒绝，不自动重放。失败返回 2，中断返回 130；完整得到
+评审结论返回 0、abstain 返回 1，返回 0 也不表示内容全部正确或获准晋升。
+
 ## 证据边界
 
 调用方提供冻结 BenchmarkTask、execution_dir、独立 evaluator_root，以及要评审的

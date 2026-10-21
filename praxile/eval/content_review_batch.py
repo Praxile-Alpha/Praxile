@@ -5,12 +5,12 @@ from .content_review import _digest, _validate_inputs, review_content
 from ..usage_evidence import summarize_usage
 
 
-def review_content_batched(router, logger, *, source_text, output_text, requirements,
+def plan_content_review_batch(*, source_text, output_text, requirements,
                            total_output_tokens, batch_size=4, timeout_per_call=90,
                            role="content_review_judge", private=True,
                            response_mode="function", response_checkpoint=None, citation_mode="quote",
                            output_allocations=None):
-    """Stop on first abstention; never recycle unused allowance or retry groups.
+    """Validate and freeze a batch plan without model calls or persistent state.
 
     This caps requested output tokens across logical calls, not input tokens,
     money, wall time, provider billing or transport retries. Configure transport
@@ -45,6 +45,22 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         "total_output_tokens": total_output_tokens, "timeout_per_call": timeout_per_call,
         "groups": [{"ids": [item["id"] for item in group], "max_tokens": budget}
                    for group, budget in zip(groups, budgets)]}
+    return plan
+
+
+def review_content_batched(router, logger, *, source_text, output_text, requirements,
+                           total_output_tokens, batch_size=4, timeout_per_call=90,
+                           role="content_review_judge", private=True,
+                           response_mode="function", response_checkpoint=None, citation_mode="quote",
+                           output_allocations=None):
+    """Stop on first abstention; never recycle allowance or retry groups here."""
+    plan = plan_content_review_batch(source_text=source_text, output_text=output_text,
+        requirements=requirements, total_output_tokens=total_output_tokens, batch_size=batch_size,
+        timeout_per_call=timeout_per_call, role=role, private=private, response_mode=response_mode,
+        response_checkpoint=response_checkpoint, citation_mode=citation_mode, output_allocations=output_allocations)
+    expected = {item["id"]: dict(item) for item in requirements}
+    groups = [[expected[key] for key in group["ids"]] for group in plan["groups"]]
+    budgets = [group["max_tokens"] for group in plan["groups"]]
     record = {"schema_version": "praxile.content_review_batch.v1", "plan": plan,
         "plan_sha256": _digest(json.dumps(plan, sort_keys=True)), "status": "pending",
         "groups": [], "logical_requests": 0, "allocated_output_tokens_requested": 0,

@@ -192,6 +192,14 @@ R0-A DOCX 源材料增补（2026-10-21）：显式 source_format=docx_body 与�
 35 passed，真实解析资源测试 4 passed。仍是开发期正文评审，未证明官方成绩、
 视觉质量或真实 judge 准确性，不提前勾选完整 Office 验收。
 
+R0-A 产物评审 CLI 增补（2026-10-21）：owned_review_cli 默认只做离线证据/抽取/
+预算预检，显式 --execute 才调用独立 judge，云端另需 --public；输出不含材料正文
+或私有 requirements。与实际评审共享纯 batch planner，保留重复 run ID 拒绝。
+CLI/评审相关 62 项单元测试通过，真实 DOCX 双侧文件经新入口预检，不创建评审
+目录或发出模型请求。该入口仍为开发期内容评审，不是官方 evaluator 或自动晋升。
+最终验证：fast suite 1271 passed / 13 skipped；真实 DOCX 抽取与 CLI 预检资源
+测试 4 passed；--help 入口实测成功，无付费请求。
+
 R0-A 终态幂等恢复增补（2026-10-21）：owned runner/CLI 新增 run_id 与 resume。
 排他落盘 claim 在执行前占用身份；相同 ID 不带 resume 不得再次执行，计划变化
 不得复用。成功回收并确认清理后，以执行报告、轨迹、输入和输出摘要封存终态；
