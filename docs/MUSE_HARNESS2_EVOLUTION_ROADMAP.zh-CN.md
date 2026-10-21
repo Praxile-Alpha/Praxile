@@ -536,6 +536,13 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+真实新工具版本复验（2026-10-21）：96d468b 新 wheel 在固定 Office 库存任务
+完成一次 M3.1 Flash 基线，官方仍 13/15，产物留存/摘要一致/凭据撤销/资源清理
+已验证。但模型没有使用新 XLSX 工具，改用 Shell；两次文档 batch schema 拒绝，
+产物 opener 因缺依赖返回 unsupported。已澄清 batch 明确白名单与顺序文档读取
+提示，未放宽安全策略，也未追加付费重跑。新工具真实调用验收、完整依赖环境和
+质量提升仍未证明，相关项不勾选。见 results/workbuddy-xlsx-tools-baseline-20261021.md。
+
 表格值断言增补（2026-10-21）：公开 deliverable structure 支持 cell_values，
 限时快照 parser 只返回所需单元格，类型敏感比较，公式/错误值不视为重算通过。
 修复过小工作表维度可隐藏数据的观察缺口。真实 XLSX + fixture 模型验证错值

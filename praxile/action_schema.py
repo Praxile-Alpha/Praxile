@@ -108,7 +108,8 @@ class ActionSchemaRegistry:
                         continue
                     nested_type = item.get("type")
                     if nested_type not in READ_ONLY_ACTIONS:
-                        errors.append(f"batch.actions[{index}].type `{nested_type}` is not read-only")
+                        errors.append(f"batch.actions[{index}].type `{nested_type}` is not batch-compatible; "
+                                      "use a standalone action. Document parsers are read-only but require sequential resource budgets.")
         return not errors, errors
 
     def repair_prompt(self, errors: list[str]) -> str:
@@ -132,6 +133,8 @@ class ActionSchemaRegistry:
             optional = ", ".join(schema["optional"].keys()) or "(none)"
             lines.append(f"- {action_type}: required={required}; optional={optional}")
         lines.append(docx_spec_prompt())
+        lines.append("batch permits only these actions (at most 8): " + ", ".join(sorted(READ_ONLY_ACTIONS)) +
+                     ". read_document is read-only but NOT batch-compatible; call it sequentially to respect parser resource budgets.")
         from .spreadsheet_spec import xlsx_spec_prompt
         lines.append(xlsx_spec_prompt())
         lines.append("check_document_layout renders DOCX using an opt-in trusted renderer; max_pages checks an explicit page limit. "

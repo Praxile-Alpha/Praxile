@@ -61,7 +61,7 @@ class ToolRegistry:
             {"name": "read_file", "description": "Read a project-relative file after safety checks; supports start_line/end_line for long files."},
             {"name": "read_document", "description": "Extract PDF pages, XLSX rows or DOCX blocks; paginated, read-only, no OCR/recalculation. Use instead of read_file for binary documents."},
             {"name": "read_files", "description": "Read up to 20 project-relative files with per-file safety checks."},
-            {"name": "batch", "description": "Run up to 8 read-only actions concurrently."},
+            {"name": "batch", "description": "Run up to 8 batch-compatible actions: " + ", ".join(sorted(READ_ONLY_ACTIONS)) + ". read_document must run sequentially."},
             {"name": "browser_open", "description": "Open a URL with the optional Playwright browser adapter."},
             {"name": "browser_screenshot", "description": "Capture a screenshot artifact with the optional Playwright adapter."},
             {"name": "browser_navigate", "description": "Navigate the opt-in persistent browser session to an allowed URL."},
@@ -216,7 +216,8 @@ class ToolRegistry:
         if rejected:
             return {
                 "status": "blocked",
-                "output": f"batch only supports read-only actions; rejected: {', '.join(str(item) for item in rejected)}",
+                "output": f"batch only supports batch-compatible actions; rejected: {', '.join(str(item) for item in rejected)}. "
+                          "Use standalone actions for document parsing; read-only does not imply batch-compatible.",
                 "data": {"rejected_action_types": rejected},
                 "risk_level": "medium",
             }
