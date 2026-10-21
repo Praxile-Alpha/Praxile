@@ -11,6 +11,42 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration,
               pytest.mark.skipif(os.name != "posix", reason="POSIX lease backend")]
 
 
+def test_repeated_cancellation_keeps_process_owned_until_reaped(tmp_path, monkeypatch):
+    async def exercise():
+        lease = LocalWorkspaceLease(tmp_path)
+        await lease.prepare()
+        original = lease.cancel
+        started, release = asyncio.Event(), asyncio.Event()
+        async def delayed_cancel():
+            started.set()
+            await release.wait()
+            await original()
+        monkeypatch.setattr(lease, "cancel", delayed_cancel)
+        pending = asyncio.create_task(lease.execute(
+            [sys.executable, "-c", "import time; time.sleep(60)"], timeout=10))
+        process = None
+        try:
+            async with asyncio.timeout(5):
+                while lease._process is None:
+                    await asyncio.sleep(.01)
+            process = lease._process
+            pending.cancel()
+            await asyncio.wait_for(started.wait(), 5)
+            for _ in range(3):
+                pending.cancel()
+                await asyncio.sleep(.01)
+                assert not pending.done()
+                assert lease._busy and lease._process is process
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+            await lease.cleanup()
+        assert process is not None and process.returncode is not None
+        assert lease._process is None and lease._busy is False
+    asyncio.run(exercise())
+
+
 def test_execution_collection_and_idempotent_release(tmp_path):
     releases = []
 

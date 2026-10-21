@@ -226,13 +226,18 @@ class PraxileAgent(BaseAgent):
                 endpoint=f"http://host.docker.internal:{port}/v1", capability_file=remote)
         finally:
             broker.revoke()
-            await asyncio.to_thread(broker.close)
-            # A revoked leftover capability is unusable even if cleanup fails.
-            try:
-                await asyncio.wait_for(environment.exec(shlex.join(["rm", "-f", remote]), timeout_sec=5), timeout=6)
-            except (Exception, asyncio.CancelledError):
-                pass
-            write_json(self.logs_dir / "praxile-broker-usage.json", broker.status())
+            from ..eval.async_ownership import await_owned
+            async def release_broker():
+                try:
+                    await asyncio.to_thread(broker.close)
+                finally:
+                    # A revoked leftover capability is unusable even if removal fails.
+                    try:
+                        await asyncio.wait_for(environment.exec(shlex.join(["rm", "-f", remote]), timeout_sec=5), timeout=6)
+                    except (Exception, asyncio.CancelledError):
+                        pass
+                    write_json(self.logs_dir / "praxile-broker-usage.json", broker.status())
+            await await_owned(release_broker())
 
     async def _run_with_endpoint(self, instruction, environment, context, *, endpoint=None, capability_file=None) -> None:
         self.logs_dir.mkdir(parents=True, exist_ok=True)

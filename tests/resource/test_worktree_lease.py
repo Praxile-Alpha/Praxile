@@ -132,3 +132,47 @@ def test_active_execution_rejects_reset_then_can_be_cancelled(tmp_path):
             await lease.reset()
             assert await lease.collect("input.txt") == b"frozen"
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("operation", ["create", "reset", "cleanup"])
+def test_repeated_cancellation_waits_for_owned_git_operation(tmp_path, monkeypatch, operation):
+    source, task = source_task(tmp_path)
+    started, release = threading.Event(), threading.Event()
+    completed = []
+    async def exercise():
+        lease = None if operation == "create" else await WorktreeLease.create(
+            tmp_path / "state", task, source_override=source)
+        name = "cleanup" if operation == "cleanup" else "prepare"
+        original = getattr(BenchmarkRepositoryPreparer, name)
+        def delayed(self, *args, **kwargs):
+            started.set()
+            if not release.wait(8):
+                raise RuntimeError("synchronization timed out")
+            result = original(self, *args, **kwargs)
+            completed.append(result)
+            return result
+        monkeypatch.setattr(BenchmarkRepositoryPreparer, name, delayed)
+        pending = asyncio.create_task(WorktreeLease.create(tmp_path / "state", task,
+            source_override=source) if lease is None else getattr(lease, operation)())
+        try:
+            async with asyncio.timeout(5):
+                while not started.is_set():
+                    await asyncio.sleep(.01)
+            for _ in range(3):
+                pending.cancel()
+                await asyncio.sleep(.01)
+                assert not pending.done()
+        finally:
+            release.set()
+            try:
+                with pytest.raises(asyncio.CancelledError):
+                    await pending
+            finally:
+                monkeypatch.setattr(BenchmarkRepositoryPreparer, name, original)
+                if lease is not None:
+                    await lease.cleanup()
+        assert len(completed) == 1
+        root = completed[0].workspace_root if lease is None else lease.root
+        assert not root.exists()
+        assert (source / "input.txt").read_text() == "frozen"
+    asyncio.run(exercise())

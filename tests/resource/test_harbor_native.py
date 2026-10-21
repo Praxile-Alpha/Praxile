@@ -17,6 +17,59 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+def test_broker_cleanup_survives_repeated_cancellation(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from praxile.eval import credential_broker
+    started, release = threading.Event(), threading.Event()
+    broker_state = {"revoked": False, "closed": False}
+    class Broker:
+        capability = "fixture-not-a-credential"
+        def __init__(self, **kwargs):
+            pass
+        def start(self):
+            return "localhost", 1
+        def revoke(self):
+            broker_state["revoked"] = True
+        def close(self):
+            started.set()
+            if not release.wait(8):
+                raise RuntimeError("synchronization timed out")
+            broker_state["closed"] = True
+        def status(self):
+            return dict(broker_state)
+    monkeypatch.setattr(credential_broker, "ChatCredentialBroker", Broker)
+    monkeypatch.setattr(credential_broker, "read_private_key", lambda path: "fixture")
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), base_url="http://localhost/v1",
+        model_name="fixture", credential_file=str(tmp_path / "unused-key"))
+    monkeypatch.setattr(agent, "_run_with_endpoint", AsyncMock())
+    environment = SimpleNamespace(upload_file=AsyncMock(), exec=AsyncMock(return_value=SimpleNamespace(return_code=0)))
+    async def exercise():
+        pending = asyncio.create_task(agent.run("fixture", environment, AgentContext()))
+        try:
+            async with asyncio.timeout(5):
+                while not started.is_set():
+                    await asyncio.sleep(.01)
+            assert broker_state["revoked"] is True
+            for _ in range(3):
+                pending.cancel()
+                await asyncio.sleep(.01)
+                assert not pending.done()
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+        assert broker_state["closed"] is True
+        receipt = json.loads((tmp_path / "praxile-broker-usage.json").read_text())
+        assert receipt == broker_state
+        assert environment.exec.call_args.args[0].startswith("rm -f ")
+    asyncio.run(exercise())
+
+
 def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch):
     import shlex
     from types import SimpleNamespace

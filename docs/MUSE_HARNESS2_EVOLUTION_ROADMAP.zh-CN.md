@@ -107,6 +107,16 @@ R0-A 第一批实现（2026-10-19）：`praxile/eval/contracts.py` 提供通用�
 
 R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执行、产物读取、取消、超时进程组回收与幂等释放；仅对显式传入的 release 回调委托环境销毁，默认不删除工作区。资源测试通过 `--forked` 隔离运行。该后端不是安全沙箱，目前仅支持 POSIX；reset 明确要求通过 preparer 创建新租约，尚未接入正式 runner。Harbor 管理容器、只读输入挂载、持久化恢复及两个 benchmark 的真实执行均仍未完成，因此环境协议总项不勾选。上游依赖需分别隔离：WorkBuddy 固定 Harbor 0.18.0，JobBench 固定 0.22.0。
 
+R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
+不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
+本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
+清理等待后台 Git 操作并释放自己的目录；Harbor broker 先同步撤销凭据，再等待
+关闭、受限远端 capability 清理和用量落盘。资源测试使用 --forked：真实临时
+Git worktree/子进程验证连续取消，Harbor 0.22 fixture 验证 broker 收尾。
+没有执行新的 Docker/模型任务，不将 fixture 宣称为容器端实测。操作的 I/O
+时限由原有实现控制；该机制不保证 SIGKILL/断电恢复，不补齐 Harbor 通用租约
+或跨进程恢复，因此环境协议总项保持未完成。
+
 ### R0-B WorkBuddy Adapter
 
 公开约束 + v3 设计验收：`bca6326` 一次 low 请求 15.618 秒返回 NO_ENTRY，模型

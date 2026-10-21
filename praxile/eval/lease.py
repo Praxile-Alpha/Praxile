@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Awaitable, Callable, Protocol, Sequence
 
+from .async_ownership import await_owned
+
 
 @dataclass(frozen=True)
 class ExecutionResult:
@@ -72,28 +74,31 @@ class LocalWorkspaceLease:
                 self._process = await asyncio.shield(spawning)
             except asyncio.CancelledError:
                 # Cancellation during process creation must not lose ownership.
-                self._process = await spawning
-                await self.cancel()
-                await self._process.communicate()
+                self._process = await await_owned(spawning, propagate_cancellation=False)
+                await await_owned(self.cancel(), propagate_cancellation=False)
+                await await_owned(self._process.communicate(), propagate_cancellation=False)
                 raise
             # Shield pipe readers so timeout/cancellation can still drain output.
             reader = asyncio.create_task(self._process.communicate())
+            async def stop_and_drain():
+                await self.cancel()
+                return await reader
             try:
                 stdout, stderr = await asyncio.wait_for(asyncio.shield(reader), timeout)
             except TimeoutError:
                 timed_out = True
-                await self.cancel()
-                stdout, stderr = await reader
+                stdout, stderr = await await_owned(stop_and_drain())
             except asyncio.CancelledError:
-                await self.cancel()
-                await reader
+                await await_owned(stop_and_drain(), propagate_cancellation=False)
                 raise
             return ExecutionResult(self._process.returncode, stdout.decode(errors="replace"), stderr.decode(errors="replace"), timed_out)
         finally:
-            if self._process is not None:
-                await self.cancel()
-            self._process = None
-            self._busy = False
+            try:
+                if self._process is not None:
+                    await await_owned(self.cancel())
+            finally:
+                self._process = None
+                self._busy = False
 
     async def cancel(self) -> None:
         if self._process is None:

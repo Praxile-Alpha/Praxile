@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .lease import LocalWorkspaceLease
+from .async_ownership import await_owned
 from .v2.repository import BenchmarkRepositoryPreparer, PreparedRepository
 from .v2.schema import EvalTask
 from ..utils import new_id
@@ -40,14 +41,14 @@ class WorktreeLease(LocalWorkspaceLease):
             prepared = await asyncio.shield(operation)
         except asyncio.CancelledError:
             # A cancelled await does not stop the preparer's worker thread.
-            prepared = await operation
-            await asyncio.to_thread(preparer.cleanup, prepared)
+            prepared = await await_owned(operation, propagate_cancellation=False)
+            await await_owned(asyncio.to_thread(preparer.cleanup, prepared), propagate_cancellation=False)
             raise
         lease = cls(prepared, preparer, task, run_id, source_override)
         try:
             await lease.prepare()
         except BaseException:
-            await asyncio.to_thread(preparer.cleanup, prepared)
+            await await_owned(asyncio.to_thread(preparer.cleanup, prepared))
             raise
         return lease
 
@@ -69,7 +70,7 @@ class WorktreeLease(LocalWorkspaceLease):
                 self.prepared = await asyncio.shield(operation)
             except asyncio.CancelledError:
                 try:
-                    self.prepared = await operation
+                    self.prepared = await await_owned(operation, propagate_cancellation=False)
                 finally:
                     self._state = "failed"
                 raise
@@ -90,7 +91,7 @@ class WorktreeLease(LocalWorkspaceLease):
             try:
                 await asyncio.shield(operation)
             except asyncio.CancelledError:
-                await operation
+                await await_owned(operation, propagate_cancellation=False)
                 self._state = "closed"
                 raise
             self._state = "closed"
