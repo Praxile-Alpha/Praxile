@@ -116,6 +116,15 @@ class FeedbackStoreMixin:
             for item in (attribution_results or [])
             if isinstance(item, dict) and str(item.get("path") or "")
         }
+        from ..preferences import is_preference_asset
+        for path, attribution in list(attribution_by_path.items()):
+            if is_preference_asset({"path": path}):
+                attribution_by_path[path] = {
+                    **attribution, "should_update_asset_outcome": False,
+                    "attribution_level": "uncertain", "experience_purpose": "personalization",
+                    "reason": "Preference usage is not evidence of capability improvement.",
+                    "capability_credit_excluded": True,
+                }
         with self._connection() as conn:
             for path, attribution in attribution_by_path.items():
                 if attribution.get("referenced"):

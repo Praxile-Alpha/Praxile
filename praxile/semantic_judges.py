@@ -31,6 +31,7 @@ class AttributionJudge:
         self.router = router
 
     def judge_loaded_assets(self, trajectory: dict[str, Any], outcome: str, referenced_paths: list[str]) -> list[dict[str, Any]]:
+        from .preferences import is_preference_asset
         if not semantic_judge_enabled(self.config, "attribution_judge"):
             return []
         loaded = trajectory.get("loaded_assets") or []
@@ -54,6 +55,7 @@ class AttributionJudge:
             item
             for item in loaded
             if _asset_path(item)
+            and not is_preference_asset({"path": _asset_path(item)})
             and item.get("used_in_prompt", True)
             and (
                 _asset_path(item) in referenced

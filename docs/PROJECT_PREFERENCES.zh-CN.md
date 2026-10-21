@@ -25,12 +25,20 @@ evolution_summary.experience_purpose_usage 单独统计已加载的 preference �
 personalization_effect 与 capability_improvement 均保持 not_measured；加载次数
 不代表用户满意、因果贡献或能力收益。
 
+能力语义归因 judge 现在跳过该 namespace，不为它消费模型调用。存储层也独立
+拦截外部传入的偏好正负归因：保留 referenced/used_explicitly 观察，但强制
+should_update_asset_outcome=false、attribution_level=uncertain，并记录
+capability_credit_excluded。不会生成 outcome_attributed 事件，也不增加资产的
+positive_outcome_count/negative_outcome_count。任务自身 outcome 仍如实保留，
+不能把它当成偏好效果。旧计数/历史事件不被静默改写。
+
 ## 尚未完成
 
 - 这是项目内 namespace，不是多用户访问控制。共享同一项目状态的用户仍可读到
   已批准偏好；尚不支持个人身份隔离、全局偏好或自动跨项目迁移。
 - 旧 user.md 不自动迁移；已有 memory append、普通 memory_update 路径不强制
   重分类，仍需用户审阅内容。
-- 通用资产 usage/语义归因/晋升组件尚未全面按 personalization 分流。新增统计
-  仅是独立运行摘要，不能替代实验测量，也不能据此认定完整 R2 偏好条目完成。
+- 当前分流覆盖能力 judge 和 SQLite outcome credit，通用资产 usage 的任务结果、
+  其他离线分析/晋升入口仍需分别审计。独立运行摘要不能替代实验测量，也不能
+  据此认定完整 R2 偏好条目完成。
 - 没有自动挖掘偏好、真实模型偏好遵循率测试、偏好专属 Web 编辑器或满意度指标。

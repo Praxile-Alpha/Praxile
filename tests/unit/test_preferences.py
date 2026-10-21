@@ -30,3 +30,16 @@ def test_runtime_summary_separates_preference_usage():
         {"path": ".praxile/memory/preferences/brief.md", "kind": "memory"}]}, [])
     assert summary["experience_purpose_usage"]["personalization_assets_loaded"] == 1
     assert summary["experience_purpose_usage"]["capability_improvement"] == "not_measured"
+
+
+def test_capability_judge_does_not_call_model_for_preferences(tmp_path):
+    from praxile.semantic_judges import AttributionJudge
+    from unittest.mock import Mock
+    config = Config.load(tmp_path)
+    config.data["semantic_judges"]["enabled"] = True
+    router = Mock()
+    path = ".praxile/memory/preferences/brief.md"
+    results = AttributionJudge(config, router).judge_loaded_assets(
+        {"loaded_assets": [{"path": path, "score": 1, "used_in_prompt": True}]}, "success", [path])
+    assert results == []
+    router.chat.assert_not_called()
