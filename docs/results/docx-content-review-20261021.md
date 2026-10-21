@@ -157,3 +157,25 @@ the earlier twelve items as a completed batch. The reviewer's ledger now records
 received-but-invalid submissions as failures with known usage, or unknown where
 fields are absent/invalid. Other ModelError consumers have not all been migrated.
 No automatic retries, budget escalation or promotion followed.
+
+## Complete development review with explicit allocations
+
+A new run froze allocations `[1800, 1400, 1800, 3000]` before execution, keeping
+the total requested output allowance at 8000. The allocation was chosen using
+development usage observations: it is tuning, not held-out validation or a
+preregistered efficiency result. The source/output snapshots, sixteen requirements,
+model and unit-citation protocol were unchanged. No retry or budget transfer ran.
+
+All four groups returned complete, locally validated reviews. None reached its
+output allocation. LLM verdicts were 12 preserved, 3 missing and 1 uncertain.
+Thus the review workflow completed, but the artifact did not receive an
+all-requirements-preserved judgment. Semantic accuracy remains uncalibrated;
+these counts are not an official task score or independently verified omissions.
+
+The [allocated review receipt](docx-review-allocation-20261021.json) retains all
+sixteen verdicts and snapshot-bound reference IDs without publishing source spans
+or model prose. The batch ledger covers four recorded logical calls: 14698 input
+and 5969 output tokens; money remains unknown. It excludes prior development,
+design, execution and review attempts and does not independently attest provider
+billing or hidden retry usage. No complete baseline/candidate semantic pair was
+evaluated under this allocation. No candidate was promoted.

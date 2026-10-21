@@ -2,12 +2,14 @@
 import json
 
 from .content_review import _digest, _validate_inputs, review_content
+from ..usage_evidence import summarize_usage
 
 
 def review_content_batched(router, logger, *, source_text, output_text, requirements,
                            total_output_tokens, batch_size=4, timeout_per_call=90,
                            role="content_review_judge", private=True,
-                           response_mode="function", response_checkpoint=None, citation_mode="quote"):
+                           response_mode="function", response_checkpoint=None, citation_mode="quote",
+                           output_allocations=None):
     """Stop on first abstention; never recycle unused allowance or retry groups.
 
     This caps requested output tokens across logical calls, not input tokens,
@@ -23,8 +25,15 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         raise ValueError("unsupported citation mode")
     frozen = list(expected.values())
     groups = [frozen[i:i + batch_size] for i in range(0, len(frozen), batch_size)]
-    base, remainder = divmod(total_output_tokens, len(groups))
-    budgets = [base + (i < remainder) for i in range(len(groups))]
+    if output_allocations is None:
+        base, remainder = divmod(total_output_tokens, len(groups))
+        budgets = [base + (i < remainder) for i in range(len(groups))]
+    else:
+        if (not isinstance(output_allocations, list) or len(output_allocations) != len(groups)
+                or any(type(value) is not int for value in output_allocations)
+                or sum(output_allocations) != total_output_tokens):
+            raise ValueError("allocations must match group count and sum to the total budget")
+        budgets = list(output_allocations)
     if min(budgets) < 1 or max(budgets) > 8000:
         raise ValueError("each allocated output budget must be between 1 and 8000")
     plan = {"schema_version": "praxile.content_review_batch_plan.v1",
@@ -32,6 +41,7 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         "requirements_sha256": _digest(json.dumps(frozen, sort_keys=True)),
         "role": role, "private": private, "response_mode": response_mode,
         "citation_mode": citation_mode,
+        "allocation_policy": "equal" if output_allocations is None else "explicit",
         "total_output_tokens": total_output_tokens, "timeout_per_call": timeout_per_call,
         "groups": [{"ids": [item["id"] for item in group], "max_tokens": budget}
                    for group, budget in zip(groups, budgets)]}
@@ -42,6 +52,12 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         "promotion_eligible": False, "content_preservation_verified": False,
         "requirement_coverage_verified": False}
     logger.data.setdefault("content_review_batches", []).append(record)
+    start_call = len(logger.data.get("model_routing", {}).get("calls", []))
+    def update_usage():
+        calls = logger.data.get("model_routing", {}).get("calls", [])[start_call:]
+        record["usage_evidence"] = summarize_usage(calls, record["logical_requests"])
+        record["usage_evidence"]["scope"] = "batch_logical_requests_recorded_by_logger"
+        record["usage_evidence"]["transport_retry_usage_verified"] = False
     combined = []
     for index, (group, budget) in enumerate(zip(groups, budgets)):
         checkpoint = None
@@ -56,6 +72,7 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
             timeout=timeout_per_call, response_mode=response_mode, response_checkpoint=checkpoint,
             citation_mode=citation_mode)
         record["groups"].append(result)
+        update_usage()
         if result["status"] != "reviewed":
             record.update(status="abstained", failed_group_index=index)
             return record

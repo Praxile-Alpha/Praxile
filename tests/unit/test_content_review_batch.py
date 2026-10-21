@@ -94,3 +94,52 @@ def test_invalid_budget_fails_before_call(budget):
         review_content_batched(router, logger, source_text="source", output_text="output",
             requirements=requirements, total_output_tokens=budget, batch_size=2)
     router.chat.assert_not_called()
+
+
+def test_explicit_allocation_is_frozen_and_changes_plan_identity():
+    router, logger, requirements = setup()
+    allocations = [20, 30, 50]
+    def checkpoint(_):
+        allocations[:] = [90, 5, 5]
+    result = call(router, logger, requirements, output_allocations=allocations,
+                  response_checkpoint=checkpoint)
+    assert [c.kwargs["max_tokens"] for c in router.chat.call_args_list] == [20, 30, 50]
+    assert [g["max_tokens"] for g in result["plan"]["groups"]] == [20, 30, 50]
+    assert result["plan"]["allocation_policy"] == "explicit"
+    r2, l2, req2 = setup()
+    equal = call(r2, l2, req2)
+    assert result["plan_sha256"] != equal["plan_sha256"]
+
+
+@pytest.mark.parametrize("allocations", [[50, 50], [20, 30, 49], [True, 49, 50],
+    [0, 50, 50], [-1, 51, 50], "equal"])
+def test_bad_allocation_never_calls_model(allocations):
+    router, logger, requirements = setup()
+    with pytest.raises(ValueError):
+        call(router, logger, requirements, output_allocations=allocations)
+    router.chat.assert_not_called()
+
+
+def test_batch_ledger_excludes_prior_calls_and_retains_failed_unknown():
+    from praxile.trajectory import TrajectoryLogger
+    from praxile.model import ModelUnavailable
+    router, _, requirements = setup()
+    valid = router.chat.side_effect
+    responses = 0
+    def respond(*args, **kwargs):
+        nonlocal responses
+        responses += 1
+        if responses == 2:
+            raise ModelUnavailable("unavailable")
+        return valid(*args, **kwargs)
+    router.chat.side_effect = respond
+    logger = TrajectoryLogger("batch", {})
+    logger.add_model_cost({"prompt_tokens": 9000, "completion_tokens": 9000})
+    result = call(router, logger, requirements)
+    evidence = result["usage_evidence"]
+    assert evidence["calls"] == 2
+    assert evidence["recorded_calls"] == 1
+    assert evidence["known_tokens"] == {"prompt_tokens": 100, "completion_tokens": 20}
+    assert evidence["complete_tokens"] == {"prompt_tokens": None, "completion_tokens": None}
+    assert evidence["cost_usd"] is None
+    assert evidence["transport_retry_usage_verified"] is False
