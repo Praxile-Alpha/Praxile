@@ -44,6 +44,62 @@ def test_feedback_is_whitelisted_and_abstention_keeps_usage():
     assert kwargs["logger"].data["cost"]["prompt_tokens"] == 10
 
 
+def measured_setup():
+    from praxile.eval.v2.alignment import align_operations
+    from praxile.eval.v2.behavior_probe import probe_repetition
+    parents, reports, kwargs, calls = setup({"content": '{"decision":"abstain"}'})
+    for parent, report in zip(parents, reports):
+        parent.expected_effect["measurement"] = {"kind": "repeated_exact_operations", "operation": "search", "direction": "decrease"}
+        report["candidate_digest"] = parent.digest
+        event = lambda name: SimpleNamespace(event_id=name, type="TOOL_CALL",
+            payload={"action": {"type": "search", "pattern": "PRIVATE_SEARCH"}})
+        alignment = align_operations([event("a1"), event("a2")], [event("b1")])
+        behavior = probe_repetition(parent.expected_effect, alignment)
+        behavior["candidate_exposure_verified"] = True
+        report["improvement_episodes"][0].update(candidate={"digest": parent.digest},
+            behavior_probe=behavior, operation_alignment=alignment, verdict="hurt")
+    return parents, reports, kwargs, calls
+
+
+def test_behavior_feedback_is_replayed_and_not_sent_as_task_success():
+    parents, reports, kwargs, calls = measured_setup()
+    assert compose_after_development_probes(parents, reports, **kwargs) is None
+    payload = json.loads(calls[0][1]["content"])
+    result = payload["feedback"][0]["outcomes"][0]
+    assert result["verdict"] == "hurt"
+    assert result["behavior"]["delta"] == -1
+    assert result["behavior"]["task_success_proven"] is False
+    assert result["behavior"]["evidence_ref"] in payload["allowed_refs"]
+    assert "PRIVATE_SEARCH" not in json.dumps(calls)
+    assert "a1" not in payload["feedback"][0]["outcomes"][0]["behavior"]
+
+
+@pytest.mark.parametrize("invalid", ["delta", "identity", "duplicate_task"])
+def test_modified_behavior_feedback_stops_before_model(invalid):
+    parents, reports, kwargs, calls = measured_setup()
+    episode = reports[0]["improvement_episodes"][0]
+    if invalid == "delta":
+        episode["behavior_probe"]["delta"] = -99
+    elif invalid == "identity":
+        episode["candidate"]["digest"] = "wrong"
+    else:
+        reports[0]["improvement_episodes"].append(episode)
+    with pytest.raises(EvalSchemaError):
+        compose_after_development_probes(parents, reports, **kwargs)
+    assert not calls
+
+
+def test_unverified_exposure_does_not_supply_measurement_reference():
+    parents, reports, kwargs, calls = measured_setup()
+    for report in reports:
+        report["improvement_episodes"][0]["behavior_probe"]["candidate_exposure_verified"] = False
+    compose_after_development_probes(parents, reports, **kwargs)
+    payload = json.loads(calls[0][1]["content"])
+    assert not any(ref.startswith("probe:") for ref in payload["allowed_refs"])
+    assert payload["feedback"][0]["outcomes"][0]["behavior"] == {
+        "status": "abstained", "reason": "candidate_exposure_not_established"}
+
+
 @pytest.mark.parametrize("invalid", ["track", "digest", "invariants"])
 def test_invalid_probes_never_call_model(invalid):
     parents, reports, kwargs, calls = setup({})

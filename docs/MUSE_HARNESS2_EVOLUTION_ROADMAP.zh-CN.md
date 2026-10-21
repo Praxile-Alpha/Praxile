@@ -874,6 +874,12 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 
 ### R2-C 自动候选与执行组件
 
+局部反馈组合增补：probe composer 可消费按冻结测量从 operation alignment
+复算的行为摘要，绑定 task/candidate/event 分组为 probe 摘要引用；原始参数、
+工具输出和 rubric 不发送。修改 delta、错候选和重复任务记录拒绝；暴露不足
+弃权，旧报告保持 verdict-only。局部改善不改写任务 hurt，组合仍需独立执行。
+当前为离线 fixture 验证，非真实生成质量/收益验收，也不替代源 EventStore 认证。
+
 - [ ] 在开发任务内实现 Propose -> Probe -> Compose -> Re-run；从两个有明确假设的候选起步，不强制每个普通任务都进行多次运行。
   新增 DevelopmentContextCycle Python API：显式开发/held-out 名单、两个有假设的
   候选及预先提供的组合候选被冻结，三个版本分别执行独立隔离 A/B；可断点恢复，

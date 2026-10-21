@@ -2,6 +2,18 @@
 
 ## 被拒候选的局部证据
 
+Probe composer 现可消费结构化行为反馈：按父候选冻结的 expected_effect，从
+operation_alignment 重新计算重复操作计数，并要求与报告中的测量及事件分组
+一致。候选摘要不匹配、重复 task episode 或被修改的 delta 均在模型调用前拒绝。
+有测量但未确立候选暴露时仅传 abstained；旧的无 behavior_probe 报告保留
+verdict-only 兼容，不据此声明行为机制已验证。
+
+模型只收到测量名、baseline/candidate 数值、delta 和 `probe:<sha256>` 引用；
+引用绑定 task、候选和事件分组，可作为组合草案的证据引用。不发送原始操作参数、
+事件正文或 rubric。任务 hurt 与局部 delta 改善同时保留；组合仍必须独立 re-run。
+该 replay 验证的是报告内部一致性，不是原始 EventStore 真实性认证；调用者仍须
+通过冻结实验来源校验，不能把任意外部 JSON 当作可信测量。
+
 每个 ImprovementEpisode 增加 `retained_local_evidence`，经现有 A/B analyze/report
 路径持久化，不新建长期经验资产。记录绑定 episode、baseline/candidate 的 run、
 manifest 与 trace 引用；若有有效行为测量，保留数值差异及 event_evidence；
