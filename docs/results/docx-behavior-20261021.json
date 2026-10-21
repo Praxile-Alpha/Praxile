@@ -1,0 +1,1679 @@
+{
+  "schema_version": "praxile.public_native_behavior_pairs.v1",
+  "scope": "one_seeded_development_task_three_pairs",
+  "independent_task_count": 1,
+  "causal_effect_verified": false,
+  "promotion_eligible": false,
+  "pairs": [
+    {
+      "candidate": "first",
+      "arms": [
+        {
+          "arm": "baseline",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_1f396c8b57e9",
+            "source_result_sha256": "b0ffaef609974c371323d96ac3406a041b92f310168caf1670c726d84269a092",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 13,
+            "projected_count": 10,
+            "unprojected_tool_results": 3,
+            "operation_status_counts": [
+              {
+                "operation": "check_document_layout",
+                "status": "failure",
+                "count": 3
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 2
+              },
+              {
+                "operation": "revise_docx",
+                "status": "success",
+                "count": 4
+              }
+            ],
+            "repeated_same_parameter_observations": 3,
+            "timeline": [
+              {
+                "event_id": "event_534c85956926f256e6df",
+                "facts": {
+                  "call_event_id": "event_bcfc4d8c0ce08b403b54",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_75c70586277076fa7db5",
+                "facts": {
+                  "call_event_id": "event_955d3a5b9aa21e2ba1d5",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "observed_version_relation": "same_bytes",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+                  "previous_observed_source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "previous_read_event_id": "event_534c85956926f256e6df",
+                  "requested_char_offset": 0,
+                  "requested_limit": 10,
+                  "returned_units": 3,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 21,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_2414ed30f9470a5c60a9",
+                "facts": {
+                  "after_sha256": "aa064a2b8f67dcd46e7150f2b7b6e654d6071aff8764af36322212d2a76d985e",
+                  "before_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "bytes_changed": true,
+                  "call_event_id": "event_d84e8fc33d76eba66a56",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "1037cda146514dc9d801515bcdfbd49cee10fab05886d2a2e5fd587d3eda7e5f",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 3,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 5,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 75,
+                    "table_rows": 15,
+                    "text_characters": 3866
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_dbd0b50aced15542603e",
+                "facts": {
+                  "before_layout_event_id": null,
+                  "call_event_id": "event_f9abda3d14be1f05bf4a",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "unknown",
+                  "page_delta": null,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_2414ed30f9470a5c60a9",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_91eae18f866e0daa920b",
+                "facts": {
+                  "after_sha256": "f4da44b22171d6b057bc0a386e81abd2d7709c20ec5a4ace4b26c77c70923c65",
+                  "before_sha256": "aa064a2b8f67dcd46e7150f2b7b6e654d6071aff8764af36322212d2a76d985e",
+                  "bytes_changed": true,
+                  "call_event_id": "event_7ecfcdb62f3345ef5340",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "e99e54cfd5d8e42184e275606ccda1fd3071c46680f182362f5d2b603b3d01cd",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 5,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 75,
+                    "table_rows": 15,
+                    "text_characters": 2787
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_ad9a320c704ea7419cf0",
+                "facts": {
+                  "before_layout_event_id": "event_dbd0b50aced15542603e",
+                  "call_event_id": "event_eb09d63d77694836f7d5",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": 0,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_91eae18f866e0daa920b",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 2,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_8ef00c37b6d13dc66a6f",
+                "facts": {
+                  "after_sha256": "d9e82fa0124903bbebd5ab89dd5914ab2cad1a274effe0898f979e3c9635b736",
+                  "before_sha256": "f4da44b22171d6b057bc0a386e81abd2d7709c20ec5a4ace4b26c77c70923c65",
+                  "bytes_changed": true,
+                  "call_event_id": "event_45f9f07095c63f2122fb",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "2f045f1f88805ec33232538f6f88ca4b51ed1911a32e8cf4736bff1eb59a465f",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 68,
+                    "table_rows": 17,
+                    "text_characters": 3305
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_cc243f07c99bbd3e1c08",
+                "facts": {
+                  "before_layout_event_id": "event_ad9a320c704ea7419cf0",
+                  "call_event_id": "event_c2251581689d10392183",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": 0,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_8ef00c37b6d13dc66a6f",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 3,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_a3a76f9f6247d77316c3",
+                "facts": {
+                  "after_sha256": "3588ee4c7161c016b09143c1f6fae550be5ae668404f81940ab3d228d0b9b616",
+                  "before_sha256": "d9e82fa0124903bbebd5ab89dd5914ab2cad1a274effe0898f979e3c9635b736",
+                  "bytes_changed": true,
+                  "call_event_id": "event_3eaae724d6f7721f9e7d",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "36b34102287f15d4dc41ffc011c36db408c4026d1d117478fb252c08b5eaf792",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 16,
+                      "table": 0
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 0,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 0,
+                    "table_rows": 0,
+                    "text_characters": 3298
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_e629e82e7e873f875257",
+                "facts": {
+                  "before_layout_event_id": "event_cc243f07c99bbd3e1c08",
+                  "call_event_id": "event_18023e712b027e7b6076",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": -1,
+                  "page_limit_met": true,
+                  "pages": 1,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_a3a76f9f6247d77316c3",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 4,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_534c85956926f256e6df",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "8ec603e77f677587c19c5cc979bf8d5a22b355a2b7922397dafef410dab698c0"
+              },
+              {
+                "event_id": "event_75c70586277076fa7db5",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "52cbe165f94cc4b9a15012a0e1d69f5771b9b52f17c522cffed409fc3681edd1"
+              },
+              {
+                "event_id": "event_2414ed30f9470a5c60a9",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "3af07fe1b127bd2382b355f88b3d4d983c986919cb60129a3948ecd96b3db145"
+              },
+              {
+                "event_id": "event_dbd0b50aced15542603e",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "c92a3dade3e1a0671571f732099891cb8f399e60da020359f114a27a827fb49f"
+              },
+              {
+                "event_id": "event_91eae18f866e0daa920b",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "a97fb072eb5737ac3109efb58226c753586333ea98e07ec4c1b5f2bd7ad9dd98"
+              },
+              {
+                "event_id": "event_ad9a320c704ea7419cf0",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "9d2f5b5a5c3d2d5d73298df52a191a4220c0b076c36ff1695ec72a625221c3b7"
+              },
+              {
+                "event_id": "event_8ef00c37b6d13dc66a6f",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "bfa0042019ab49fd8b94a6658f6bdb96c2cfdc038fb5c4799a481f7fb0edd3cf"
+              },
+              {
+                "event_id": "event_cc243f07c99bbd3e1c08",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "789951245066235144dafc4e7416e46e44b4884131578937f00ac11e7a63302f"
+              },
+              {
+                "event_id": "event_a3a76f9f6247d77316c3",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "1910696ea30d5789d1c040612004f86ee112f5653a655b6a8844533dc1047971"
+              },
+              {
+                "event_id": "event_e629e82e7e873f875257",
+                "trace_id": "trace_45eab5a692b78091b2e0",
+                "event_sha256": "41eb8629a389ee8ecce3e5bbe2a20f4c620491b1fc7752d222aac7dac27e59aa"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        },
+        {
+          "arm": "candidate",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_f4986f812424",
+            "source_result_sha256": "3d2242d19522df7e43bbdba59b9fbb9738ebd4502a76325a66991484daedb600",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 12,
+            "projected_count": 9,
+            "unprojected_tool_results": 3,
+            "operation_status_counts": [
+              {
+                "operation": "check_deliverables",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "failure",
+                "count": 2
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 2
+              },
+              {
+                "operation": "revise_docx",
+                "status": "success",
+                "count": 3
+              }
+            ],
+            "repeated_same_parameter_observations": 2,
+            "timeline": [
+              {
+                "event_id": "event_95629801120b02df2fc1",
+                "facts": {
+                  "call_event_id": "event_38be8a693d953f6193f2",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "45c50418e1fc6751fc4eea904fd70dec446a63b21971108068ab8cbd8ff2fd2a",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": null,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_6e7e03d635f02a2dfe10",
+                "facts": {
+                  "call_event_id": "event_3c652d603396e27b5b07",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "observed_version_relation": "same_bytes",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "6353fea1e7b866a01f6e45ee9d07575cea40e17166ac26b13a50ce57b5e88ee4",
+                  "previous_observed_source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "previous_read_event_id": "event_95629801120b02df2fc1",
+                  "requested_char_offset": 0,
+                  "requested_limit": 5,
+                  "returned_units": 3,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 21,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_8b4331425bba198bda16",
+                "facts": {
+                  "after_sha256": "c966dc6a478e17f50bc34c965eb169e577693b868ac5ac2df41665c201eb401c",
+                  "before_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "bytes_changed": true,
+                  "call_event_id": "event_00b1ae880ec1c9f22302",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "12cdf524b362d81e375b564fc6b61f7d62b3291b38403077f87d97ffa2e38ace",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 36,
+                    "table_rows": 9,
+                    "text_characters": 2922
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_f12a2ca1f2dc51409918",
+                "facts": {
+                  "before_layout_event_id": null,
+                  "call_event_id": "event_bd104ab3498ff687639c",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "unknown",
+                  "page_delta": null,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_8b4331425bba198bda16",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_729000c36d112ae10bf4",
+                "facts": {
+                  "after_sha256": "f6815e22e439b5bb4387a76f2b8675c64322b08434d824dbdb7d2703baedf944",
+                  "before_sha256": "c966dc6a478e17f50bc34c965eb169e577693b868ac5ac2df41665c201eb401c",
+                  "bytes_changed": true,
+                  "call_event_id": "event_4b6100cd25be5938d69d",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "ae8d87f0d6f231477b9fe9bc82d9ed63bec2e96b642fb0987932a9f2955cfd4c",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 36,
+                    "table_rows": 9,
+                    "text_characters": 2271
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_7ef4530718e7e8ebcd66",
+                "facts": {
+                  "before_layout_event_id": "event_f12a2ca1f2dc51409918",
+                  "call_event_id": "event_02d76823eb858624329c",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": 0,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_729000c36d112ae10bf4",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 2,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_bfcc33d8b95532c1fcf0",
+                "facts": {
+                  "after_sha256": "8fbfb30529ffb05e88cde200831acb33b93ed37de28cc9066e393562e820d62b",
+                  "before_sha256": "f6815e22e439b5bb4387a76f2b8675c64322b08434d824dbdb7d2703baedf944",
+                  "bytes_changed": true,
+                  "call_event_id": "event_b85983954d8668f55ce5",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "ba269f9cb49b2a3f91325f50d1d83d100e4f31756ad4a32aa0912d65962592dd",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 3,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 21,
+                    "table_rows": 7,
+                    "text_characters": 1954
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_8a03626ffdb2cc4eba7b",
+                "facts": {
+                  "before_layout_event_id": "event_7ef4530718e7e8ebcd66",
+                  "call_event_id": "event_ec3df36f4a50cd5e2ec4",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": -1,
+                  "page_limit_met": true,
+                  "pages": 1,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_bfcc33d8b95532c1fcf0",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 3,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_86e30f0f349a6df00b23",
+                "facts": {
+                  "call_event_id": "event_109dad6e3c89ca4f529e",
+                  "contract_binding": "run_argument",
+                  "contract_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "check_deliverables",
+                  "output_count": 2,
+                  "output_status_counts": {
+                    "failed": 0,
+                    "optional_missing": 0,
+                    "passed": 2,
+                    "unsupported": 0
+                  },
+                  "parameter_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "public_check_passed": true,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "user_acceptance_verified": false
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_95629801120b02df2fc1",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "be7a18b2f1d7095efd6fc8349b3e6159b0484678cf78ea9951212a1618278e39"
+              },
+              {
+                "event_id": "event_6e7e03d635f02a2dfe10",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "275d1e310033f13a1a24a6775feb2655d2c4f18161f625ee7947dc1286ee351b"
+              },
+              {
+                "event_id": "event_8b4331425bba198bda16",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "6befe0154e5637dc8f80f6bed3d7d07092276b84ad2bdb10c462a336ad140f66"
+              },
+              {
+                "event_id": "event_f12a2ca1f2dc51409918",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "fcef53f20f1570f714ae6c401ac93e97c6d3b6f7ca32ca87cee1c4fc9c4bc2dc"
+              },
+              {
+                "event_id": "event_729000c36d112ae10bf4",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "2a77c0b34a75d3786a329a3c9f0634cf835b2098d718849f10051923db825b92"
+              },
+              {
+                "event_id": "event_7ef4530718e7e8ebcd66",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "344ba1b283833e41ea1374f243258c416e4c469ce72e37129b066fad35b3e1d7"
+              },
+              {
+                "event_id": "event_bfcc33d8b95532c1fcf0",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "fb5096ed62f85b86941433a018abbe930fe7da0f7e8c01ecf00f37af53436cdb"
+              },
+              {
+                "event_id": "event_8a03626ffdb2cc4eba7b",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "d362922648e4586ada6bee00aceef1d6e792af4c0a901097a44cbb61e7b6791d"
+              },
+              {
+                "event_id": "event_86e30f0f349a6df00b23",
+                "trace_id": "trace_612cb003cdd1bc97d540",
+                "event_sha256": "d0f5dd00d8adf5ac89811368f215b2f525779d1226d97fb9765ec793f22a92fb"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "second",
+      "arms": [
+        {
+          "arm": "baseline",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_853830eb98c0",
+            "source_result_sha256": "e3e9c0e9af3114a87dc1d0a1e10a209439b74e1a1c49740a77503301cd97528d",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 13,
+            "projected_count": 8,
+            "unprojected_tool_results": 5,
+            "operation_status_counts": [
+              {
+                "operation": "check_deliverables",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "failure",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 3
+              },
+              {
+                "operation": "revise_docx",
+                "status": "success",
+                "count": 2
+              }
+            ],
+            "repeated_same_parameter_observations": 1,
+            "timeline": [
+              {
+                "event_id": "event_f23a9a5157ff1eb34b70",
+                "facts": {
+                  "call_event_id": "event_89ca245f64de44560214",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_1415fc0df069e30f087a",
+                "facts": {
+                  "call_event_id": "event_3bd5d5f81f8d19bb662d",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "observed_version_relation": "same_bytes",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+                  "previous_observed_source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "previous_read_event_id": "event_f23a9a5157ff1eb34b70",
+                  "requested_char_offset": 0,
+                  "requested_limit": 10,
+                  "returned_units": 3,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 21,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_62b6bf7c6432e42bb079",
+                "facts": {
+                  "call_event_id": "event_8cf46f349d8cad977f59",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 2,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "4fed65149b68c7bf51a5a280d8c9bca9a070d774a711360ef084a2fb891cc950",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 1,
+                  "returned_units": 1,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "6cd0587e293072a7f6f57077483b87590b6fa3f908c2bc73ca77ae508c9015f4",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 115,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_00e8afe2c20d3f0cb107",
+                "facts": {
+                  "after_sha256": "55b4203e53e1fec68ca20a4155505db1337662fae706e519b1a4a47e49e6da9d",
+                  "before_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "bytes_changed": true,
+                  "call_event_id": "event_6a09530d0a6448377275",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "9cd62730fa92142280cc88e4c5c224d922d2c8640e4d5218937372a8dfa0780e",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 3,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 60,
+                    "table_rows": 15,
+                    "text_characters": 3617
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_03c743f63d0f57927fa1",
+                "facts": {
+                  "before_layout_event_id": null,
+                  "call_event_id": "event_bd2c6cbffeb6ce8bfe4c",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "unknown",
+                  "page_delta": null,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_00e8afe2c20d3f0cb107",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_484ae862fc307dfca12a",
+                "facts": {
+                  "after_sha256": "3f8894c9e82b2c29e95a124814acef4f230e5b54a476aad55de6f2038a746a50",
+                  "before_sha256": "55b4203e53e1fec68ca20a4155505db1337662fae706e519b1a4a47e49e6da9d",
+                  "bytes_changed": true,
+                  "call_event_id": "event_76096b5ac39272527d0c",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "b731872686bdbe91e9c3f017f673dfc65e0c8658b6fab75f0ed390df636a359d",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 3,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 60,
+                    "table_rows": 15,
+                    "text_characters": 2797
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_983074e21d56408af8e4",
+                "facts": {
+                  "before_layout_event_id": "event_03c743f63d0f57927fa1",
+                  "call_event_id": "event_39939b313b44d7b9ce6c",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": -1,
+                  "page_limit_met": true,
+                  "pages": 1,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_484ae862fc307dfca12a",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 2,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_dfd98c5e68c93e39ca07",
+                "facts": {
+                  "call_event_id": "event_e04350fbc1c3c3d32255",
+                  "contract_binding": "run_argument",
+                  "contract_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "check_deliverables",
+                  "output_count": 2,
+                  "output_status_counts": {
+                    "failed": 0,
+                    "optional_missing": 0,
+                    "passed": 2,
+                    "unsupported": 0
+                  },
+                  "parameter_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "public_check_passed": true,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "user_acceptance_verified": false
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_f23a9a5157ff1eb34b70",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "353e86181cb2c9921cb65c59f5b2dfec0c2b7a3f1c0094a403ff776699013799"
+              },
+              {
+                "event_id": "event_1415fc0df069e30f087a",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "f27de8e842530f75b925bc3fdf9fe7aa6413ec7dfcd70945eb4b06c96bca4b58"
+              },
+              {
+                "event_id": "event_62b6bf7c6432e42bb079",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "3b07102dab12c7a543ca6c6bc2686d8c692aed7cdd30ed407413a6a427e30dcd"
+              },
+              {
+                "event_id": "event_00e8afe2c20d3f0cb107",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "d6d2adbd13d7e887b1f96e6ae48bb86ee66f90ec0104c100159eb4d8b3c5c1e9"
+              },
+              {
+                "event_id": "event_03c743f63d0f57927fa1",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "4492e40a5670e1a029203d423cf89014fbf35f1e7f0f8cc5d6eacd4bc829fcc4"
+              },
+              {
+                "event_id": "event_484ae862fc307dfca12a",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "926081c7db205f7ce4066c1f1c8933373ced1ec79d8c80ddf963495bf1828abc"
+              },
+              {
+                "event_id": "event_983074e21d56408af8e4",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "ea145d01233c78b1784d5d5baabbbd08e1e7fa4ee38bb5ac789496db21b6d07a"
+              },
+              {
+                "event_id": "event_dfd98c5e68c93e39ca07",
+                "trace_id": "trace_3e1d8d7fec94f07d08e5",
+                "event_sha256": "8e9898ccbd2ad1cc88efbb6f8c4cd8036305f487416acdebd34139b2c9f0e7f7"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        },
+        {
+          "arm": "candidate",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_994ac67dba40",
+            "source_result_sha256": "bb1c0b536432d750b42c474702191593b041c9b7f2582121fc9f42d1a79eee8f",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 8,
+            "projected_count": 5,
+            "unprojected_tool_results": 3,
+            "operation_status_counts": [
+              {
+                "operation": "check_deliverables",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "revise_docx",
+                "status": "success",
+                "count": 2
+              }
+            ],
+            "repeated_same_parameter_observations": 0,
+            "timeline": [
+              {
+                "event_id": "event_b3e112c5eab68fd920a7",
+                "facts": {
+                  "call_event_id": "event_e847570685903df3f841",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_c73400fd38e9a2cc60db",
+                "facts": {
+                  "after_sha256": "8a49b5099d73c07da97dd50cc944ddcdb74e68c021f51c3caf1128760517b5d8",
+                  "before_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "bytes_changed": true,
+                  "call_event_id": "event_606149463cd322d11607",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "66033afef0745584c79c1eaebdcc90e7df0d9322cd0af7821f61c1ca4bec7ca6",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 14,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 0
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 0,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 0,
+                    "table_rows": 0,
+                    "text_characters": 2679
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_7ca550616180ac06eb27",
+                "facts": {
+                  "after_sha256": "1233bd89cbd482e847eeed1f5ffd21b4bf68c5730e62750054039d6a8a818139",
+                  "before_sha256": "8a49b5099d73c07da97dd50cc944ddcdb74e68c021f51c3caf1128760517b5d8",
+                  "bytes_changed": true,
+                  "call_event_id": "event_c7d47e44175bc782e14d",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "0a4d853d276e175bc59f7e4ef1ba84a4c389c477e8436f04dc39623110eb127a",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 14,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 1,
+                      "table": 0
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 0,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 0,
+                    "table_rows": 0,
+                    "text_characters": 2675
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_ed4bb90f3d285125bab1",
+                "facts": {
+                  "before_layout_event_id": null,
+                  "call_event_id": "event_4d80674e652d7c459c73",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "unknown",
+                  "page_delta": null,
+                  "page_limit_met": true,
+                  "pages": 1,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_7ca550616180ac06eb27",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_91c9a8889293e235affa",
+                "facts": {
+                  "call_event_id": "event_3a22824502aaf4f59498",
+                  "contract_binding": "run_argument",
+                  "contract_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "check_deliverables",
+                  "output_count": 2,
+                  "output_status_counts": {
+                    "failed": 0,
+                    "optional_missing": 0,
+                    "passed": 2,
+                    "unsupported": 0
+                  },
+                  "parameter_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "public_check_passed": true,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "user_acceptance_verified": false
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_b3e112c5eab68fd920a7",
+                "trace_id": "trace_8cb6db1f74012973dfb6",
+                "event_sha256": "a5623fa916c8c28c1a4c0f2caddf20de323a207d12360b3620dde8ece22e0853"
+              },
+              {
+                "event_id": "event_c73400fd38e9a2cc60db",
+                "trace_id": "trace_8cb6db1f74012973dfb6",
+                "event_sha256": "aeaf18949fd659e4b7c96d94ff5c1400a62c908e3f96a95adf83fdae0e087fda"
+              },
+              {
+                "event_id": "event_7ca550616180ac06eb27",
+                "trace_id": "trace_8cb6db1f74012973dfb6",
+                "event_sha256": "c4cb96eaf28d2213d3bf9ca15c08f80b52ce818012f7a39c8cc6aac0201d1135"
+              },
+              {
+                "event_id": "event_ed4bb90f3d285125bab1",
+                "trace_id": "trace_8cb6db1f74012973dfb6",
+                "event_sha256": "2818e692ce63f30d84da0827816789504dc1e0255a91c7acd5b2f065a377d573"
+              },
+              {
+                "event_id": "event_91c9a8889293e235affa",
+                "trace_id": "trace_8cb6db1f74012973dfb6",
+                "event_sha256": "8af70183e75bd5c1b9e727ab7757587afd79217c5461d66e19fa1d7682319b91"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "composition",
+      "arms": [
+        {
+          "arm": "baseline",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_acd6baea21fb",
+            "source_result_sha256": "815d0739fb98d11f33cee48a08265d7bda91ed6432c7ebb2b37a0decd0ea78c8",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 7,
+            "projected_count": 2,
+            "unprojected_tool_results": 5,
+            "operation_status_counts": [
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 2
+              }
+            ],
+            "repeated_same_parameter_observations": 0,
+            "timeline": [
+              {
+                "event_id": "event_7ecc16d3bb0a634782ac",
+                "facts": {
+                  "call_event_id": "event_7215fae3d6c9d019c90a",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_c5dd301058d0366dac78",
+                "facts": {
+                  "call_event_id": "event_916d3f2e3c2fe86aa60d",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "observed_version_relation": "same_bytes",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "e1c43fe4ee54e466522fd38725af1c54f46344b1e7cd0ec2e85f739c576171c3",
+                  "previous_observed_source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "previous_read_event_id": "event_7ecc16d3bb0a634782ac",
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 3,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 21,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_7ecc16d3bb0a634782ac",
+                "trace_id": "trace_e2834137bed04aca3a1a",
+                "event_sha256": "bf144865e5b6069ad9d0f1f795168d48f015df482dbb5bd38858b7ed5e4c418e"
+              },
+              {
+                "event_id": "event_c5dd301058d0366dac78",
+                "trace_id": "trace_e2834137bed04aca3a1a",
+                "event_sha256": "a6f6e788c5c03501e56aab488ea6041927a42cfd85b268b2644bd8da2982f5da"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        },
+        {
+          "arm": "candidate",
+          "behavior": {
+            "schema_version": "praxile.native_behavior.v1",
+            "task_id": "task_22f7a8edbeb2",
+            "source_result_sha256": "f9a459a54ffa3a1231d46d53dcbe1b87d6079462df9096c6fddb4e0ec1a491c6",
+            "projection_version": 4,
+            "scope": "eligible_structured_tool_results_in_recorded_order",
+            "source_tool_result_count": 12,
+            "projected_count": 7,
+            "unprojected_tool_results": 5,
+            "operation_status_counts": [
+              {
+                "operation": "check_deliverables",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "failure",
+                "count": 1
+              },
+              {
+                "operation": "check_document_layout",
+                "status": "success",
+                "count": 1
+              },
+              {
+                "operation": "read_document",
+                "status": "success",
+                "count": 2
+              },
+              {
+                "operation": "revise_docx",
+                "status": "success",
+                "count": 2
+              }
+            ],
+            "repeated_same_parameter_observations": 1,
+            "timeline": [
+              {
+                "event_id": "event_af43c438b8c999a73eba",
+                "facts": {
+                  "call_event_id": "event_cb2ff2974e76388f242a",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "next_start": 21,
+                  "observed_version_relation": "unknown",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "ee6fdca7b766a84bcd9e3140de84f626950cc95457ed971208674050744887f8",
+                  "previous_observed_source_sha256": null,
+                  "previous_read_event_id": null,
+                  "requested_char_offset": 0,
+                  "requested_limit": 20,
+                  "returned_units": 20,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 1,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_7fcb6151d4598700b0d3",
+                "facts": {
+                  "call_event_id": "event_a765dab62e5586d7e85e",
+                  "causal_effect_verified": false,
+                  "comparison_basis": "same_task_trace_and_recorded_path",
+                  "exit_code": null,
+                  "observed_version_relation": "same_bytes",
+                  "official_evaluation": false,
+                  "operation": "read_document",
+                  "parameter_sha256": "92b97645ad6258817f0e03d600567c2766dfb8e560a30a11ef8472c80cdf7d0c",
+                  "previous_observed_source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "previous_read_event_id": "event_af43c438b8c999a73eba",
+                  "requested_char_offset": 0,
+                  "requested_limit": 10,
+                  "returned_units": 3,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "source_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "start_unit": 21,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "total_units": 23,
+                  "unit_kind": "block"
+                }
+              },
+              {
+                "event_id": "event_8a49358e5684a3de314d",
+                "facts": {
+                  "after_sha256": "73b7c93f2cf0cd376294bb55744d923047413a8152446883117a2cb75586f855",
+                  "before_sha256": "ff3f0916b24abc2665c013397007a2fde03da3bd441ff511239d1dcf1387a27b",
+                  "bytes_changed": true,
+                  "call_event_id": "event_4d94805b8ffae510f74c",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "5bbd63a76fcb7decd8ebd50b8251f1c2a866f29e207bf103108e665ddfd1c6b4",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 0,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 3,
+                      "table": 1
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 4,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 60,
+                    "table_rows": 15,
+                    "text_characters": 3838
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_2ac70ef5c03dcb863ca8",
+                "facts": {
+                  "before_layout_event_id": null,
+                  "call_event_id": "event_2e18cddb7ca1bbb74303",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "unknown",
+                  "page_delta": null,
+                  "page_limit_met": false,
+                  "pages": 2,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_8a49358e5684a3de314d",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "failure",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_56d0f9583d8f234f3592",
+                "facts": {
+                  "after_sha256": "106c03c18b96e7629f5f4b677222c77ab91a795f571532e7a415d7b5debefe1d",
+                  "before_sha256": "73b7c93f2cf0cd376294bb55744d923047413a8152446883117a2cb75586f855",
+                  "bytes_changed": true,
+                  "call_event_id": "event_cdc25b2e69e4fbdf7a95",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "revise_docx",
+                  "parameter_sha256": "f5df390da3956754e13e64d219f6d1d9ac5d2d3b8aad05adbc40e3c53e977b3f",
+                  "replacement_structure": {
+                    "block_counts": {
+                      "bullet": 8,
+                      "heading": 1,
+                      "page_break": 0,
+                      "paragraph": 2,
+                      "table": 0
+                    },
+                    "content_preservation_verified": false,
+                    "maximum_table_columns": 0,
+                    "requested_layout": "compact",
+                    "schema_version": "praxile.document_structure.v1",
+                    "scope": "replacement_spec_only",
+                    "table_cells": 0,
+                    "table_rows": 0,
+                    "text_characters": 2836
+                  },
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_c0e700aa36300c2b103f",
+                "facts": {
+                  "before_layout_event_id": "event_2ac70ef5c03dcb863ca8",
+                  "call_event_id": "event_e82e3c1ba84b02b8940a",
+                  "causal_effect_verified": false,
+                  "constraint_source": "action_argument",
+                  "exit_code": null,
+                  "max_pages": 1,
+                  "official_evaluation": false,
+                  "operation": "check_document_layout",
+                  "page_comparison_status": "matched_recorded_versions_and_renderer",
+                  "page_delta": -1,
+                  "page_limit_met": true,
+                  "pages": 1,
+                  "parameter_sha256": "e02027003af602c18a61715f9ea67001e10c57575a978ab4b33657c5a3538c30",
+                  "rendered": true,
+                  "revision_event_id": "event_56d0f9583d8f234f3592",
+                  "revision_link_status": "unique_content_digest",
+                  "same_parameter_occurrence": 2,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "visual_quality_verified": false
+                }
+              },
+              {
+                "event_id": "event_097a47534e978d4b140f",
+                "facts": {
+                  "call_event_id": "event_62f3eae594b0b479c804",
+                  "contract_binding": "run_argument",
+                  "contract_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "exit_code": null,
+                  "official_evaluation": false,
+                  "operation": "check_deliverables",
+                  "output_count": 2,
+                  "output_status_counts": {
+                    "failed": 0,
+                    "optional_missing": 0,
+                    "passed": 2,
+                    "unsupported": 0
+                  },
+                  "parameter_sha256": "3449dd5b6f0907c69d9673f7f619a9a61947b31c99016297b3a189e9c52551bf",
+                  "public_check_passed": true,
+                  "same_parameter_occurrence": 1,
+                  "semantic_quality_verified": false,
+                  "state_equivalence": "unknown",
+                  "status": "success",
+                  "user_acceptance_verified": false
+                }
+              }
+            ],
+            "sources": [
+              {
+                "event_id": "event_af43c438b8c999a73eba",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "2706a1d0a1e9348888cd93336142daec4db8cb6c0f51d0143b622a91c4d3bac9"
+              },
+              {
+                "event_id": "event_7fcb6151d4598700b0d3",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "1ad5d064d57e7d03abcbe4f62ff379f99e732b055d2a09a9e2a343fccdbb07c4"
+              },
+              {
+                "event_id": "event_8a49358e5684a3de314d",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "1cc2c77bc5e38fb124871e9d205ba1ab068dc5641c6e19bc1f6abe7a750abae8"
+              },
+              {
+                "event_id": "event_2ac70ef5c03dcb863ca8",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "d501cf9f52b4a2291fa87c5d17db46919e4495bf1f55ab2b4351d344c936f7f7"
+              },
+              {
+                "event_id": "event_56d0f9583d8f234f3592",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "56264c2d3f320e127fb587d359a862036a2e38da89b2c82298daa22e95dd220b"
+              },
+              {
+                "event_id": "event_c0e700aa36300c2b103f",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "f7dfdc49af3b198e70916866c9225872ef39a5e1d0323c20c895d45d537aa339"
+              },
+              {
+                "event_id": "event_097a47534e978d4b140f",
+                "trace_id": "trace_13367201dd480e1f0b2c",
+                "event_sha256": "3ad96afe49c76c39e617b5357363e2114c218644e65bc065c206c5b089dd527c"
+              }
+            ],
+            "provenance_attested": false,
+            "causal_effect_verified": false,
+            "task_success_verified": false,
+            "promotion_eligible": false
+          }
+        }
+      ]
+    }
+  ]
+}

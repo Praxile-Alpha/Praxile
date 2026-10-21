@@ -17,7 +17,7 @@ from .schema import EvalSchemaError, canonical_json
 
 
 def collect_native_evidence(result_path, *, expected_sha256, development_task_ids,
-                            heldout_task_ids, track, limit=20):
+                            heldout_task_ids, track, limit=20, all_eligible=False):
     """Membership is caller-declared, not attested; never read evaluator files."""
     for members in (development_task_ids, heldout_task_ids):
         if (not isinstance(members, (list, tuple, set, frozenset))
@@ -30,6 +30,8 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         raise EvalSchemaError("explicit disjoint development membership required")
     if type(limit) is not int or not 1 <= limit <= 20:
         raise EvalSchemaError("evidence limit must be in [1, 20]")
+    if type(all_eligible) is not bool:
+        raise EvalSchemaError("all_eligible must be boolean")
     raw, result = _read(result_path)
     digest = hashlib.sha256(raw).hexdigest()
     if digest != expected_sha256:
@@ -76,11 +78,13 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
         sources.append({"event_id": event.event_id, "trace_id": event.trace_id,
                         "event_sha256": hashlib.sha256(event.to_json().encode()).hexdigest()})
         priorities.append(1 if status == "success" else 0)
-    order = select_evidence(evidence, priorities, limit)
+    order = list(range(len(evidence))) if all_eligible else select_evidence(evidence, priorities, limit)
     return {"schema_version": "praxile.native_development_evidence.v1", "track": track,
         "source_result_sha256": digest, "task_id": task,
         "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
         "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),
+        "selection": "all_eligible_in_event_order" if all_eligible else "bounded_priority_selection",
+        "source_tool_result_count": sum(event.type == "TOOL_RESULT" for event in events),
         "projection": "structured_tool_outcomes_no_raw_text", "projection_version": 4, "provenance_attested": False,
         "promotion_eligible": False,
         "limitations": ["Development membership is explicitly supplied by the caller, not independently attested.",

@@ -77,3 +77,27 @@ def test_cli_writes_private_bundle_once(source, monkeypatch, capsys):
     with pytest.raises(FileExistsError):
         main()
     assert output.read_bytes() == before
+
+
+def test_behavior_uses_all_eligible_results_instead_of_selected_sample(source):
+    from praxile.eval.native_behavior import summarize_native_behavior
+    value = json.loads(source.read_text())
+    template = value["trajectory"]["actions"][0]
+    value["trajectory"]["actions"] = [{**template, "step": step} for step in range(1, 26)]
+    source.write_text(json.dumps(value))
+    limited = collect_native_evidence(source, **options(source))
+    assert limited["omitted_count"] == 5
+    args = options(source)
+    args.pop("track")
+    full = summarize_native_behavior(source, **args)
+    assert full["projected_count"] == 25
+    assert full["repeated_same_parameter_observations"] == 24
+    assert full["causal_effect_verified"] is False
+    assert full["task_success_verified"] is False
+    assert "DO_NOT_EXPORT" not in json.dumps(full)
+    assert [item["facts"]["same_parameter_occurrence"] for item in full["timeline"]] == list(range(1, 26))
+
+
+def test_all_eligible_flag_is_strict_boolean(source):
+    with pytest.raises(EvalSchemaError, match="all_eligible must be boolean"):
+        collect_native_evidence(source, **options(source), all_eligible="true")
