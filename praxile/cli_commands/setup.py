@@ -235,11 +235,21 @@ def cmd_demo(args: argparse.Namespace, project_root: Path) -> int:
     return 0
 
 def cmd_doctor(args: argparse.Namespace, project_root: Path) -> int:
+    probe_models = getattr(args, "probe_benchmark_models", False)
+    if probe_models and not getattr(args, "benchmark", None):
+        raise ValueError("--probe-benchmark-models requires --benchmark")
     if getattr(args, "benchmark", None):
         from ..services.benchmark_health import inspect_benchmark
+        from ..services.benchmark_model_health import inspect_model_roles
         report = inspect_benchmark(args.benchmark, online=args.online, workspace=project_root)
+        report["model_health"] = inspect_model_roles(Config.load(project_root), probe=probe_models)
+        if probe_models:
+            for check in report.get("checks", []):
+                if check["name"] == "model_endpoint":
+                    check.update(status="see_model_health", detail="Explicit role probe results are in model_health")
         print(json.dumps(report, indent=2))
-        return 0 if report["infrastructure_available"] else 1
+        return 0 if report["infrastructure_available"] and (
+            not probe_models or report["model_health"]["models_reachable"]) else 1
     config, store = load(project_root)
     store.initialize(config)
     router = ModelRouter(config)

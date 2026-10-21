@@ -537,6 +537,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor.add_argument("--online", action="store_true", help="Probe model endpoints, or only Docker when --benchmark is set")
     p_doctor.add_argument("--benchmark", choices=["workbuddy", "jobbench"],
                           help="Inspect isolated benchmark prerequisites without initializing a project")
+    p_doctor.add_argument("--probe-benchmark-models", action="store_true",
+                          help="With --benchmark, send up to two small potentially billable executor/judge probes")
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_interop = sub.add_parser("interop", help="Explain optional framework adapter boundaries")

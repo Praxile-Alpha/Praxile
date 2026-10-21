@@ -98,6 +98,13 @@ R0 是首个实现阶段，不沿用旧 P0/P1 编号，避免与已完成的 V2 
   Eval Runner report 的 benchmark_contracts 使用现有 from_swebench 显式投影，版本标为输入任务集内容 digest；旧执行 backend/evaluator 不变，legacy manifest 不改写，resume 不重复运行已完成任务。25 项合同/runner/A-B 测试通过，包含 manifest 字节稳定、输入摘要稳定、投影一致与私有测试/答案不泄漏。这是兼容接入，不代表已用通用 Harbor 执行 SWE-bench，也不是新增模型性能验收。
 - [ ] doctor 输出缺失依赖、容器架构、磁盘、执行模型和评审模型状态；Linux 环境与 Mac Docker Desktop 分别给出实测支持矩阵。
   自检增补：在线查询 daemon OS/架构，主机磁盘容量只读观测；离线未查询 daemon 时不宣称 infrastructure_available。10 项测试通过，本机离线查询已验证；Docker VM 磁盘、模型/judge 连通性和 Linux/Mac 完整实测矩阵仍未完成。
+  模型自检增补：benchmark doctor 增加显式 coding_agent/content_review_judge 角色状态，
+  仅 --probe-benchmark-models 才允许两个固定短提示词探测，主角色直连、不 fallback，
+  provider transport 显式关闭，错误仅保留类型。默认不调用模型、不初始化项目。
+  fixture 验证边界，不等于真实 endpoint/官方 judge 验收；外部 runner 的覆盖参数
+  与单独 judge 文件不自动继承，完整支持矩阵仍未完成。见 BENCHMARK_HEALTH.zh-CN.md。
+  验证：17 项 benchmark health 单元测试通过，fast suite 1256 passed / 13 skipped；
+  本机离线 CLI 正确报告缺失依赖和未配置角色，无模型调用、无项目初始化。
 
 代码落点：在 `eval` 下增加通用协议与插件，不先大改 legacy runtime；通过桥接保留现有 `eval/v2`。benchmark 可选依赖使用独立环境，避免上游 Python/Harbor 版本拖动基础安装。
 
