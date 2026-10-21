@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip("harbor")
 from praxile.eval.lease import LocalWorkspaceLease
 from praxile.eval.lease_inspect import inspect_lease, read_ownership
+from praxile.eval.lease_recover import recover_lease
 
 pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.slow,
               pytest.mark.skipif(os.name != "posix" or not os.environ.get("PRAXILE_TEST_LEASE_IMAGE"),
@@ -47,6 +48,9 @@ asyncio.run(main())
             ownership = read_ownership(root)
             assert ownership["owner_pid"] == child.pid
             assert ownership["generations"][0]["phase"] == "ready"
+            sessions = [item["session"] for item in ownership["generations"]]
+            with pytest.raises(RuntimeError, match="still active"):
+                await recover_lease(root, confirm_sessions=sessions)
             before = (root / "ownership.json").read_bytes()
             os.killpg(child.pid, signal.SIGKILL)
             assert await asyncio.wait_for(child.wait(), 10) == -signal.SIGKILL
@@ -62,6 +66,16 @@ asyncio.run(main())
             assert report["generations"][0]["resources"]["container"]
             assert report["owner_liveness"] == "not_established"
             assert (root / "ownership.json").read_bytes() == before
+            async with LocalWorkspaceLease(tmp_path) as host:
+                recovered = await host.execute([sys.executable, "-m", "praxile.eval.lease_recover",
+                    "--lease-dir", str(root), "--cleanup", "--discard-uncollected", "--confirm-session", *sessions], timeout=60)
+            assert recovered.returncode == 0 and not recovered.timed_out
+            receipts = list(root.glob("recovery-*.json"))
+            assert len(receipts) == 1
+            receipt = json.loads(receipts[0].read_text())
+            assert receipt["status"] == "cleaned" and receipt["resources_absent"] is True
+            assert any(item["kind"] == "container" for item in receipt["removed"])
+            assert receipt["execution_replayed"] is False
         finally:
             if child.returncode is None:
                 os.killpg(child.pid, signal.SIGKILL)
@@ -74,19 +88,7 @@ asyncio.run(main())
                     continue
                 record = read_ownership(owned)
                 assert record["owner_pid"] == child.pid
-                observed = await inspect_lease(owned)
-                async with LocalWorkspaceLease(tmp_path) as host:
-                    for generation in observed["generations"]:
-                        assert generation["observation"] in {"present", "absent"}
-                        for kind in ("container", "network", "volume"):
-                            for resource in generation["resources"][kind]:
-                                field = "{{json .Config.Labels}}" if kind == "container" else "{{json .Labels}}"
-                                labels = await host.execute(["docker", kind, "inspect", "--format", field, resource], timeout=30)
-                                assert labels.returncode == 0 and not labels.timed_out
-                                assert json.loads(labels.stdout)["com.docker.compose.project"] == generation["session"]
-                                command = ["docker", kind, "rm"] + (["-f"] if kind == "container" else []) + [resource]
-                                removed = await host.execute(command, timeout=30)
-                                assert removed.returncode == 0 and not removed.timed_out
+                await recover_lease(owned, confirm_sessions=[item["session"] for item in record["generations"]])
                 assert (await inspect_lease(owned))["resources_absent"] is True
         assert root is not None
     asyncio.run(exercise())

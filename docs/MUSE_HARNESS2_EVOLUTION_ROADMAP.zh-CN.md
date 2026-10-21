@@ -198,6 +198,16 @@ Mac ARM64 Docker Desktop，固定 python 镜像摘要沿用前述测试，无模
 fast suite 1234 passed / 13 skipped。强杀后的记录留存/资源发现已有实证；
 生产自动回收、PID 身份鉴别、断电恢复及动作 checkpoint 恢复仍未完成。
 
+R0-A 显式受控回收增补（2026-10-21）：新租约持有 POSIX owner.lock 至正常
+cleanup，记录 device/inode；SIGKILL 由内核释放锁。新增 lease_recover 模块 CLI，
+要求 --cleanup、--discard-uncollected 和按序确认全部 session。活跃锁、锁替换、
+旧无锁记录、daemon/标签不匹配均拒绝删除；取得排他锁后逐项核查资源身份，
+只删除对应容器/网络/卷，实时复查并留下独立审计记录，不改写原所有权记录，
+不删除镜像或宿主产物、不重放执行。连续取消仍等待已授权清理收尾后释放锁。
+16 项检查/回收单元测试通过；两版 Harbor 各 11 项真实故障与租约回归通过，
+最终 CLI 数据丢失确认在 0.22 再次实测通过。此能力依赖本机 POSIX 协作锁，
+不是 PID 存活认证、无确认自动 janitor、NFS/跨主机支持、断电恢复或动作续跑。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

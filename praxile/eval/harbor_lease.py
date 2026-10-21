@@ -22,6 +22,7 @@ from .lease import ExecutionResult, LocalWorkspaceLease
 from .contracts import InputArtifact
 from .input_snapshot import freeze_public_inputs, verify_public_inputs
 from ..utils import write_json
+from .owner_lock import OwnerLock
 
 
 class HarborDockerLease:
@@ -36,6 +37,7 @@ class HarborDockerLease:
         self.image = image
         self.root = state_root.resolve() / ("harbor-lease-" + uuid.uuid4().hex)
         self.root.mkdir(parents=True, exist_ok=False, mode=0o700)
+        self._owner_lock = OwnerLock(self.root / "owner.lock", create=True)
         self._state = "new"
         self._busy = False
         self._lifecycle = asyncio.Lock()
@@ -64,7 +66,8 @@ class HarborDockerLease:
         record["phase"] = phase
         write_json(self.root / "ownership.json", {
             "schema_version": "praxile.harbor_ownership.v1", "lease_id": self.root.name,
-            "image": self.image, "owner_pid": os.getpid(), "generations": self._generations})
+            "image": self.image, "owner_pid": os.getpid(), "owner_lock": self._owner_lock.identity,
+            "generations": self._generations})
 
     async def _docker(self, *argv):
         async with LocalWorkspaceLease(self.root) as host:
@@ -263,6 +266,7 @@ class HarborDockerLease:
                     self._state = "failed"
                     raise
                 self._state = "closed"
+                self._owner_lock.close()
             await await_owned(close())
 
     async def __aenter__(self):

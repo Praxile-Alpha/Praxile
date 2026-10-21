@@ -31,6 +31,9 @@ Docker environment，不接管 `Trial` 传给 `PraxileAgent` 的环境，不自�
 - 创建容器前写入 ownership.json，记录租约身份、owner PID、固定镜像和每代
   session 的 Docker daemon ID。reset 不丢弃前代记录；只有独立查询确认资源
   消失后才记录 cleanup_verified。daemon 改变时拒绝在另一个 daemon 上清理。
+- 新租约在生命周期内持有 owner.lock 的非阻塞 POSIX flock，正常 cleanup 后
+  才释放；进程退出由内核释放。记录锁文件 device/inode，防止用替换的锁冒充
+  原锁。只支持本机 POSIX 文件系统的协作式排他，不依赖 PID 是否重用来判定。
 
 ```python
 from pathlib import Path
@@ -58,6 +61,29 @@ python -m praxile.eval.lease_inspect --lease-dir /absolute/path/to/harbor-lease-
 或资源已经成为孤儿。不得仅凭本结果推导可以删除资源。旧无 ownership.json 的
 租约不猜测 session，也不自动迁移。记录不是签名认证，不防同权限宿主篡改。
 
+### 显式回收
+
+**回收会删除容器和卷，未采集的成果可能丢失。先检查、保存所需成果，再明确确认。**
+从只读检查结果中取得全部 session，按原顺序传入：
+
+```bash
+python -m praxile.eval.lease_recover \
+  --lease-dir /absolute/path/to/harbor-lease-ID \
+  --cleanup --discard-uncollected \
+  --confirm-session praxile-lease-SESSION_ID
+```
+
+只接受有锁身份的新记录。活跃 owner 或另一个 recovery 持锁时拒绝；取得锁后
+重读记录并核对 inode、daemon ID，逐项 inspect 标签后才删除对应容器、网络、卷。
+不删除镜像、宿主输入或产物，不使用 prune，不触碰其他 session。每次操作形成
+独立 recovery-UUID.json，保留逐项删除和失败信息，原 ownership.json 不改写。
+完成后再次实时检查全部资源；重复清理已空环境为无删除操作的新审计记录。
+
+回收过程中取消会先等已授权清理和审计收尾，期间继续持锁。它不是自动 janitor，
+不证明原 PID 已死亡，也不是 checkpoint 恢复；只证明没有遵守该协议的活跃 owner
+持有锁。旧无锁记录、锁替换、daemon 变化或标签不符均拒绝。NFS/跨宿主锁语义、
+恶意宿主并发篡改及不遵守协议的外部程序不在已验证范围。
+
 资源测试为 `tests/resource/test_harbor_lease.py`。默认不创建 Docker 环境；真实
 测试需显式设置 `PRAXILE_TEST_LEASE_IMAGE`，使用固定版本环境和 `--forked`。
 测试覆盖创建、执行、受限采集、reset、超时、取消和释放后的资源查询；fixture
@@ -71,14 +97,14 @@ python -m praxile.eval.lease_inspect --lease-dir /absolute/path/to/harbor-lease-
 1. 创建独立子进程并等待租约 prepare 完成的明确握手。
 2. 向该子进程自己的进程组发送 SIGKILL，等待并确认退出码为 -SIGKILL。
 3. 用新的 Python 进程运行 lease_inspect，确认能发现真实遗留容器，且不修改 ownership.json。
-4. 测试 finally 逐项重新核对精确 session 标签，只删除本测试资源，再查询确认全部不存在。
+4. 验证 owner 活跃时正式回收 API 拒绝；强杀后新进程运行显式回收 CLI，审计删除并确认全部不存在。
 
 Harbor 0.18.0 与 0.22.0 均已在 Mac ARM64 Docker Desktop 验证；测试为 slow +
 integration + resource，必须显式设置固定 PRAXILE_TEST_LEASE_IMAGE，并使用
---forked。无真实模型调用。此测试清理逻辑仅属于测试夹具，没有开放为生产恢复
-API：它依赖测试已经确认自己创建并终止了那个 owner，不能照搬到身份不明的现场。
+--forked。无真实模型调用。正式回收路径用 owner lock、明确 session 确认、daemon
+和标签检查保护，不沿用此前仅由测试夹具证明 owner 已退出的前提。
 该证据证明强杀后记录可用、独立检查可发现遗留资源，不证明动作 checkpoint
-恢复、断电恢复或生产自动回收已经完成。
+恢复、断电恢复或无人工确认的生产自动回收已经完成。
 
 本后端不是敌对代码安全沙箱：只读输入已在显式清单路径实现，但尚未建立完整
 下载/私有评测存储隔离、网络隔离策略或宿主资源配额。宿主同权限进程仍可能在
