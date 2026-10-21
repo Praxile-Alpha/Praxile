@@ -45,6 +45,12 @@ class HarborDockerLease:
         if inputs:
             self._input_identity = freeze_public_inputs(input_source_root, inputs, self.root / "inputs")
 
+    @property
+    def public_inputs(self):
+        """Agent-visible paths without host locations or private evaluator data."""
+        return [{"path": "inputs/" + item.path, "content_digest": item.content_digest}
+                for item in self._inputs]
+
     async def _docker(self, *argv):
         async with LocalWorkspaceLease(self.root) as host:
             result = await host.execute(["docker", *argv], timeout=30)
@@ -92,7 +98,7 @@ class HarborDockerLease:
                 self._state = "failed"
                 raise
             mounts = [{"type": "bind", "source": str(self.root / "inputs"),
-                       "target": "/inputs", "read_only": True}]
+                       "target": "/workspace/inputs", "read_only": True}]
         self._session = "praxile-lease-" + uuid.uuid4().hex
         generation = self.root / self._session
         environment_dir = generation / "environment"
