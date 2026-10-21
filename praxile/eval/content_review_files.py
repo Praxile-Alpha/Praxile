@@ -40,7 +40,8 @@ def load_review_run(directory):
         raise ValueError("review directory must be a local directory")
     manifest, inputs, report, trajectory = [_read(root, name) for name in (
         "manifest.json", "inputs.json", "report.json", "trajectory.json")]
-    validate_execution_binding(manifest.get("execution_binding"), output_text=inputs.get("output_text"))
+    validate_execution_binding(manifest.get("execution_binding"), output_text=inputs.get("output_text"),
+                               source_text=inputs.get("source_text"))
     if (manifest.get("schema_version") != "praxile.content_review_run.v1"
             or manifest.get("input_sha256") != _digest(json.dumps(inputs, sort_keys=True))
             or set(inputs) != {"source_text", "output_text", "requirements"}):

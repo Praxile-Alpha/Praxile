@@ -46,7 +46,7 @@ def _reader(root):
 
 
 def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_root: Path,
-                         source_path: str, output_path: str, output_format="text"):
+                         source_path: str, output_path: str, output_format="text", source_format="text"):
     if not isinstance(task, BenchmarkTask):
         raise ValueError("typed benchmark task required")
     if (task.evaluator.name, task.evaluator.version) != ("praxile-content-review", "1"):
@@ -59,6 +59,8 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
         raise ValueError("source and output must be declared in the frozen task")
     if output_format not in {"text", "docx_body"}:
         raise ValueError("unsupported output extraction profile")
+    if source_format not in {"text", "docx_body"}:
+        raise ValueError("unsupported source extraction profile")
     if output_format == "docx_body" and output.media_type != "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         raise ValueError("DOCX extraction requires declared DOCX media type")
     if output_format == "text" and not (output.media_type.startswith("text/") or output.media_type == "application/json"):
@@ -108,7 +110,13 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
         output_text, extraction = extract_docx_body(output_raw)
     else:
         output_text = output_raw.decode("utf-8")
-    inputs = {"source_text": source_raw.decode("utf-8"), "output_text": output_text,
+    source_extraction = None
+    if source_format == "docx_body":
+        from .document_review_extraction import extract_docx_body
+        source_text, source_extraction = extract_docx_body(source_raw)
+    else:
+        source_text = source_raw.decode("utf-8")
+    inputs = {"source_text": source_text, "output_text": output_text,
               "requirements": evaluator["requirements"]}
     binding = {"task_fingerprint": task.fingerprint.removeprefix("sha256:"),
         "execution_sha256": _sha(report_raw), "trajectory_sha256": _sha(trajectory_raw),
@@ -116,14 +124,17 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
         "evaluator_sha256": _sha(evaluator_raw)}
     if extraction is not None:
         binding["output_extraction"] = extraction
+    if source_extraction is not None:
+        binding["source_extraction"] = source_extraction
     return inputs, binding
 
 
 def review_owned_output(config, task, *, execution_dir, evaluator_root, source_path, output_path,
                         run_id, total_output_tokens, batch_size=4, private=True, timeout_per_call=90,
-                        output_format="text"):
+                        output_format="text", source_format="text"):
     inputs, binding = prepare_owned_review(task, execution_dir=execution_dir, evaluator_root=evaluator_root,
-                                          source_path=source_path, output_path=output_path, output_format=output_format)
+                                          source_path=source_path, output_path=output_path, output_format=output_format,
+                                          source_format=source_format)
     return run_content_review(config, run_id=run_id, inputs=inputs, execution_binding=binding,
         total_output_tokens=total_output_tokens, batch_size=batch_size, private=private,
         timeout_per_call=timeout_per_call)

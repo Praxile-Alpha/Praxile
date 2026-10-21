@@ -185,6 +185,13 @@ R0-A DOCX 内容桥接增补（2026-10-21）：owned_content_review 新增显式
 真实解析和既有文档工具回归 11 passed，桥接/持久化评审 fixture 32 passed；
 没有真实 judge 调用或新增 benchmark 成绩，完整 Office 验收仍未完成。
 
+R0-A DOCX 源材料增补（2026-10-21）：显式 source_format=docx_body 与输出 profile
+独立选择，原始输入摘要通过后才抽取。source_extraction 保存解析版本/代码与
+源正文摘要，持久化读取分别验证两侧正文，旧文本及仅输出抽取记录继续兼容。
+真实 DOCX -> DOCX 冻结证据桥接通过；四种格式组合及篡改拒绝的相关单元测试
+35 passed，真实解析资源测试 4 passed。仍是开发期正文评审，未证明官方成绩、
+视觉质量或真实 judge 准确性，不提前勾选完整 Office 验收。
+
 R0-A 终态幂等恢复增补（2026-10-21）：owned runner/CLI 新增 run_id 与 resume。
 排他落盘 claim 在执行前占用身份；相同 ID 不带 resume 不得再次执行，计划变化
 不得复用。成功回收并确认清理后，以执行报告、轨迹、输入和输出摘要封存终态；
