@@ -17,6 +17,16 @@ preserved/contradicted 必须有精确存在的非空产物引文；遗漏条目
 进入传入的 TrajectoryLogger；请求失败时用量未知，不补零。接口本身不重试，
 provider/transport 的重试仍由既有配置控制。异常正文不会写入记录。
 
+可显式传 `response_mode="function"`，通过已有 named function submission 提交
+评审对象；默认仍为 `text`，不改变其他调用。function 模式需执行模型声明工具
+支持且使用 OpenAI-compatible provider；不支持时不能静默换协议。它只提交
+结果，不执行工具。记录包含协议名与 contract 摘要，来源引文和完整覆盖依旧
+由本地验证器检查，不因为模型用了 function 就信任输出。
+
+验证失败返回固定 `validation_code`，区分截断、JSON、顶层形状、条目字段、
+未知/重复 ID、判定值、理由、引文类型/长度、无法引用和覆盖不完整；不记录
+模型提供的未知字段或错误正文，不做格式修复或自动重试。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。

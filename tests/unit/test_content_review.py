@@ -63,6 +63,33 @@ def test_uncertainty_is_not_success():
     assert record["all_declared_requirements_preserved"] is False
 
 
+def test_function_submission_keeps_local_validation_authoritative():
+    record, router, _ = run(response_mode="function")
+    contract = router.chat.call_args.kwargs["response_contract"]
+    assert contract["name"] == "submit_content_review_v1"
+    items = contract["schema"]["properties"]["items"]
+    assert items["minItems"] == items["maxItems"] == 1
+    assert items["items"]["properties"]["id"]["enum"] == ["consent"]
+    assert record["response_mode"] == "function"
+    assert len(record["response_contract_sha256"]) == 64
+    invalid, _, _ = run([{"id": "consent", "verdict": "preserved",
+        "output_quote": "fabricated", "reason": "Present"}], response_mode="function")
+    assert invalid["status"] == "abstained"
+    assert invalid["validation_code"] == "unsupported_citation"
+
+
+def test_default_mode_does_not_change_provider_protocol():
+    record, router, _ = run()
+    assert record["response_mode"] == "text"
+    assert "response_contract" not in router.chat.call_args.kwargs
+    assert "response_contract_sha256" not in record
+
+
+def test_missing_items_has_safe_diagnostic():
+    record, _, _ = run([])
+    assert record["validation_code"] == "incomplete_coverage"
+
+
 def test_bad_source_citation_prevents_model_call():
     router = Mock()
     with pytest.raises(ValueError):
@@ -142,6 +169,41 @@ def test_real_router_and_provider_preserve_http_cause(tmp_path, monkeypatch):
         assert "sensitive" not in json.dumps(report)
         assert report["usage_available"] is False
         transport.post_json.assert_called_once()
+    finally:
+        close = getattr(transport, "close", None)
+        if callable(close):
+            close()
+
+
+def test_function_submission_through_real_router_provider(tmp_path, monkeypatch):
+    from praxile.config import Config, ProjectPaths
+    from praxile.model import ModelRouter
+
+    monkeypatch.setenv("PRAXILE_TEST_REVIEW_KEY", "test-only")
+    config = Config({"model_providers": {"test": {"type": "openai_compatible",
+        "base_url": "https://example.invalid/v1", "api_key_env": "PRAXILE_TEST_REVIEW_KEY",
+        "models": [{"name": "test", "supports_tools": True}]}},
+        "model_roles": {"content_review_judge": {"provider": "test", "model": "test"}}},
+        ProjectPaths(tmp_path))
+    router = ModelRouter(config)
+    transport = router.providers["test"].transport
+    arguments = json.dumps({"items": [{"id": "x", "verdict": "uncertain",
+        "output_quote": "", "reason": "No equivalent evidence"}]})
+    post = Mock(return_value={"choices": [{"finish_reason": "tool_calls", "message": {
+        "tool_calls": [{"type": "function", "function": {
+            "name": "submit_content_review_v1", "arguments": arguments}}]}}],
+        "usage": {"prompt_tokens": 20, "completion_tokens": 30}})
+    monkeypatch.setattr(transport, "post_json", post)
+    logger = SimpleNamespace(data={}, add_model_cost=Mock())
+    try:
+        report = review_content(router, logger, source_text="source", output_text="output",
+            requirements=[{"id": "x", "requirement": "x", "source_quote": "source"}],
+            private=False, response_mode="function")
+        assert report["status"] == "reviewed"
+        assert report["all_declared_requirements_preserved"] is False
+        assert report["finish_reason"] == "tool_calls"
+        assert post.call_args.kwargs["payload"]["tool_choice"]["function"]["name"] == "submit_content_review_v1"
+        post.assert_called_once()
     finally:
         close = getattr(transport, "close", None)
         if callable(close):

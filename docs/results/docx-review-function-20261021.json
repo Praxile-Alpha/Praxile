@@ -1,0 +1,82 @@
+{
+  "schema_version": "praxile.public_review_protocol_trial.v1",
+  "scope": "single_function_trial_not_replacement",
+  "model": "MiniMax-M3.1-Flash",
+  "request_options": {
+    "reasoning_effort": "low"
+  },
+  "report": {
+    "schema_version": "praxile.content_review.v1",
+    "scope": "caller_supplied_text",
+    "role": "content_review_judge",
+    "input_sha256": "cb9290a9693027efeddc8103b0b798f8f418646545304e361bd991ce3bdc8cec",
+    "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+    "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+    "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd",
+    "status": "abstained",
+    "official_evaluation": false,
+    "promotion_eligible": false,
+    "content_preservation_verified": false,
+    "requirement_coverage_verified": false,
+    "max_tokens": 3000,
+    "timeout_seconds": 90,
+    "logical_requests": 1,
+    "usage_available": true,
+    "transport_attempts_verified": false,
+    "response_mode": "function",
+    "response_contract_sha256": "66e5d6148578f2a6801497e4d6972c30c4e464d4ef138e9da46f73b0a65cd0d4",
+    "response_sha256": "4b2cdc6a3d2227a4db60f95d059692858905e335730b4e86dd1f20fa3b891f7b",
+    "finish_reason": "tool_calls",
+    "failure_stage": "validation",
+    "failure_category": "invalid_review",
+    "validation_code": "invalid_item"
+  },
+  "cost": {
+    "model_calls": 1,
+    "prompt_tokens": 4618,
+    "completion_tokens": 3000,
+    "tool_calls": 0,
+    "usage_evidence": {
+      "calls": 1,
+      "recorded_calls": 1,
+      "known_tokens": {
+        "prompt_tokens": 4618,
+        "completion_tokens": 3000
+      },
+      "reported_calls": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1
+      },
+      "complete_tokens": {
+        "prompt_tokens": 4618,
+        "completion_tokens": 3000
+      },
+      "schema_version": "praxile.trajectory_usage.v1",
+      "by_purpose": {
+        "content_review_judge": {
+          "calls": 1,
+          "recorded_calls": 1,
+          "known_tokens": {
+            "prompt_tokens": 4618,
+            "completion_tokens": 3000
+          },
+          "reported_calls": {
+            "prompt_tokens": 1,
+            "completion_tokens": 1
+          },
+          "complete_tokens": {
+            "prompt_tokens": 4618,
+            "completion_tokens": 3000
+          }
+        }
+      },
+      "unattributed_calls": 0,
+      "cost_usd": null,
+      "scope": "calls_recorded_by_trajectory_logger"
+    }
+  },
+  "process_exit_code": 0,
+  "transport_retries_configured": 0,
+  "promotion_eligible": false,
+  "report_sha256": "7f275552b67a9c415fb07f6f1103690682a875e02eaac1efbdf6563c07199c74"
+}

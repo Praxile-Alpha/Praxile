@@ -67,3 +67,14 @@ The API now projects bounded HTTP/attempt diagnostics from the nearest transport
 exception cause, without exception messages or response bodies. Tests exercise
 the actual Router/Provider wrapping path with a simulated HTTP 429, invalid fields
 and cyclic causes. This is not evidence that the real earlier failures were 429s.
+
+## Function submission trial
+
+One further, separately recorded call used the same first-candidate input and
+budget with explicit `response_mode=function`. MiniMax returned a named function
+submission with finish reason `tool_calls`, but local item validation rejected it.
+See [protocol trial receipt](docx-review-function-20261021.json). This demonstrates
+transport submission, not valid review or semantic quality. The invocation retained
+the coarse `invalid_item` code; subsequent code splits this into field/ID/verdict/
+reason/quote diagnostics, but cannot retroactively identify which check failed.
+No automatic repair, retries, candidate ranking or promotion followed this trial.
