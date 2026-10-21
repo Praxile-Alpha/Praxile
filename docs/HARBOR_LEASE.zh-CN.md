@@ -28,6 +28,9 @@ Docker environment，不接管 `Trial` 传给 `PraxileAgent` 的环境，不自�
 - collect 在容器内复用 descriptor-relative 读取：拒绝链接和特殊文件、检查根目录
   身份和读取期间变化、限制字节数，以 base64 传输。它不是原子文件系统快照。
 - 生命周期保留本地 trial 日志，不自动删除宿主目录；没有加载或传输模型凭据。
+- 创建容器前写入 ownership.json，记录租约身份、owner PID、固定镜像和每代
+  session 的 Docker daemon ID。reset 不丢弃前代记录；只有独立查询确认资源
+  消失后才记录 cleanup_verified。daemon 改变时拒绝在另一个 daemon 上清理。
 
 ```python
 from pathlib import Path
@@ -41,6 +44,19 @@ async with HarborDockerLease(Path(".praxile/leases"), image=IMAGE_DIGEST) as lea
 ```
 
 ## 验证与未完成项
+
+已有 ownership.json 的租约可用下列只读命令检查（不要求安装 Harbor）：
+
+```bash
+python -m praxile.eval.lease_inspect --lease-dir /absolute/path/to/harbor-lease-ID
+```
+
+命令先验证记录格式和 session 范围，再查询相同 daemon 下该 session 的容器、
+网络和卷；不调用 stop/rm，不修改记录，也不重新启动模型。退出码 0 表示这次
+观测各代资源均不存在；1 表示有资源或 daemon 不匹配；2 表示检查失败、状态未知。
+历史 cleanup_verified 不能替代当前查询；owner PID 只是记录，不能证明进程仍活着
+或资源已经成为孤儿。不得仅凭本结果推导可以删除资源。旧无 ownership.json 的
+租约不猜测 session，也不自动迁移。记录不是签名认证，不防同权限宿主篡改。
 
 资源测试为 `tests/resource/test_harbor_lease.py`。默认不创建 Docker 环境；真实
 测试需显式设置 `PRAXILE_TEST_LEASE_IMAGE`，使用固定版本环境和 `--forked`。

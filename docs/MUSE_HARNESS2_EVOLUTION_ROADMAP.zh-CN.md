@@ -180,6 +180,15 @@ resume 逐项校验后返回原报告，不启动模型或容器。claimed/失�
 fast suite 1229 passed / 12 skipped。这仅补齐已完成结果幂等复用，不是中途动作
 checkpoint 恢复或遗留容器回收，完整 crash/resume 验收仍未完成。
 
+R0-A 遗留资源观测增补（2026-10-21）：租约在 Docker 创建前持久化 ownership.json，
+保存每代 session、daemon ID、owner PID 和阶段；reset 保留历史。新增只读
+`python -m praxile.eval.lease_inspect --lease-dir ...`，实时查询自身标签下容器/
+网络/卷，不根据旧状态推断资源已释放，也不执行清理。daemon 不匹配或查询失败
+保持未知/未确认，清理路径也在 daemon 变化时拒绝 stop。5 项只读检查测试、
+两版 Harbor 各 8 项 fixture 与 2 项真实容器测试通过，包含运行中存在和三代
+清理后不存在；fast suite 1234 passed / 12 skipped。PID 存活、SIGKILL 实测、
+自动遗留回收和中途动作恢复仍未验收，总项继续未完成。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

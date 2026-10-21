@@ -10,6 +10,7 @@ import base64
 from importlib.metadata import version
 import json
 import math
+import os
 from pathlib import Path
 import re
 import shlex
@@ -20,6 +21,7 @@ from .async_ownership import await_owned
 from .lease import ExecutionResult, LocalWorkspaceLease
 from .contracts import InputArtifact
 from .input_snapshot import freeze_public_inputs, verify_public_inputs
+from ..utils import write_json
 
 
 class HarborDockerLease:
@@ -42,6 +44,7 @@ class HarborDockerLease:
         self._root_identity = None
         self._inputs = inputs
         self._input_identity = None
+        self._generations = []
         if inputs:
             self._input_identity = freeze_public_inputs(input_source_root, inputs, self.root / "inputs")
 
@@ -50,6 +53,18 @@ class HarborDockerLease:
         """Agent-visible paths without host locations or private evaluator data."""
         return [{"path": "inputs/" + item.path, "content_digest": item.content_digest}
                 for item in self._inputs]
+
+    def _record_generation(self, phase, *, daemon_id=None):
+        record = next((item for item in self._generations if item["session"] == self._session), None)
+        if record is None:
+            if daemon_id is None:
+                return
+            record = {"session": self._session, "daemon_id": daemon_id}
+            self._generations.append(record)
+        record["phase"] = phase
+        write_json(self.root / "ownership.json", {
+            "schema_version": "praxile.harbor_ownership.v1", "lease_id": self.root.name,
+            "image": self.image, "owner_pid": os.getpid(), "generations": self._generations})
 
     async def _docker(self, *argv):
         async with LocalWorkspaceLease(self.root) as host:
@@ -61,6 +76,9 @@ class HarborDockerLease:
     async def _destroy(self):
         if self._environment is None:
             return
+        ownership = next((item for item in self._generations if item["session"] == self._session), None)
+        if ownership is not None and await self._docker("info", "--format", "{{.ID}}") != ownership["daemon_id"]:
+            raise RuntimeError("Docker daemon changed; refusing cleanup in a different daemon")
         # Harbor stop may swallow errors; independently inspect owned labels.
         await self._environment.stop(delete=True)
         label = "label=com.docker.compose.project=" + self._session
@@ -70,6 +88,7 @@ class HarborDockerLease:
             if remaining:
                 raise RuntimeError("Harbor cleanup left owned " + resource + " resources")
         self._environment = None
+        self._record_generation("cleanup_verified")
 
     async def prepare(self):
         async with self._lifecycle:
@@ -100,6 +119,12 @@ class HarborDockerLease:
             mounts = [{"type": "bind", "source": str(self.root / "inputs"),
                        "target": "/workspace/inputs", "read_only": True}]
         self._session = "praxile-lease-" + uuid.uuid4().hex
+        daemon_id = await self._docker("info", "--format", "{{.ID}}")
+        if not daemon_id:
+            self._state = "failed"
+            raise RuntimeError("Docker daemon identity unavailable")
+        # Persist before any container creation; retain all reset generations.
+        self._record_generation("starting", daemon_id=daemon_id)
         generation = self.root / self._session
         environment_dir = generation / "environment"
         environment_dir.mkdir(parents=True)
@@ -122,6 +147,7 @@ class HarborDockerLease:
                 raise RuntimeError("container Python/workspace preflight failed")
             self._root_identity = tuple(json.loads(result.stdout))
             self._state = "ready"
+            self._record_generation("ready")
         except BaseException:
             self._state = "failed"
             await self._destroy()

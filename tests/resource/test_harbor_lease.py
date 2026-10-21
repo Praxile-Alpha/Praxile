@@ -90,6 +90,21 @@ def test_cleanup_verifies_resources_and_can_retry(tmp_path, monkeypatch):
     asyncio.run(exercise())
 
 
+def test_cleanup_refuses_changed_daemon(tmp_path, monkeypatch):
+    async def exercise():
+        lease = HarborDockerLease(tmp_path, image=IMAGE)
+        environment = SimpleNamespace(stop=AsyncMock())
+        lease._environment, lease._session = environment, "praxile-lease-" + "a" * 32
+        lease._state = "ready"
+        lease._generations = [{"session": lease._session, "daemon_id": "original", "phase": "ready"}]
+        monkeypatch.setattr(lease, "_docker", AsyncMock(return_value="different"))
+        with pytest.raises(RuntimeError, match="different daemon"):
+            await lease.cleanup()
+        environment.stop.assert_not_awaited()
+        assert lease._environment is environment and lease._state == "failed"
+    asyncio.run(exercise())
+
+
 def test_cleanup_repeated_cancellation_keeps_ownership(tmp_path, monkeypatch):
     async def exercise():
         lease = HarborDockerLease(tmp_path, image=IMAGE)
@@ -160,6 +175,10 @@ def test_real_owned_docker_lifecycle(tmp_path):
         try:
             await lease.prepare()
             first_session = lease._session
+            from praxile.eval.lease_inspect import inspect_lease
+            observed = await inspect_lease(lease.root)
+            assert observed["resources_absent"] is False
+            assert observed["generations"][0]["observation"] == "present"
             result = await lease.execute(["python3", "-c",
                 "from pathlib import Path; p=Path('/workspace/inputs'); "
                 "assert sorted(x.name for x in p.iterdir()) == ['task.txt']; "
@@ -200,6 +219,9 @@ def test_real_owned_docker_lifecycle(tmp_path):
         finally:
             await lease.cleanup()
         assert lease._state == "closed"
+        observed = await inspect_lease(lease.root)
+        assert observed["resources_absent"] is True
+        assert len(observed["generations"]) == 3
     asyncio.run(exercise())
 
 
