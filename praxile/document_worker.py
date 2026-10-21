@@ -5,6 +5,14 @@ import zipfile
 from pathlib import Path
 
 
+def docx_body_blocks(path):
+    import docx
+    from docx.oxml.ns import qn
+    document = docx.Document(path)
+    return [" ".join(node.text or "" for node in block.iter(qn("w:t")))
+            for block in document.element.body if block.tag in {qn("w:p"), qn("w:tbl")}]
+
+
 def extract(path, *, start, limit, sheet, offset):
     suffix = path.suffix.lower()
     if suffix in {".xlsx", ".docx"}:
@@ -47,14 +55,8 @@ def extract(path, *, start, limit, sheet, offset):
             document.close()
         kind = "row"
     elif suffix == ".docx":
-        import docx
-        document = docx.Document(path)
         # Paragraph and table traversal follows document order, not two separate lists.
-        from docx.oxml.ns import qn
-        texts = []
-        for block in document.element.body:
-            if block.tag in {qn("w:p"), qn("w:tbl")}:
-                texts.append(" ".join(node.text or "" for node in block.iter(qn("w:t"))))
+        texts = docx_body_blocks(path)
         total = len(texts)
         for index in range(start - 1, min(total, start - 1 + limit)):
             add(index + 1, texts[index])
@@ -126,6 +128,18 @@ def main():
                     document.add_paragraph(block["text"], style="List Bullet" if kind == "bullet" else None)
             document.save(path.parent / "result.docx")
             result = {"status": "success"}
+        elif options.get("operation") == "review_docx_body":
+            from importlib.metadata import version
+            with zipfile.ZipFile(path) as archive:
+                entries = archive.infolist()
+                if (len(entries) > 10000 or len({item.filename for item in entries}) != len(entries)
+                        or sum(item.file_size for item in entries) > 64 * 1024**2):
+                    raise ValueError("document package exceeds review bounds")
+            blocks = docx_body_blocks(path)
+            text = "\n".join(blocks)
+            if len(blocks) > 10000 or len(text) > 200000:
+                raise ValueError("document text exceeds review bounds")
+            result = {"status": "success", "text": text, "parser_version": version("python-docx")}
         else:
             result = {"status": "success", "data": extract(path, **options)}
     except ImportError:

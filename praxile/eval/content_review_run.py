@@ -14,15 +14,26 @@ from .content_review_batch import review_content_batched
 from .v2.manifest import _redact
 
 
-def validate_execution_binding(value):
+def validate_execution_binding(value, *, output_text=None):
     if value is None:
         return None
     fields = {"task_fingerprint", "execution_sha256", "trajectory_sha256", "source_sha256",
               "output_sha256", "evaluator_sha256"}
-    if (not isinstance(value, dict) or set(value) != fields
+    if (not isinstance(value, dict) or set(value) not in (fields, fields | {"output_extraction"})
             or any(not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
-                   for digest in value.values())):
+                   for key, digest in value.items() if key in fields)):
         raise ValueError("invalid execution evidence binding")
+    if "output_extraction" in value:
+        extraction = value["output_extraction"]
+        if (not isinstance(extraction, dict) or set(extraction) != {"profile", "parser_version", "worker_sha256", "text_sha256"}
+                or extraction.get("profile") != "praxile.docx_body_text.v1"
+                or not isinstance(extraction.get("parser_version"), str)
+                or not re.fullmatch(r"[A-Za-z0-9.+_-]{1,80}", extraction["parser_version"])
+                or any(not isinstance(extraction.get(key), str) or not re.fullmatch(r"[a-f0-9]{64}", extraction[key])
+                       for key in ("worker_sha256", "text_sha256"))
+                or (output_text is not None and extraction["text_sha256"] != _digest(output_text))):
+            raise ValueError("invalid output extraction binding")
+        return {**value, "output_extraction": dict(extraction)}
     return dict(value)
 
 
@@ -33,7 +44,7 @@ def run_content_review(config, *, run_id, inputs, total_output_tokens, batch_siz
         raise ValueError("unsafe content review run ID")
     if not isinstance(inputs, dict) or set(inputs) != {"source_text", "output_text", "requirements"}:
         raise ValueError("inputs require source_text, output_text and requirements only")
-    execution_binding = validate_execution_binding(execution_binding)
+    execution_binding = validate_execution_binding(execution_binding, output_text=inputs["output_text"])
     # Require an explicit role; a default coding route is not an independent judge declaration.
     role_config = config.get("model_roles", role, default={})
     if not isinstance(role_config, dict) or not role_config.get("provider") or not role_config.get("model"):

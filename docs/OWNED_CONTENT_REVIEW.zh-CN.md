@@ -1,4 +1,4 @@
-# Native 文本产物的独立内容评审
+# Native 产物的独立内容评审
 
 `praxile.eval.owned_content_review.review_owned_output` 将已回收文本产物交给
 独立 `content_review_judge`。它是开发期内容评审，不是 WorkBuddy/JobBench 官方
@@ -12,7 +12,8 @@ source_path / output_path（必须是任务清单中的路径）。函数检查�
 - task fingerprint、image、公开输入清单与执行报告一致。
 - 执行器已返回，清理已确认，所有 required 输出声明已回收。
 - 所选源输入与输出的文件摘要、输出字节数、原始 Native 轨迹摘要匹配。
-- 文件读取拒绝软/硬链接和特殊文件，限制单文件 1 MiB，输入/输出必须为 UTF-8。
+- 文件读取拒绝软/硬链接和特殊文件，限制单文件 1 MiB，源输入必须为 UTF-8；
+  默认文本输出同样为 UTF-8，DOCX 输出需显式选择下述抽取 profile。
 - 私有 evaluator 存储不能在 execution_dir 内，内容摘要必须匹配任务引用。
 
 只验证被选源文件和输出的实际字节；其余输出只检查回收声明，不声称全量质量
@@ -35,8 +36,8 @@ private_ref 是 evaluator_root 下的相对文件名，content_digest 是该文�
 ```
 
 要求与 source_quote 复用既有严格校验、逐项判断及引用机制。源文件只选一项，
-输出仅支持 text/* 或 application/json；DOCX/PDF 等须另接固定版本抽取器，
-不在这里偷偷转换或截断。
+默认输出只支持 text/* 或 application/json；DOCX 使用显式 profile，PDF 等仍拒绝。
+不根据扩展名偷偷转换或截断。
 
 ```python
 from praxile.eval.owned_content_review import review_owned_output
@@ -60,3 +61,24 @@ loopback endpoint；明确允许材料发送至云端后，调用方才可传 pr
 
 fixture 测试覆盖篡改拒绝、清理前拒绝、私有存储边界、独立角色、摘要持久化及
 重复调用拒绝；不代表真实 judge 准确率、官方成绩或跨任务泛化。
+
+## DOCX 正文抽取
+
+`review_owned_output(..., output_format="docx_body")` 要求任务 OutputContract 的
+media_type 为 application/vnd.openxmlformats-officedocument.wordprocessingml.document。
+验证原始 DOCX 摘要后，受限子进程复用 document_worker 的正文段落/表格解析，
+依次连接全部正文块，不使用 read_document 的 4000 字符分页片段。需要安装
+`praxile[documents]`。源材料仍只接受 UTF-8 文本，不自动抽取 DOCX 源材料。
+
+明确限制：单个原始文件 1 MiB、ZIP 展开 64 MiB、最多 10000 ZIP 条目和正文块、
+正文 200000 字符；超过边界拒绝，不截断。重复 ZIP 条目拒绝。子进程超时 25 秒，
+继承 document_worker 的平台相关 CPU/地址空间限制；这不是敌对文件的完整沙箱。
+
+execution_binding 仍保留原始输出 SHA-256，额外保存 output_extraction：
+profile=praxile.docx_body_text.v1、python-docx 版本、worker 代码 SHA-256 和抽取
+文本 SHA-256。持久化读取时再次核对抽取文本摘要；无此字段的旧文本评审保持兼容。
+版本是运行时记录而非自动固定安装，严格对比实验仍需冻结解析依赖。
+
+抽取只覆盖正文和表格文本，不覆盖页眉、批注、修订解释、图片或排版；这些要求
+不能从正文评审推断通过。真实解析测试覆盖长段落、表格顺序、超限与损坏文件，
+桥接 fixture 覆盖显式启用、原始字节篡改拒绝、抽取证据持久化和加载时校验。

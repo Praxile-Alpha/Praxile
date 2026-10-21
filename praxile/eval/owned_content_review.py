@@ -46,7 +46,7 @@ def _reader(root):
 
 
 def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_root: Path,
-                         source_path: str, output_path: str):
+                         source_path: str, output_path: str, output_format="text"):
     if not isinstance(task, BenchmarkTask):
         raise ValueError("typed benchmark task required")
     if (task.evaluator.name, task.evaluator.version) != ("praxile-content-review", "1"):
@@ -57,7 +57,11 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     output = next((item for item in task.outputs if item.path == output_path), None)
     if source is None or output is None:
         raise ValueError("source and output must be declared in the frozen task")
-    if not (output.media_type.startswith("text/") or output.media_type == "application/json"):
+    if output_format not in {"text", "docx_body"}:
+        raise ValueError("unsupported output extraction profile")
+    if output_format == "docx_body" and output.media_type != "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        raise ValueError("DOCX extraction requires declared DOCX media type")
+    if output_format == "text" and not (output.media_type.startswith("text/") or output.media_type == "application/json"):
         raise ValueError("binary output requires a separately verified extraction pipeline")
     read = _reader(execution_dir)
     report_raw = read("execution.json")
@@ -98,19 +102,28 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     evaluator = _json(evaluator_raw)
     if set(evaluator) != {"requirements"} or not isinstance(evaluator["requirements"], list):
         raise ValueError("private evaluator requires a requirements array only")
-    inputs = {"source_text": source_raw.decode("utf-8"), "output_text": output_raw.decode("utf-8"),
+    extraction = None
+    if output_format == "docx_body":
+        from .document_review_extraction import extract_docx_body
+        output_text, extraction = extract_docx_body(output_raw)
+    else:
+        output_text = output_raw.decode("utf-8")
+    inputs = {"source_text": source_raw.decode("utf-8"), "output_text": output_text,
               "requirements": evaluator["requirements"]}
     binding = {"task_fingerprint": task.fingerprint.removeprefix("sha256:"),
         "execution_sha256": _sha(report_raw), "trajectory_sha256": _sha(trajectory_raw),
         "source_sha256": _sha(source_raw), "output_sha256": _sha(output_raw),
         "evaluator_sha256": _sha(evaluator_raw)}
+    if extraction is not None:
+        binding["output_extraction"] = extraction
     return inputs, binding
 
 
 def review_owned_output(config, task, *, execution_dir, evaluator_root, source_path, output_path,
-                        run_id, total_output_tokens, batch_size=4, private=True, timeout_per_call=90):
+                        run_id, total_output_tokens, batch_size=4, private=True, timeout_per_call=90,
+                        output_format="text"):
     inputs, binding = prepare_owned_review(task, execution_dir=execution_dir, evaluator_root=evaluator_root,
-                                          source_path=source_path, output_path=output_path)
+                                          source_path=source_path, output_path=output_path, output_format=output_format)
     return run_content_review(config, run_id=run_id, inputs=inputs, execution_binding=binding,
         total_output_tokens=total_output_tokens, batch_size=batch_size, private=private,
         timeout_per_call=timeout_per_call)

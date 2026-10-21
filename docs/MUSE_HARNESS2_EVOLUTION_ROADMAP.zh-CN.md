@@ -178,6 +178,13 @@ run ID 不重放。仅支持显式 praxile-content-review v1 开发评审、单�
 这是本地一致性与调用边界证据，非签名认证、真实 judge 准确率或官方成绩。
 详见 `OWNED_CONTENT_REVIEW.zh-CN.md`，路线图总项保持未完成。
 
+R0-A DOCX 内容桥接增补（2026-10-21）：owned_content_review 新增显式 docx_body
+输出抽取，原始产物摘要校验后在受限子进程复用正文/表格解析；超限拒绝、不分页
+截断。评审 manifest 绑定原始字节、解析器版本、worker 代码与抽取文本摘要，读取
+时校验抽取文本。源输入仍为 UTF-8，不覆盖页眉/图片/修订/视觉，也不是官方评分。
+真实解析和既有文档工具回归 11 passed，桥接/持久化评审 fixture 32 passed；
+没有真实 judge 调用或新增 benchmark 成绩，完整 Office 验收仍未完成。
+
 R0-A 终态幂等恢复增补（2026-10-21）：owned runner/CLI 新增 run_id 与 resume。
 排他落盘 claim 在执行前占用身份；相同 ID 不带 resume 不得再次执行，计划变化
 不得复用。成功回收并确认清理后，以执行报告、轨迹、输入和输出摘要封存终态；
