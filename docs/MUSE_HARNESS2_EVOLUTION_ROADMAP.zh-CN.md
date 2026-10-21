@@ -390,6 +390,13 @@ inventory，与宿主留存清单按相对路径、字节数和 SHA-256 比较�
 评分器实际读取证明或内容正确性。详见 results/workbuddy-artifact-identity-20261021.md。
 官方 verifier 隔离与其他任务族仍缺，总项保持未完成。
 
+R0-A 租约命令期限增补（2026-10-21）：独立 Harbor 租约使用受控环境子类，
+未指定 timeout 的 Compose 命令默认 120 秒；已有任务期限不缩短。镜像 OS 查询
+改用持有进程组的 LocalWorkspaceLease，超时失败并回收。真实阻塞客户端测试
+验证终止；启停后仍检查 session 资源，不能把客户端退出当作 daemon 资源消失。
+这不是统一生命周期硬截止，上传/同步初始化与累计时间仍待覆盖，因此整体环境
+协议项不勾选。实现及边界见 HARBOR_LEASE.zh-CN.md。
+
 ### R0-C JobBench Adapter
 
 工具 profile v2 真实设计返回完整文本但 JSON 解析失败（未进入动作校验），无候选。

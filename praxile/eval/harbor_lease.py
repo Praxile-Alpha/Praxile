@@ -113,7 +113,7 @@ class HarborDockerLease:
                 raise
 
     async def _prepare_owned(self):
-        from harbor.environments.docker.docker import DockerEnvironment
+        from .owned_docker_environment import OwnedDockerEnvironment
         from harbor.models.task.config import EnvironmentConfig
         from harbor.models.trial.paths import TrialPaths
 
@@ -143,7 +143,7 @@ class HarborDockerLease:
         environment_dir.mkdir(parents=True)
         paths = TrialPaths(generation / "trial")
         paths.mkdir()
-        self._environment = DockerEnvironment(
+        self._environment = OwnedDockerEnvironment(
             environment_dir=environment_dir, environment_name=self._session,
             session_id=self._session, trial_paths=paths, keep_containers=False,
             task_env_config=EnvironmentConfig(docker_image=self.image, workdir="/workspace"),
