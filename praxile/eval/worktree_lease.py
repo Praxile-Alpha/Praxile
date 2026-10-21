@@ -78,6 +78,7 @@ class WorktreeLease(LocalWorkspaceLease):
                 self._state = "failed"
                 raise
             self.root = self.prepared.workspace_root
+            self._bind_root_identity()
             self._state = "ready"
 
     async def cleanup(self) -> None:

@@ -92,6 +92,8 @@ def test_cancellation_and_busy_cleanup(tmp_path):
                 await asyncio.sleep(0.01)
             with pytest.raises(RuntimeError):
                 await lease.cleanup()
+            with pytest.raises(RuntimeError, match="idle ready"):
+                await lease.collect("out.txt")
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task

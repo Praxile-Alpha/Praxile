@@ -6,10 +6,11 @@ import math
 import os
 import signal
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Awaitable, Callable, Protocol, Sequence
 
 from .async_ownership import await_owned
+from .artifact_read import DEFAULT_ARTIFACT_BYTES, read_artifact
 
 
 @dataclass(frozen=True)
@@ -24,7 +25,7 @@ class EnvironmentLease(Protocol):
     async def prepare(self) -> None: ...
     async def reset(self) -> None: ...
     async def execute(self, argv: Sequence[str], *, timeout: float) -> ExecutionResult: ...
-    async def collect(self, relative_path: str) -> bytes: ...
+    async def collect(self, relative_path: str, *, max_bytes: int = DEFAULT_ARTIFACT_BYTES) -> bytes: ...
     async def cancel(self) -> None: ...
     async def cleanup(self) -> None: ...
 
@@ -41,10 +42,15 @@ class LocalWorkspaceLease:
         self.root = root.resolve(strict=True)
         if not self.root.is_dir():
             raise ValueError("workspace must be a directory")
+        self._bind_root_identity()
         self._release = release
         self._process: asyncio.subprocess.Process | None = None
         self._state = "new"
         self._busy = False
+
+    def _bind_root_identity(self) -> None:
+        info = self.root.stat()
+        self._root_identity = (info.st_dev, info.st_ino)
 
     async def prepare(self) -> None:
         if self._state == "closed":
@@ -110,16 +116,10 @@ class LocalWorkspaceLease:
             pass
         await self._process.wait()
 
-    async def collect(self, relative_path: str) -> bytes:
-        if self._state != "ready":
-            raise RuntimeError("lease is not ready")
-        path = PurePosixPath(relative_path)
-        if not relative_path or "\\" in relative_path or path.is_absolute() or ".." in path.parts or str(path) != relative_path:
-            raise ValueError("artifact path must be normalized and relative")
-        target = (self.root / relative_path).resolve(strict=True)
-        if not target.is_relative_to(self.root) or not target.is_file():
-            raise ValueError("artifact must be a file inside workspace")
-        return target.read_bytes()
+    async def collect(self, relative_path: str, *, max_bytes: int = DEFAULT_ARTIFACT_BYTES) -> bytes:
+        if self._state != "ready" or self._busy:
+            raise RuntimeError("artifact collection requires an idle ready lease")
+        return read_artifact(self.root, relative_path, root_identity=self._root_identity, max_bytes=max_bytes)
 
     async def cleanup(self) -> None:
         if self._state == "closed":
