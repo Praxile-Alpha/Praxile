@@ -296,6 +296,8 @@ class AgentRuntime:
         checkpoint = self.store.load_checkpoint(task_id)
         if not checkpoint:
             raise FileNotFoundError(f"No checkpoint found for task: {task_id}")
+        if "pending_action" in checkpoint["trajectory"]:
+            raise ValueError("checkpoint contains an unconfirmed action; inspect tool side effects before starting a new run")
         logger = TrajectoryLogger.from_data(checkpoint["trajectory"])
         frozen_contract = logger.data.get("deliverable_contract")
         requested_contract = self.tools.deliverable_contract
@@ -1065,6 +1067,17 @@ class AgentRuntime:
                     )
                     self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
                     return "needs_human", "Run cancelled by Web Console stop request."
+                # Persist intent before dispatch; a crash cannot turn an unknown
+                # tool outcome into a silently replayable checkpoint.
+                logger.data["pending_action"] = {
+                    "schema_version": 1,
+                    "step": len(logger.data["actions"]) + 1,
+                    "action_type": action_type,
+                    "action_sha256": hashlib.sha256(json.dumps(
+                        action, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
+                    "status": "outcome_unconfirmed",
+                }
+                self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {}, force=True)
                 if action_type == "subtask_reflect":
                     decision = self.tools.safety.check_tool_call(action_type, action,
                         context={"task_id": logger.task_id, "step": len(logger.data["actions"]) + 1})
@@ -1137,7 +1150,12 @@ class AgentRuntime:
                                   if action_type == "subtask_note" else action)
                 messages.append({"role": "assistant", "content": json.dumps(history_action, ensure_ascii=False)})
                 messages.append({"role": "user", "content": "Observation:\n" + json.dumps(observation, ensure_ascii=False)})
-                self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {})
+                pending_action = logger.data.pop("pending_action")
+                try:
+                    self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {}, force=True)
+                except BaseException:
+                    logger.data["pending_action"] = pending_action
+                    raise
                 if action_type == "finish":
                     status = action.get("status", "completed")
                     if status not in {"completed", "needs_human", "failed"}:
@@ -1342,12 +1360,13 @@ class AgentRuntime:
         *,
         messages: list[dict[str, str]],
         context: dict[str, Any],
+        force: bool = False,
     ) -> None:
         if not self.config.get("checkpoint", "enabled", default=True):
             return
         every_steps = max(1, int(self.config.get("checkpoint", "every_steps", default=1) or 1))
         action_count = len(logger.data.get("actions", []))
-        if action_count and action_count % every_steps != 0:
+        if not force and action_count and action_count % every_steps != 0:
             return
         checkpoint = {
             "schema_version": 1,

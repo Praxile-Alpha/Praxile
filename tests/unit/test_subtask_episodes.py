@@ -102,4 +102,5 @@ def test_runtime_records_explicit_boundaries_and_tool_references(tmp_path):
     assert episode["action_refs"] == [logger.data["actions"][1]["action_id"]]
     assert logger.data["cost"]["tool_calls"] == 1
     assert runtime.tools.execute.call_count == 1
-    assert runtime._write_checkpoint.call_count == 3
+    assert runtime._write_checkpoint.call_count == 6
+    assert all(call.kwargs["force"] is True for call in runtime._write_checkpoint.call_args_list)

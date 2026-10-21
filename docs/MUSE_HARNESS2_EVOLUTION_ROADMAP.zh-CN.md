@@ -222,6 +222,16 @@ Harbor 0.18.0 / 0.22.0 各 14 项资源测试通过；fast suite 为 1249 passed
 动作去重、工具副作用确认、中途续跑、自动 GC 及完整 crash/resume 仍未完成，
 因此环境协议总项继续不勾选。使用限制见 OWNED_NATIVE_RUNNER.zh-CN.md。
 
+R0-A Runtime 动作恢复增补（2026-10-21）：启用 checkpoint 时，每次合法动作
+分发前保存 pending_action，返回后连同 observation 强制保存完成态，不受步骤
+采样影响；意图写失败不执行工具，未确认动作恢复在模型调用前拒绝。真实 POSIX
+子进程在副作用后 SIGKILL 的测试已覆盖跨进程读取拒绝；另有写入失败与采样测试。
+fast suite 1249 passed / 13 skipped；动作恢复、经验恢复、交付约束与 Native
+worker 共 41 项资源测试通过（本地 HTTP fixture，无外部模型调用）。
+此机制不提供 exactly-once、断电事务或自动重放，不覆盖全部前后处理阶段；旧
+checkpoint 和禁用 checkpoint 的运行不获得追溯保障，Native 中途恢复仍未开放。
+详见 RUNTIME_ACTION_RECOVERY.zh-CN.md，完整 crash/resume 总项继续不勾选。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
