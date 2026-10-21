@@ -2,7 +2,36 @@
 from collections.abc import Mapping
 from copy import deepcopy
 import math
+import hashlib
+import json
 from .behavior_probe import probe_repetition
+
+
+def retained_local_evidence(episode):
+    """Keep auditable observations even when no reusable experience is justified."""
+    behavior = episode["behavior_probe"]
+    observations = []
+    if behavior.get("status") == "measured":
+        observations.append({"kind": "behavior_measurement",
+            "measurement": deepcopy(behavior["measurement"]),
+            "baseline": behavior["baseline"], "candidate": behavior["candidate"],
+            "delta": behavior["delta"], "event_evidence": deepcopy(behavior["event_evidence"]),
+            "verdict": behavior["verdict"],
+            "comparison_invariants_verified": behavior["comparison_invariants_verified"],
+            "candidate_exposure_verified": behavior["candidate_exposure_verified"]})
+    difference = episode["observed_difference"]
+    for metric, delta in difference["measured_deltas"].items():
+        observations.append({"kind": "run_metric_delta", "metric": metric, "delta": delta,
+                             "behavior_or_quality_improvement_proven": False})
+    payload = {"episode_id": episode["episode_id"], "baseline": deepcopy(episode["baseline"]),
+               "candidate": deepcopy(episode["candidate"]), "observations": observations,
+               "task_verdict": episode["verdict"], "confounders": list(episode["confounders"])}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                                       allow_nan=False).encode()).hexdigest()
+    return {"schema_version": "praxile.retained_local_evidence.v1", **payload,
+            "evidence_sha256": digest, "disposition": "retained_for_review" if observations else "NO_ENTRY",
+            "causal_attribution": False, "transfer_validated": False,
+            "promotion_eligible": False, "raw_trace_attested": False}
 
 
 def improvement_episodes(experiment_id, candidate, baseline, treatment, comparison, invariant_check,
@@ -76,4 +105,6 @@ def improvement_episodes(experiment_id, candidate, baseline, treatment, comparis
             "next_action": "collect missing evidence" if confounders else "repeat and perform component ablation",
             "experience_entry": "NO_ENTRY",
         })
+    for episode in episodes:
+        episode["retained_local_evidence"] = retained_local_evidence(episode)
     return episodes

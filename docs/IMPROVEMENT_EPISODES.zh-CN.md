@@ -1,5 +1,22 @@
 # 配对实验解释记录
 
+## 被拒候选的局部证据
+
+每个 ImprovementEpisode 增加 `retained_local_evidence`，经现有 A/B analyze/report
+路径持久化，不新建长期经验资产。记录绑定 episode、baseline/candidate 的 run、
+manifest 与 trace 引用；若有有效行为测量，保留数值差异及 event_evidence；
+tool_calls/latency/cost 的可比较差值单列为 run_metric_delta，不认作行为收益。
+
+任务 verdict 与局部行为 verdict 分开：任务 hurt、局部 repetition helped 可以
+同时存在。confounded 的观察也保留混杂标记，不转成因果结论。没有可测观察时
+disposition 为 NO_ENTRY；有观察时为 retained_for_review。原 experience_entry
+仍为 NO_ENTRY，promotion_eligible、causal_attribution、transfer_validated 均为 false。
+
+evidence_sha256 对引用、观察、任务 verdict 和混杂因素作确定性摘要，不签名、不
+证明 trace 真实性，也不验证事件引用实际存在；原始证据校验仍由调用链负责。
+目前不自动生成新经验，不把被拒候选的局部数值改善当成可迁移知识。需要用户
+审阅、后续重复/消融与独立结果验证，不能仅靠 LLM confidence 升级。
+
 ## 开发任务组合实验
 
 `praxile.eval.v2.development_cycle.DevelopmentContextCycle(state_root, event_store)`

@@ -865,6 +865,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
   这不证明完整环境/抽取器/语义等价，也不验证后续机制收益；见
   [状态对齐证据](results/docx-read-alignment-20261021.json)。完整语义对齐仍未完成。
 - [ ] 被拒候选仍保留可用的局部证据；新经验必须引用具体差异，允许 NO_ENTRY。
+  局部记录增补：ImprovementEpisode 持久化 retained_local_evidence，绑定配对
+  run/manifest/trace 与可测行为的事件引用；任务 verdict 与局部行为 verdict
+  分开，hurt/confounded 不丢观察，缺观察返回 NO_ENTRY。确定性摘要用于记录
+  完整性，不作 trace 认证。仍不自动生成/晋升经验；独立局部效果复验与新经验
+  生成闭环未完成，本总项保持未勾选。见 IMPROVEMENT_EPISODES.zh-CN.md。
 - [ ] 不确定的机制归因触发单组件消融/重复试验，不能靠更高 LLM confidence 消除混杂。
 
 ### R2-C 自动候选与执行组件
