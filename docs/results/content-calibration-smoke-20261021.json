@@ -1,0 +1,122 @@
+{
+  "schema_version": "praxile.public_content_calibration_trial.v1",
+  "scope": "authored_development_smoke_cases_not_heldout",
+  "model": "MiniMax-M3.1-Flash",
+  "request_options": {
+    "reasoning_effort": "low"
+  },
+  "report": {
+    "schema_version": "praxile.content_calibration.v1",
+    "suite_sha256": "59043c7972977c70f9db5c20eb923c0cbe2ea0ae028ee673e3f4c7e267155dfa",
+    "scope": "caller_labeled_development_cases",
+    "reference_labels_verified": false,
+    "case_count": 4,
+    "max_logical_requests": 4,
+    "max_requested_output_tokens": 4800,
+    "role": "content_review_judge",
+    "response_mode": "function",
+    "citation_mode": "units",
+    "timeout_per_case": 60,
+    "rows": [
+      {
+        "case_id": "case-01",
+        "requirement_id": "r1",
+        "expected": "preserved",
+        "predicted": "preserved",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "c4c20e35ce04266bf78b8823c31779e48526e4754659be258ce35f90cebf6cd3"
+      },
+      {
+        "case_id": "case-02",
+        "requirement_id": "r1",
+        "expected": "missing",
+        "predicted": "missing",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "5ee1ea90e8adffbef712141a4ceefae35e9fd1783ecc411a9dc729cdf3948fc4"
+      },
+      {
+        "case_id": "case-03",
+        "requirement_id": "r1",
+        "expected": "contradicted",
+        "predicted": "contradicted",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "38f7ce40e33dafb25f6cad46ae0d398e5d883a3ce51c3886fccdd61527c785e7"
+      },
+      {
+        "case_id": "case-04",
+        "requirement_id": "r1",
+        "expected": "missing",
+        "predicted": "missing",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "0c8eb3c8396ef331efe615f13abd302f2f070dc466f3315caaeefc18dd223457"
+      }
+    ],
+    "status": "completed",
+    "promotion_eligible": false,
+    "official_evaluation": false,
+    "requirement_count": 4,
+    "decided_count": 4,
+    "abstention_count": 0,
+    "correct_count": 4,
+    "coverage": 1.0,
+    "accuracy_including_abstention": 1.0,
+    "conditional_accuracy": 1.0,
+    "preserved_precision": 1.0,
+    "false_preserved_count": 0,
+    "false_preserved_rate": 0.0,
+    "probability_calibration_error": null
+  },
+  "cost": {
+    "model_calls": 4,
+    "prompt_tokens": 3816,
+    "completion_tokens": 610,
+    "tool_calls": 0,
+    "usage_evidence": {
+      "calls": 4,
+      "recorded_calls": 4,
+      "known_tokens": {
+        "prompt_tokens": 3816,
+        "completion_tokens": 610
+      },
+      "reported_calls": {
+        "prompt_tokens": 4,
+        "completion_tokens": 4
+      },
+      "complete_tokens": {
+        "prompt_tokens": 3816,
+        "completion_tokens": 610
+      },
+      "schema_version": "praxile.trajectory_usage.v1",
+      "by_purpose": {
+        "content_review_judge": {
+          "calls": 4,
+          "recorded_calls": 4,
+          "known_tokens": {
+            "prompt_tokens": 3816,
+            "completion_tokens": 610
+          },
+          "reported_calls": {
+            "prompt_tokens": 4,
+            "completion_tokens": 4
+          },
+          "complete_tokens": {
+            "prompt_tokens": 3816,
+            "completion_tokens": 610
+          }
+        }
+      },
+      "unattributed_calls": 0,
+      "cost_usd": null,
+      "scope": "calls_recorded_by_trajectory_logger"
+    }
+  },
+  "process_exit_code": 0,
+  "transport_retries_configured": 0,
+  "reference_labels_sent_to_judge": false,
+  "report_sha256": "2838665a02792d36c4fcb0791574fd9ef96e5ba7bfaa87dc8ed20a3752600db4",
+  "promotion_eligible": false
+}

@@ -100,6 +100,23 @@ function 模式使用独立 `submit_content_review_units_v1` contract。
 与判断相关，更不证明保留要求成立；语义校准与人工复核依旧需要。该模式不做
 OCR、原始 DOCX 来源认证、完整抽取证明，也不改变晋升门禁。
 
+## 参考标签校准
+
+`praxile.eval.content_calibration.calibrate_content_review` 接收 1..32 个显式
+开发样例及每例固定输出额度。每例包含 source_text、output_text、requirements
+及 expected 参考标签。全部输入和标签覆盖在调用前验证；expected、case ID
+不进入 judge 消息，只在返回后对照。每例最多一次逻辑请求，不自动修复或重试。
+
+报告区分协议校验与语义参考一致性：记录 decided/abstention、全体准确率
+（弃权计不正确）、有判定时的条件准确率、preserved precision 与错误保留率。
+uncertain 或调用失败保留为弃权；无分母的指标是 null。无置信概率时不伪造
+概率校准误差，probability_calibration_error 保持 null；错误保留率不是实际
+promotion 率。标签只是调用方提供的参考，不由接口认证。
+
+`tests/fixtures/content_review_development.json` 是人工编写的四个开发冒烟样例，
+不是独立人工审核集或 held-out 数据。一次四例匹配不能证明真实复合要求的
+准确性、统计可靠性或广泛抗注入能力，也不会改变生产策略或晋升状态。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。
