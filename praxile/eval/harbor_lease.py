@@ -180,6 +180,20 @@ class HarborDockerLease:
         finally:
             self._busy = False
 
+    async def run_adapter(self, agent, instruction, context):
+        """Keep the environment exclusively owned across native setup and run."""
+        if self._state != "ready" or self._busy:
+            raise RuntimeError("adapter execution requires an idle ready lease")
+        self._busy = True
+        try:
+            await agent.setup(self._environment)
+            await agent.run(instruction, self._environment, context)
+        except BaseException:
+            await await_owned(self.cancel(), propagate_cancellation=False)
+            raise
+        finally:
+            self._busy = False
+
     async def collect(self, relative_path, *, max_bytes=artifact_read.DEFAULT_ARTIFACT_BYTES):
         if type(max_bytes) is not int or not 1 <= max_bytes <= 256 * 1024**2:
             raise ValueError("artifact read limit must be 1..256 MiB")

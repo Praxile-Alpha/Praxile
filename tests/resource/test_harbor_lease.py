@@ -36,6 +36,38 @@ def test_public_input_view_does_not_expose_host_references(tmp_path):
     assert lease.public_inputs == expected
 
 
+def test_adapter_owns_exclusive_execution_and_cancellation(tmp_path, monkeypatch):
+    async def exercise():
+        lease = HarborDockerLease(tmp_path, image=IMAGE)
+        lease._state = "ready"
+        lease._environment = object()
+        started = asyncio.Event()
+        async def setup(environment):
+            assert environment is lease._environment
+            started.set()
+            await asyncio.Event().wait()
+        agent = SimpleNamespace(setup=setup, run=AsyncMock())
+        destroyed = AsyncMock()
+        monkeypatch.setattr(lease, "_destroy", destroyed)
+        pending = asyncio.create_task(lease.run_adapter(agent, "task", object()))
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            with pytest.raises(RuntimeError):
+                await lease.execute(["true"], timeout=1)
+            with pytest.raises(RuntimeError):
+                await lease.reset()
+            with pytest.raises(RuntimeError):
+                await lease.cleanup()
+        finally:
+            pending.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+        destroyed.assert_awaited_once()
+        agent.run.assert_not_awaited()
+        assert lease._state == "failed" and not lease._busy
+    asyncio.run(exercise())
+
+
 def test_cleanup_verifies_resources_and_can_retry(tmp_path, monkeypatch):
     async def exercise():
         lease = HarborDockerLease(tmp_path, image=IMAGE)

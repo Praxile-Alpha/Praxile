@@ -136,6 +136,21 @@ public_inputs 公开投影仅返回 `inputs/...` 与摘要，不暴露 source_re
 覆盖与新增由只读挂载拒绝；6 项 fixture 覆盖公开投影副本和生命周期边界。
 这是实际文件工具接入证据，不是完整模型任务或正式 runner 接入验收。
 
+R0-A 独占 Native runner 增补（2026-10-21）：新增 run_owned_native Python
+入口，把 BenchmarkTask 公开投影、只读输入、现有 PraxileAgent/AgentRuntime、
+轨迹回收、输出合同逐项采集和租约清理接成 one-shot 执行链路；run_adapter
+在 setup/run 期间独占环境。执行报告区分 executor_returned、产物回收、清理
+确认及 official_evaluation=not_run，不把轨迹存在或输出存在当成质量通过。
+两版 Harbor 的真实 Docker + 本机 fixture 模型验证 read_file/edit_file、产物
+摘要和轨迹留存；私有 evaluator sentinel 与来源名不进入请求。0.18 的 runner
+和 lease 合计 11 项通过，0.22 runner 2 项及 lease fixture 7 项通过，fast suite
+1202 passed / 12 skipped。固定 worker wheel 摘要
+`6c55bbdce7342c823b47c6e66d85a1ab35f7a4c9983484cc4920050b4cfa9f9b`；
+由本地工作树构建（含既有未提交文档改动），不声称为干净发布构建。旧 dist
+wheel 缺少监督模块的失败已保留，未计入模型效果。无付费模型调用、无官方分数。
+旧 Trial/mini-SWE 路径不变，CLI/resume、私有评分阶段和全部 benchmark 验收仍缺。
+见 `OWNED_NATIVE_RUNNER.zh-CN.md`。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
