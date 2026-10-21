@@ -680,6 +680,13 @@ loopback，云端公开材料需 --public；完整响应默认不存。fixture �
 
 ## 9. 阶段 R3：证明竞争力，而非只完成接口
 
+跨供应商评审增补（2026-10-21）：MiniMax 既有 first 组产物由独立 DeepSeek
+deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均被 judge 判为保留。
+已保留 thinking/forced-tool-choice 不兼容的三次 HTTP 400，改为显式非思考模式
+后新建配对，不覆盖旧报告。与 MiniMax 的内容判断存在分歧，不能以更乐观评分
+代替参考真值；完整校准、质量和收益验证仍未完成。见
+[跨供应商记录](results/deepseek-content-review-20261021.md)。
+
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。

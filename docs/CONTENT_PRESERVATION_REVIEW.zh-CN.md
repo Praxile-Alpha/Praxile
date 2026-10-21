@@ -183,6 +183,43 @@ python -m praxile.eval.content_review_files \
 即使所有文件自洽也不是防伪签名；同时改写完整输入和证据链的攻击不属于
 该校验的认证范围。最终仍标记 provenance_verified=False、promotion_eligible=False。
 
+## MiniMax 执行、DeepSeek 独立评审
+
+执行器和评审器可以使用不同供应商。保持 coding/executor 的 MiniMax 路由不变，
+只在实验配置中增加以下 provider 和 role（合并到已有节点，不覆盖其他模型）：
+
+```json
+{
+  "model_providers": {
+    "deepseek": {
+      "type": "openai_compatible",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "max_retries": 0,
+      "models": [{"name": "deepseek-flash", "supports_tools": true}]
+    }
+  },
+  "model_roles": {
+    "content_review_judge": {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "request_options": {"thinking": {"type": "disabled"}}
+    }
+  }
+}
+```
+
+2026-10-21 核对[官方更新记录](https://api-docs.deepseek.com/updates/)，
+`deepseek-flash` 指向 DeepSeek-V4.1-Flash-1017；这是可变别名，不是永久固定版本。
+复现实验应保留核验日期、模型列表返回及配置摘要，不只记录“最新模型”。
+当前评审使用命名函数强制提交。真实协议探测确认，启用 thinking 时 DeepSeek
+拒绝这种 tool_choice（HTTP 400）；因此本配置显式禁用 thinking，而不是绕过
+本地 schema、引用或覆盖校验。模型密钥仅从环境注入，不放进 JSON 或提交 Git。
+
+该角色仅覆盖本内容评审接口，不会自动替换所有 semantic judge 或官方评分器。
+供应商分离减少了同模型自评依赖，但不证明 judge 已校准或评判正确。已有产物
+可单独评审，不需要重新调用 MiniMax 执行器；旧评审结果保留，新结果单独编号。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。
