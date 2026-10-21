@@ -80,6 +80,19 @@ def _validate_inputs(source_text, output_text, requirements, role, private,
     return expected
 
 
+VERDICT_POLICY_VERSION = "praxile.content_verdict_policy.v1"
+VERDICT_POLICY = (
+    "preserved: every material obligation in the requirement is retained, including responsible roles, "
+    "deadlines, thresholds, prerequisites and exceptions; a partial match is not preserved. "
+    "missing: at least one required detail is omitted, with no explicit incompatible statement. "
+    "contradicted: the output explicitly conflicts with a required fact or obligation, for example "
+    "swapped roles, changed deadlines, negated prerequisites or reversed exceptions. "
+    "Omission alone is missing, not contradicted. When both omission and explicit conflict occur, "
+    "use contradicted and explain both. uncertain: ambiguity or insufficient evidence prevents "
+    "a supported judgment. Do not fill gaps from general knowledge. "
+)
+
+
 def review_content(router, logger, *, source_text, output_text, requirements,
                    role="content_review_judge", private=True, max_tokens=3000,
                    timeout=90, response_mode="text", response_checkpoint=None,
@@ -126,6 +139,8 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         "transport_attempts_verified": False,
         "response_mode": response_mode,
         "citation_mode": citation_mode,
+        "verdict_policy_version": VERDICT_POLICY_VERSION,
+        "verdict_policy_sha256": _digest(VERDICT_POLICY),
     }
     if contract is not None:
         record["response_contract_sha256"] = _digest(json.dumps(contract, sort_keys=True))
@@ -148,7 +163,8 @@ def review_content(router, logger, *, source_text, output_text, requirements,
                    "output_quote must be an exact nonempty substring of output_text for preserved/contradicted, "
                    "and may be empty for missing/uncertain. ")
                 + "verdict is preserved, missing, contradicted, or uncertain. "
-                "Give a short reason, compare meaning rather than keywords. "
+                + VERDICT_POLICY
+                + "Give a short reason, compare meaning rather than keywords. "
                 "Use uncertain when evidence is insufficient; never infer task success or promotion."
                 + (" Submit once through the provided function; it only submits a result and executes no tool."
                    if contract is not None else ""))},

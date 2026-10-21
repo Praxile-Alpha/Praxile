@@ -693,6 +693,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 与新 DeepSeek 报告离线定位四项分歧，旧格式绑定能力明确降级披露，无新模型
 调用。见[分歧记录](results/judge-disagreement-20261021.json)；人工校准仍待完成。
 
+复合要求校准增补：新增六个显式作者标签的开发样例，DeepSeek 真实调用匹配
+5/6，期限遗漏被判为冲突；未出现误保留，不外推准确率。补充版本化 verdict
+定义，记录政策摘要、拒绝普通 A/B 混比政策，跨 judge 审查披露差异；新提示词
+尚未真实复验。见[校准收据](results/deepseek-compound-calibration-20261021.json)。
+
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。

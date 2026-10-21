@@ -1,0 +1,140 @@
+{
+  "schema_version": "praxile.public_compound_calibration.v1",
+  "model": "deepseek-flash",
+  "request_options": {
+    "thinking": {
+      "type": "disabled"
+    }
+  },
+  "scope": "authored_compound_development_cases_not_heldout",
+  "suite_file_sha256": "4826cc07d9a5a5aede562fe2cd77d2949b458f46b44ade1287ed32d2929a4f81",
+  "evaluated_policy": "legacy_unversioned_before_explicit_verdict_definitions",
+  "new_policy_real_validation": "not_run",
+  "report": {
+    "schema_version": "praxile.content_calibration.v1",
+    "suite_sha256": "9c42b001bc3bf1bd691d59cac36a0b677eb3d98c93981680f27ebca47339a55d",
+    "scope": "caller_labeled_development_cases",
+    "reference_labels_verified": false,
+    "case_count": 6,
+    "max_logical_requests": 6,
+    "max_requested_output_tokens": 7200,
+    "role": "content_review_judge",
+    "response_mode": "function",
+    "citation_mode": "units",
+    "timeout_per_case": 60,
+    "rows": [
+      {
+        "case_id": "compound-01",
+        "requirement_id": "r1",
+        "expected": "missing",
+        "predicted": "missing",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "8c9cd51e6d4eb778bb6c21ab0b71aee95622ffb02f2094121d5807058fff207a"
+      },
+      {
+        "case_id": "compound-02",
+        "requirement_id": "r1",
+        "expected": "preserved",
+        "predicted": "preserved",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "6a8dfb4d9e2787f20e46cfaec401c4967d3fe992edc17271e4b792805e342943"
+      },
+      {
+        "case_id": "compound-03",
+        "requirement_id": "r1",
+        "expected": "contradicted",
+        "predicted": "contradicted",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "87581cdea30b641f8d2fce8631f569a41e0161ffdd3d5cdf14cec41f3e81b9a2"
+      },
+      {
+        "case_id": "compound-04",
+        "requirement_id": "r1",
+        "expected": "missing",
+        "predicted": "contradicted",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "cd9c4dc32533a03b22b0f90156baaf525efd1bd4e0b717dcd5505a83b34bc571"
+      },
+      {
+        "case_id": "compound-05",
+        "requirement_id": "r1",
+        "expected": "contradicted",
+        "predicted": "contradicted",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "93bdb82b43565796850b494cbdf5a1d9fe0d2e2c3712b3212c5e1ed04217308a"
+      },
+      {
+        "case_id": "compound-06",
+        "requirement_id": "r1",
+        "expected": "preserved",
+        "predicted": "preserved",
+        "abstained": false,
+        "review_status": "reviewed",
+        "review_input_sha256": "9d25b6dc690f37adb1d1b1ddc2dd632b6d369a224df4908da209748c7a76828c"
+      }
+    ],
+    "status": "completed",
+    "promotion_eligible": false,
+    "official_evaluation": false,
+    "requirement_count": 6,
+    "decided_count": 6,
+    "abstention_count": 0,
+    "correct_count": 5,
+    "coverage": 1.0,
+    "accuracy_including_abstention": 0.8333333333333334,
+    "conditional_accuracy": 0.8333333333333334,
+    "preserved_precision": 1.0,
+    "false_preserved_count": 0,
+    "false_preserved_rate": 0.0,
+    "probability_calibration_error": null
+  },
+  "usage_evidence": {
+    "calls": 6,
+    "recorded_calls": 6,
+    "known_tokens": {
+      "prompt_tokens": 5100,
+      "completion_tokens": 843
+    },
+    "reported_calls": {
+      "prompt_tokens": 6,
+      "completion_tokens": 6
+    },
+    "complete_tokens": {
+      "prompt_tokens": 5100,
+      "completion_tokens": 843
+    },
+    "schema_version": "praxile.trajectory_usage.v1",
+    "by_purpose": {
+      "content_review_judge": {
+        "calls": 6,
+        "recorded_calls": 6,
+        "known_tokens": {
+          "prompt_tokens": 5100,
+          "completion_tokens": 843
+        },
+        "reported_calls": {
+          "prompt_tokens": 6,
+          "completion_tokens": 6
+        },
+        "complete_tokens": {
+          "prompt_tokens": 5100,
+          "completion_tokens": 843
+        }
+      }
+    },
+    "unattributed_calls": 0,
+    "cost_usd": null,
+    "scope": "calls_recorded_by_trajectory_logger"
+  },
+  "source_sha256": {
+    "manifest.json": "4bbe28bbefb0214aaff56dcd56e14d176b591757915fd5e8869bf7d88a0f2cd7",
+    "report.json": "13a47363cffdd9ce524a6d0eda218b385fdc44bebadefd270af41487f678306c",
+    "trajectory.json": "374cc12304ce562024e55451e96f95e587fcefe07c0d2fb0321f21e15ed9651a"
+  },
+  "promotion_eligible": false
+}

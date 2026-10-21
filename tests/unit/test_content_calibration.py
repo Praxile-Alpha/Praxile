@@ -67,3 +67,54 @@ def test_public_smoke_report_is_bound_to_authored_suite_not_general_calibration(
     assert report["reference_labels_verified"] is False
     assert report["probability_calibration_error"] is None
     assert report["promotion_eligible"] is False
+
+
+def test_compound_suite_labels_remain_in_controller_and_cover_failure_modes():
+    root = Path(__file__).resolve().parents[2]
+    suite = json.loads((root / "tests/fixtures/content_review_compound_development.json").read_text())
+    router = Mock()
+    seen = []
+    def chat(messages, **kwargs):
+        payload = json.loads(messages[1]["content"])
+        seen.append(payload)
+        assert set(payload) == {"source_text", "output_text", "requirements"}
+        assert "compound-" not in json.dumps(messages)
+        return {"content": json.dumps({"items": [{"id": "r1", "verdict": "uncertain",
+            "output_quote": "", "reason": "Not adjudicated by fixture"}]}), "usage": {}}
+    router.chat.side_effect = chat
+    result = invoke(router, SimpleNamespace(data={}, add_model_cost=Mock()), suite=suite["cases"])
+    assert len(seen) == result["case_count"] == result["abstention_count"] == 6
+    assert result["false_preserved_count"] == 0
+    assert result["preserved_precision"] is None
+    assert result["reference_labels_verified"] is False
+    assert sorted(c["expected"]["r1"] for c in suite["cases"]) == [
+        "contradicted", "contradicted", "missing", "missing", "preserved", "preserved"]
+
+
+def test_verdict_policy_is_sent_and_bound_to_review_record():
+    from praxile.eval.content_review import VERDICT_POLICY, VERDICT_POLICY_VERSION
+    router = Mock()
+    router.chat.return_value = {"content": "invalid", "usage": {}}
+    logger = SimpleNamespace(data={}, add_model_cost=Mock())
+    invoke(router, logger)
+    system = router.chat.call_args.args[0][0]["content"]
+    assert VERDICT_POLICY in system
+    assert "Omission alone is missing, not contradicted" in system
+    record = logger.data["content_reviews"][0]
+    assert record["verdict_policy_version"] == VERDICT_POLICY_VERSION
+    assert record["verdict_policy_sha256"] == hashlib.sha256(VERDICT_POLICY.encode()).hexdigest()
+
+
+def test_compound_receipt_preserves_mismatch_and_does_not_claim_new_policy_validation():
+    root = Path(__file__).resolve().parents[2]
+    path = root / "tests/fixtures/content_review_compound_development.json"
+    suite = json.loads(path.read_text())
+    receipt = json.loads((root / "docs/results/deepseek-compound-calibration-20261021.json").read_text())
+    assert receipt["suite_file_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    report = receipt["report"]
+    assert report["suite_sha256"] == hashlib.sha256(json.dumps(suite["cases"], sort_keys=True).encode()).hexdigest()
+    assert report["case_count"] == 6 and report["correct_count"] == 5
+    assert [(r["case_id"], r["expected"], r["predicted"]) for r in report["rows"]
+        if r["expected"] != r["predicted"]] == [("compound-04", "missing", "contradicted")]
+    assert receipt["new_policy_real_validation"] == "not_run"
+    assert receipt["promotion_eligible"] is report["reference_labels_verified"] is False

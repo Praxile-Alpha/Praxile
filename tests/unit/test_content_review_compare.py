@@ -40,6 +40,14 @@ def test_budget_or_judge_mismatch_is_not_comparable():
     assert compare(report(), report(), "b" * 64)["reason"] == "conditions_mismatch"
 
 
+def test_old_and_new_verdict_policies_cannot_claim_equal_conditions():
+    left, right = report(), report()
+    for group in right["groups"]:
+        group.pop("verdict_policy_version")
+        group.pop("verdict_policy_sha256")
+    assert compare(left, right)["reason"] == "verdict_policy_mismatch"
+
+
 @pytest.mark.parametrize("mutation", ["digest", "items", "group_output", "coverage"])
 def test_inconsistent_evidence_is_rejected(mutation):
     left = report()

@@ -5,6 +5,22 @@ import re
 from .content_review import _digest
 
 
+def verdict_policy(review):
+    policies = set()
+    for group in review.get("groups", []):
+        version, digest = group.get("verdict_policy_version"), group.get("verdict_policy_sha256")
+        if version is None and digest is None:
+            policies.add((None, None))
+        elif (not isinstance(version, str) or not version or len(version) > 100
+              or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)):
+            raise ValueError("invalid verdict policy identity")
+        else:
+            policies.add((version, digest))
+    if len(policies) > 1:
+        raise ValueError("mixed verdict policies in one batch")
+    return next(iter(policies), (None, None))
+
+
 def _checked(review):
     if not isinstance(review, dict) or review.get("schema_version") != "praxile.content_review_batch.v1":
         raise ValueError("unsupported review")
@@ -78,6 +94,8 @@ def compare_content_reviews(baseline, candidate, *, baseline_judge_sha256, candi
         return {**result, "reason": "conditions_mismatch"}
     if lvalues is None or rvalues is None:
         return {**result, "reason": "incomplete_review"}
+    if verdict_policy(baseline) != verdict_policy(candidate):
+        return {**result, "reason": "verdict_policy_mismatch"}
     rows = [{"id": key, "baseline": lvalues[key], "candidate": rvalues[key]} for key in lvalues]
     result.update(status="compared", rows=rows, requirement_count=len(rows),
         baseline_preserved=sum(v == "preserved" for v in lvalues.values()),

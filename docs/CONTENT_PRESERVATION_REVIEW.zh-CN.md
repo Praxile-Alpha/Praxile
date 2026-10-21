@@ -246,6 +246,24 @@ DeepSeek；旧标签没有被更乐观的新标签覆盖。仍缺人工参考标
 
 ## 证据边界
 
+### 复合要求与标签语义
+
+`tests/fixtures/content_review_compound_development.json` 增加六个作者标注的开发
+样例，覆盖部分前提遗漏、完整释义、责任人交换、期限遗漏、例外反转与例外保留。
+标签仅在控制面比较，不提供给 judge，不是人工认证或 held-out 参考集。
+DeepSeek 非思考模式真实六次调用与标签匹配 5/6，0 弃权、0 false-preserved；
+期限遗漏被判成 contradicted。见
+[真实校准收据](results/deepseek-compound-calibration-20261021.json)。小样本的零
+false-preserved 不证明真实文档没有误保留，也不解决已有四项人工复核分歧。
+
+据此新增 `praxile.content_verdict_policy.v1`：保留须涵盖所有实质义务；仅遗漏
+应为 missing；显式冲突才为 contradicted；两者同时存在按冲突并解释；证据
+不足为 uncertain。每条新报告记录政策版本和摘要，旧报告不回填。普通 A/B
+比较拒绝新旧政策混比；分歧审查则明确列出政策差异。
+
+**六次真实结果来自修改前的提示词。** 新政策目前仅有提示词透传、摘要绑定及
+比较器回归测试，尚无真实复验，不把提示词修改宣称为准确率已改善。
+
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。
 - `all_declared_requirements_preserved` 是 LLM 对已声明要求的判断，不是环境验证。
 - `content_preservation_verified`、`requirement_coverage_verified`、

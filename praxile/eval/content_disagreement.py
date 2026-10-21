@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import re
 
-from .content_review_compare import _checked
+from .content_review_compare import _checked, verdict_policy
 from .content_review_files import load_review_run
 
 
@@ -29,6 +29,10 @@ def compare_judgments(left, right, *, left_judge_sha256, right_judge_sha256):
         for key in sorted(plans[0]) if key not in snapshot_keys and plans[0][key] != plans[1][key]]
     if values[0] is None or values[1] is None:
         return {**result, "reason": "incomplete_review"}
+    lpolicy, rpolicy = verdict_policy(left), verdict_policy(right)
+    if lpolicy != rpolicy:
+        result["condition_differences"].append({"field": "verdict_policy",
+            "left": list(lpolicy), "right": list(rpolicy)})
     if set(values[0]) != set(values[1]):
         raise ValueError("same requirement digest with inconsistent coverage")
     rows = [{"id": key, "left": values[0][key], "right": values[1][key],

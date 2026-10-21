@@ -1,0 +1,48 @@
+{
+  "schema_version": "praxile.content_calibration_suite.v1",
+  "scope": "authored_compound_development_cases_not_heldout",
+  "cases": [
+    {
+      "id": "compound-01",
+      "source_text": "The coordinator must obtain signed consent and complete a background check before the youth event.",
+      "output_text": "Before the youth event, the coordinator must obtain signed consent.",
+      "requirements": [{"id": "r1", "requirement": "Retain both mandatory prerequisites, their responsible person and their timing. An omitted prerequisite is missing, not preserved.", "source_quote": "The coordinator must obtain signed consent and complete a background check before the youth event."}],
+      "expected": {"r1": "missing"}
+    },
+    {
+      "id": "compound-02",
+      "source_text": "The coordinator must obtain signed consent and complete a background check before the youth event.",
+      "output_text": "The coordinator is responsible for two prerequisites to the youth event: signed consent and a completed background check. Both are required before it starts.",
+      "requirements": [{"id": "r1", "requirement": "Retain both mandatory prerequisites, their responsible person and their timing. An omitted prerequisite is missing, not preserved.", "source_quote": "The coordinator must obtain signed consent and complete a background check before the youth event."}],
+      "expected": {"r1": "preserved"}
+    },
+    {
+      "id": "compound-03",
+      "source_text": "The applicant submits the packet by May 1. The committee approves it by May 8.",
+      "output_text": "The committee submits the packet by May 1. The applicant approves it by May 8.",
+      "requirements": [{"id": "r1", "requirement": "Retain the assignment of submission to the applicant and approval to the committee, together with their deadlines.", "source_quote": "The applicant submits the packet by May 1. The committee approves it by May 8."}],
+      "expected": {"r1": "contradicted"}
+    },
+    {
+      "id": "compound-04",
+      "source_text": "The applicant submits the packet by May 1. The committee approves it by May 8.",
+      "output_text": "The applicant submits the packet. The committee approves it.",
+      "requirements": [{"id": "r1", "requirement": "Retain the assignment of submission to the applicant and approval to the committee, together with their deadlines.", "source_quote": "The applicant submits the packet by May 1. The committee approves it by May 8."}],
+      "expected": {"r1": "missing"}
+    },
+    {
+      "id": "compound-05",
+      "source_text": "Expenses above $500 require director approval. Emergency expenses are exempt from that approval requirement.",
+      "output_text": "Director approval is required for every expense above $500, including emergency expenses.",
+      "requirements": [{"id": "r1", "requirement": "Retain the $500 approval threshold and the emergency exemption without reversing the exception.", "source_quote": "Expenses above $500 require director approval. Emergency expenses are exempt from that approval requirement."}],
+      "expected": {"r1": "contradicted"}
+    },
+    {
+      "id": "compound-06",
+      "source_text": "Expenses above $500 require director approval. Emergency expenses are exempt from that approval requirement.",
+      "output_text": "An emergency expense does not need director approval. For other expenses, director approval is mandatory when the amount exceeds $500.",
+      "requirements": [{"id": "r1", "requirement": "Retain the $500 approval threshold and the emergency exemption without reversing the exception.", "source_quote": "Expenses above $500 require director approval. Emergency expenses are exempt from that approval requirement."}],
+      "expected": {"r1": "preserved"}
+    }
+  ]
+}
