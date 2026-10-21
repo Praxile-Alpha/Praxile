@@ -595,7 +595,7 @@ class ProjectEnv:
         restored: list[dict[str, Any]] = []
         actions = list(trajectory.get("actions", []))
         for action in reversed(actions):
-            if action.get("action_type") == "revise_docx" and action.get("status") == "success":
+            if action.get("action_type") in {"revise_docx", "revise_xlsx"} and action.get("status") == "success":
                 from .document_revision import rollback_revision
                 restored.append(rollback_revision(self.config, self.fs.safety,
                     (action.get("observation", {}) or {}).get("data", {}) or {}))

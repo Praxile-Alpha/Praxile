@@ -39,6 +39,7 @@ class ActionSchemaRegistry:
             "edit_file": {"required": {"path": str, "content": str}, "optional": {}},
             "create_docx": {"required": {"path": str, "document": dict}, "optional": {}},
             "create_xlsx": {"required": {"path": str, "workbook": dict}, "optional": {}},
+            "revise_xlsx": {"required": {"path": str, "workbook": dict, "expected_sha256": str}, "optional": {}},
             "revise_docx": {"required": {"path": str, "document": dict, "expected_sha256": str}, "optional": {}},
             "run_command": {"required": {"command": str}, "optional": {}},
             "finish": {"required": {"summary": str}, "optional": {"status": str}},
@@ -66,7 +67,7 @@ class ActionSchemaRegistry:
         for key, expected_type in schema["optional"].items():
             if key in action and action[key] is not None and not isinstance(action[key], expected_type):
                 errors.append(f"{action_type}.{key} must be {expected_type.__name__}")
-        if action_type == "create_xlsx":
+        if action_type in {"create_xlsx", "revise_xlsx"}:
             from .spreadsheet_spec import validate_xlsx_spec
             try:
                 validate_xlsx_spec(action.get("workbook"))
@@ -78,10 +79,10 @@ class ActionSchemaRegistry:
                 validate_docx_spec(action.get("document"))
             except (ValueError, TypeError) as error:
                 errors.append(str(error))
-        if action_type == "revise_docx":
+        if action_type in {"revise_docx", "revise_xlsx"}:
             digest = action.get("expected_sha256")
             if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
-                errors.append("revise_docx.expected_sha256 must be the current SHA-256 from a document observation")
+                errors.append(f"{action_type}.expected_sha256 must be the current SHA-256 from a document observation")
         if action_type == "check_document_layout" and "max_pages" in action:
             if type(action["max_pages"]) is not int or not 1 <= action["max_pages"] <= 2000:
                 errors.append("check_document_layout.max_pages must be an integer in [1, 2000]")

@@ -14,7 +14,7 @@ from .utils import utc_now
 
 
 READ_ONLY_ACTIONS = {"list_files", "project_map", "list_dir", "find_files", "search", "read_file", "read_files"}
-MUTATING_ACTIONS = {"edit_file", "create_docx", "create_xlsx", "revise_docx", "run_command", "browser_click", "browser_fill", "browser_download"}
+MUTATING_ACTIONS = {"edit_file", "create_docx", "create_xlsx", "revise_docx", "revise_xlsx", "run_command", "browser_click", "browser_fill", "browser_download"}
 
 
 class ToolRegistry:
@@ -75,6 +75,7 @@ class ToolRegistry:
             {"name": "create_docx", "description": "Create a new DOCX from paragraph/heading/bullet/table/page_break blocks; never overwrite, no model code execution."},
             {"name": "create_xlsx", "description": "Create a new value-only XLSX from named sheets and rows; strings are literal, no formulas or overwrite."},
             {"name": "revise_docx", "description": "Rebuild an existing DOCX from complete blocks; requires current SHA-256, creates backup, rejects conflicts."},
+            {"name": "revise_xlsx", "description": "Rebuild all sheets of an XLSX from literal values and current SHA-256; backs up originals, does not preserve formulas/styles."},
             {"name": "run_command", "description": "Run an allowed test/lint/build command."},
             {"name": "check_document_layout", "description": "Opt-in DOCX rendering and page-count check; not visual quality verification."},
             {"name": "finish", "description": "Finish the task with completed, needs_human, or failed."},
@@ -135,6 +136,10 @@ class ToolRegistry:
         if action_type == "create_docx":
             from .documents import create_docx
             return create_docx(self.config, self.safety, str(action.get("path", "")), action.get("document")).to_dict()
+        if action_type == "revise_xlsx":
+            from .document_revision import revise_xlsx
+            return revise_xlsx(self.config, self.safety, str(action.get("path", "")),
+                action.get("workbook"), action.get("expected_sha256")).to_dict()
         if action_type == "revise_docx":
             from .document_revision import revise_docx
             return revise_docx(self.config, self.safety, str(action.get("path", "")),

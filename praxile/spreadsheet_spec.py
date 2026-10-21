@@ -8,7 +8,9 @@ def xlsx_spec_prompt():
     return ('create_xlsx.workbook requires {"sheets":[{"name":"Sheet1","rows":[["Name","Count"],["Item",2]]}]}. '
             '1..10 uniquely named sheets, rectangular rows (1..1000 by 1..100), at most 20000 cells and 256 KiB. '
             'Cells are strings, finite numbers, booleans or null; all strings are literal text, never formulas. '
-            'Existing parent directory and new .xlsx path required. No overwrite, macros, links or formula recalculation.')
+            'Existing parent directory and new .xlsx path required. No overwrite, macros, links or formula recalculation. '
+            'revise_xlsx uses the same complete workbook specification and current expected_sha256 to rebuild an existing file. '
+            'It replaces all sheets and does not preserve styles, formulas, charts or metadata; inspect before using.')
 
 
 def validate_xlsx_spec(spec):

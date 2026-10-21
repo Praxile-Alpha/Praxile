@@ -38,3 +38,12 @@ def test_rectangular_unique_and_bounded_sheets():
     ):
         with pytest.raises(ValueError):
             validate_xlsx_spec(workbook)
+
+
+@pytest.mark.parametrize("digest", [None, "", "a" * 63, "G" * 64, True, "b" * 64])
+def test_revision_requires_digest_and_cannot_batch(digest):
+    action = {"type": "revise_xlsx", "path": "data.xlsx", "expected_sha256": digest, "workbook": spec()}
+    registry = ActionSchemaRegistry()
+    assert registry.validate(action)[0] is (digest == "b" * 64)
+    assert not registry.validate({"type": "batch", "actions": [action]})[0]
+    assert "revise_xlsx" in MUTATING_ACTIONS
