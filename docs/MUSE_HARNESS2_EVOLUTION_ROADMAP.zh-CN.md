@@ -189,6 +189,15 @@ R0-A 遗留资源观测增补（2026-10-21）：租约在 Docker 创建前持久
 清理后不存在；fast suite 1234 passed / 12 skipped。PID 存活、SIGKILL 实测、
 自动遗留回收和中途动作恢复仍未验收，总项继续未完成。
 
+R0-A SIGKILL 实测增补（2026-10-21）：新增独立 resource/integration/slow 故障
+测试，等待创建租约的子进程明确 ready 后，向其独立进程组发送 SIGKILL 并确认
+退出码。随后新 Python 进程通过 ownership.json 发现真实遗留容器，检查未改写
+记录。测试 finally 重新检查各资源的精确 session 标签，再逐项删除本测试资源
+并复查为空；未使用全局 prune。Harbor 0.18.0、0.22.0 各 1 项真实故障测试通过，
+Mac ARM64 Docker Desktop，固定 python 镜像摘要沿用前述测试，无模型调用。
+fast suite 1234 passed / 13 skipped。强杀后的记录留存/资源发现已有实证；
+生产自动回收、PID 身份鉴别、断电恢复及动作 checkpoint 恢复仍未完成。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

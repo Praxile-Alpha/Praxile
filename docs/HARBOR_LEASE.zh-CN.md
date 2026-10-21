@@ -66,6 +66,20 @@ python -m praxile.eval.lease_inspect --lease-dir /absolute/path/to/harbor-lease-
 验证输入可见、越界读取被阻止以及输入覆盖/新增触发只读文件系统错误。此验证不
 调用模型，不等同于完整 AgentRuntime 或正式 benchmark 验收。
 
+独立故障测试 `tests/resource/test_harbor_lease_crash.py` 在固定 Harbor 环境中：
+
+1. 创建独立子进程并等待租约 prepare 完成的明确握手。
+2. 向该子进程自己的进程组发送 SIGKILL，等待并确认退出码为 -SIGKILL。
+3. 用新的 Python 进程运行 lease_inspect，确认能发现真实遗留容器，且不修改 ownership.json。
+4. 测试 finally 逐项重新核对精确 session 标签，只删除本测试资源，再查询确认全部不存在。
+
+Harbor 0.18.0 与 0.22.0 均已在 Mac ARM64 Docker Desktop 验证；测试为 slow +
+integration + resource，必须显式设置固定 PRAXILE_TEST_LEASE_IMAGE，并使用
+--forked。无真实模型调用。此测试清理逻辑仅属于测试夹具，没有开放为生产恢复
+API：它依赖测试已经确认自己创建并终止了那个 owner，不能照搬到身份不明的现场。
+该证据证明强杀后记录可用、独立检查可发现遗留资源，不证明动作 checkpoint
+恢复、断电恢复或生产自动回收已经完成。
+
 本后端不是敌对代码安全沙箱：只读输入已在显式清单路径实现，但尚未建立完整
 下载/私有评测存储隔离、网络隔离策略或宿主资源配额。宿主同权限进程仍可能在
 校验后修改快照；只读挂载不等于对恶意宿主的防护。Harbor 启动/停止自身没有整体硬期限；Docker daemon
