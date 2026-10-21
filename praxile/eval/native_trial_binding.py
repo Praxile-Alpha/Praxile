@@ -6,7 +6,7 @@ from .v2.schema import EvalSchemaError
 from ..trace import native_run_to_events
 
 
-def bind_native_trace(trial, read, evidence):
+def bind_native_trace(trial, read, evidence, *, retention=None):
     """Use the importer's checked reader and raw-byte digest ledger.
 
     Legacy trials remain usable, but never acquire a verified binding merely
@@ -47,7 +47,13 @@ def bind_native_trace(trial, read, evidence):
             or json.dumps(projection["events"], sort_keys=True, allow_nan=False)
             != json.dumps([event.to_dict() for event in events], sort_keys=True, allow_nan=False)):
         raise EvalSchemaError("official trial/native event projection mismatch")
-    return {"status": "bound", "source_result_sha256": digest,
+    binding = {"status": "bound", "source_result_sha256": digest,
             "trace_id": events[0].trace_id, "run_id": events[0].run_id,
             "trajectory_task_id": events[0].task_id, "event_count": len(events),
             "experience_mode": result["experience_mode"], "provenance_attested": False}
+    if retention is not None:
+        from .artifact_identity import compare_inventory
+        directory = ((trial.get("config") or {}).get("agent") or {}).get("kwargs") or {}
+        binding["artifact_identity"] = compare_inventory(
+            result.get("artifact_inventory"), retention, directory.get("output_directory"))
+    return binding

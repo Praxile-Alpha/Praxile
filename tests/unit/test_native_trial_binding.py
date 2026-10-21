@@ -106,3 +106,62 @@ def test_rejects_cross_trial_or_modified_native_evidence(case, mutation):
     write(root, "result.json", trial)
     with pytest.raises(ValueError):
         run()
+
+
+@pytest.mark.parametrize("change,expected", [
+    ("none", "matched"), ("bytes", "mismatch"), ("size", "mismatch"),
+    ("missing", "mismatch"), ("added", "mismatch"), ("incomplete", "unknown"),
+    ("duplicate", "unknown"), ("escape", "unknown"), ("no_hash", "unknown"),
+    ("wrong_directory", "unknown"), ("missing_inventory", "unknown")])
+def test_import_compares_bound_inventory_to_retained_bytes(case, change, expected):
+    root, trial, run = case
+    target = root / "artifacts/workspace/output"
+    target.mkdir(parents=True)
+    (target / "a.txt").write_bytes(b"abc")
+    write(root, "artifacts/manifest.json", [{"source": "/workspace/output",
+        "destination": "artifacts/workspace/output", "type": "directory", "status": "ok"}])
+    trial["config"] = {"agent": {"kwargs": {"output_directory": "output"}}}
+    result = json.loads((root / "agent/praxile-result.json").read_text())
+    inventory = {"schema_version": "praxile.artifact_inventory.v1", "complete": True,
+        "directory": "output", "files": [{"path": "output/a.txt", "size_bytes": 3,
+        "sha256": hashlib.sha256(b"abc").hexdigest(), "status": "unsupported"}]}
+    result["artifact_inventory"] = inventory
+    if change == "bytes":
+        (target / "a.txt").write_bytes(b"xyz")
+    elif change == "size":
+        inventory["files"][0]["size_bytes"] = 4
+    elif change == "missing":
+        (target / "a.txt").unlink()
+    elif change == "added":
+        (target / "b.txt").write_bytes(b"extra")
+    elif change == "incomplete":
+        inventory["complete"] = False
+    elif change == "duplicate":
+        inventory["files"] *= 2
+    elif change == "escape":
+        inventory["files"][0]["path"] = "output/../a.txt"
+    elif change == "no_hash":
+        del inventory["files"][0]["sha256"]
+    elif change == "wrong_directory":
+        inventory["directory"] = "elsewhere"
+    elif change == "missing_inventory":
+        del result["artifact_inventory"]
+    digest = write(root, "agent/praxile-result.json", result)
+    trial["agent_result"]["metadata"]["praxile"]["source_result_sha256"] = digest
+    write(root, "agent/praxile-events.json", {
+        "schema_version": "praxile.native_event_projection.v1", "source_result_sha256": digest,
+        "events": [e.to_dict() for e in native_run_to_events(result)]})
+    write(root, "result.json", trial)
+    report = run()
+    identity = report["native_trace_binding"]["artifact_identity"]
+    assert identity["status"] == expected
+    assert identity["content_verified"] is False
+    assert identity["verifier_input_verified"] is False
+    assert identity["provenance_attested"] is False
+    assert report["outcome"]["scores"] == []
+    if change in {"bytes", "size"}:
+        assert identity["changed"] == ["a.txt"]
+    if change == "missing":
+        assert identity["missing"] == ["a.txt"]
+    if change == "added":
+        assert identity["added"] == ["b.txt"]

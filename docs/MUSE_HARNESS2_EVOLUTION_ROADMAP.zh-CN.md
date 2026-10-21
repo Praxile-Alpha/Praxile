@@ -381,6 +381,15 @@ R0-B 真实留存复验（2026-10-21）：同一 Office 库存任务以新鲜 M3
 详见 results/workbuddy-retention-baseline-20261021.md。官方 verifier 独立身份、
 评分前产物字节身份和其他任务族仍未验证，R0-B 总项不勾选。
 
+R0-B 产物身份核对增补（2026-10-21）：WorkBuddy/JobBench 导入增加
+`native_trace_binding.artifact_identity`，仅使用已通过 trial 摘要绑定的原生
+inventory，与宿主留存清单按相对路径、字节数和 SHA-256 比较。报告新增、缺失、
+变更；缺清单、不完整或无有效摘要时保持 unknown，不用格式解析成功代替身份。
+对上一轮真实 Office Trial 离线复核，result.xlsx 的 27091 字节和摘要完全一致，
+结果 matched；没有追加模型调用。此为两个观测点的一致性，不是来源认证、
+评分器实际读取证明或内容正确性。详见 results/workbuddy-artifact-identity-20261021.md。
+官方 verifier 隔离与其他任务族仍缺，总项保持未完成。
+
 ### R0-C JobBench Adapter
 
 工具 profile v2 真实设计返回完整文本但 JSON 解析失败（未进入动作校验），无候选。

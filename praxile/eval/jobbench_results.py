@@ -115,7 +115,10 @@ def import_trial(task_id: str, trial_dir: Path, *, expected_task_checksum: str,
             reason = "official verifier reported an error"
     elif exception.get("exception_type") == "VerifierTimeoutError":
         status, reason = "timed_out", "official verifier timed out"
-    report["native_trace_binding"] = bind_native_trace(trial, read, evidence)
+    from .native_artifacts import audit_output
+    report["output_retention"] = audit_output(root, trial)
+    report["native_trace_binding"] = bind_native_trace(trial, read, evidence,
+                                                       retention=report["output_retention"])
     report["outcome"] = BenchmarkOutcome(task_id, status, scores, tuple(evidence)).to_dict()
     report["reason"] = reason
     report["evidence_digests"] = evidence
