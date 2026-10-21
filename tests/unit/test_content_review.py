@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from praxile.eval.content_review import review_content
+from praxile.eval.content_review import review_content, _transport_failure
 from praxile.model import ModelUnavailable
 
 
@@ -86,3 +86,63 @@ def test_provider_failure_does_not_leak_exception_or_retry():
     assert "secret" not in json.dumps(result)
     router.chat.assert_called_once()
     logger.add_model_cost.assert_not_called()
+
+
+def test_transport_cause_projection_drops_secrets_and_limits_scope():
+    cause = RuntimeError("secret provider body")
+    cause.transport_evidence = {"attempt_count": 1, "secret": "credential", "attempts": [
+        {"status": "http_error", "status_code": 429, "elapsed_ms": 12, "body": "secret"}]}
+    wrapped = ModelUnavailable("secret URL")
+    wrapped.__cause__ = cause
+    report = _transport_failure(wrapped)
+    assert report == {"scope": "nearest_transport_cause_only", "attempt_count": 1,
+                      "attempts": [{"status": "http_error", "status_code": 429, "elapsed_ms": 12}],
+                      "usage_unknown": True}
+    assert "secret" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("status,code,elapsed", [("secret", 429, 1), ("http_error", True, 1),
+    ("timeout", None, -1), ("http_error", "secret", 1)])
+def test_malformed_transport_diagnostics_are_not_persisted(status, code, elapsed):
+    error = RuntimeError()
+    error.transport_evidence = {"attempt_count": 1, "attempts": [
+        {"status": status, "status_code": code, "elapsed_ms": elapsed}]}
+    assert _transport_failure(error) is None
+
+
+def test_cyclic_exception_chain_is_bounded():
+    error = RuntimeError()
+    error.__cause__ = error
+    assert _transport_failure(error) is None
+
+
+def test_real_router_and_provider_preserve_http_cause(tmp_path, monkeypatch):
+    from praxile.config import Config, ProjectPaths
+    from praxile.model import ModelRouter
+    from praxile.http_transport import HTTPTransportError
+
+    monkeypatch.setenv("PRAXILE_TEST_REVIEW_KEY", "test-only")
+    config = Config({"model_providers": {"test": {"type": "openai_compatible",
+        "base_url": "https://example.invalid/v1", "api_key_env": "PRAXILE_TEST_REVIEW_KEY"}},
+        "model_roles": {"content_review_judge": {"provider": "test", "model": "test"}}},
+        ProjectPaths(tmp_path))
+    router = ModelRouter(config)
+    error = HTTPTransportError("HTTP 429 sensitive-body", status_code=429)
+    error.transport_evidence = {"attempt_count": 1, "attempts": [
+        {"status": "http_error", "status_code": 429, "elapsed_ms": 10}]}
+    transport = router.providers["test"].transport
+    monkeypatch.setattr(transport, "post_json", Mock(side_effect=error))
+    logger = SimpleNamespace(data={}, add_model_cost=Mock())
+    try:
+        report = review_content(router, logger, source_text="source", output_text="output",
+            requirements=[{"id": "x", "requirement": "x", "source_quote": "source"}], private=False)
+        assert report["status"] == "abstained"
+        assert report["failure_category"] == "model_unavailable"
+        assert report["transport_failure"]["attempts"][0]["status_code"] == 429
+        assert "sensitive" not in json.dumps(report)
+        assert report["usage_available"] is False
+        transport.post_json.assert_called_once()
+    finally:
+        close = getattr(transport, "close", None)
+        if callable(close):
+            close()

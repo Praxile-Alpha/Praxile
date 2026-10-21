@@ -14,6 +14,41 @@ def _text(value, maximum):
     return isinstance(value, str) and bool(value.strip()) and len(value) <= maximum
 
 
+def _transport_failure(error):
+    """Project only bounded scalar diagnostics from the nearest transport cause.
+
+    A router may have tried other providers: this evidence is NOT a complete
+    ledger of all routes or all network attempts for the logical request.
+    """
+    seen = set()
+    for _ in range(16):
+        if error is None or id(error) in seen:
+            break
+        seen.add(id(error))
+        evidence = getattr(error, "transport_evidence", None)
+        if isinstance(evidence, dict):
+            attempts = evidence.get("attempts")
+            if (not isinstance(attempts, list) or not 1 <= len(attempts) <= 100
+                    or type(evidence.get("attempt_count")) is not int
+                    or evidence["attempt_count"] != len(attempts)):
+                return None
+            safe = []
+            for item in attempts:
+                if not isinstance(item, dict):
+                    return None
+                code, elapsed, status = item.get("status_code"), item.get("elapsed_ms"), item.get("status")
+                if (code is not None and (type(code) is not int or not 100 <= code <= 599)
+                        or type(elapsed) is not int or not 0 <= elapsed <= 86400000
+                        or not isinstance(status, str) or status not in {
+                            "success", "http_error", "timeout", "unavailable", "decode_error", "cancelled"}):
+                    return None
+                safe.append({"status": status, "status_code": code, "elapsed_ms": elapsed})
+            return {"scope": "nearest_transport_cause_only", "attempt_count": len(safe),
+                    "attempts": safe, "usage_unknown": True}
+        error = error.__cause__ or (None if error.__suppress_context__ else error.__context__)
+    return None
+
+
 def review_content(router, logger, *, source_text, output_text, requirements,
                    role="content_review_judge", private=True, max_tokens=3000,
                    timeout=90):
@@ -120,4 +155,7 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         elif stage == "validation" and isinstance(error, ValueError):
             category = "invalid_review"
         record.update(status="abstained", failure_stage=stage, failure_category=category)
+        diagnostic = _transport_failure(error)
+        if diagnostic is not None:
+            record["transport_failure"] = diagnostic
     return record

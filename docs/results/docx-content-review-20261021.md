@@ -50,3 +50,20 @@ These new diagnostics cannot retroactively explain the four failures. The
 and verdicts; original quote text stays in the local private review directory.
 Next work remains request-failure diagnosis, calibrated source-to-output review,
 behavior comparison, and frozen multi-task evaluation. This does not complete R2.
+
+## Separate diagnostic request
+
+One additional request used the exact first-candidate review input, same model,
+low reasoning, 3000 output tokens, 90-second timeout and zero configured transport
+retries. Its process exited cleanly. The provider returned a response with finish
+reason `stop`, but local validation rejected the submission. No item verdict was
+accepted. The [diagnostic receipt](docx-review-diagnostic-20261021.json) records this
+as a separate call, not a replacement for the original failed review. It does not
+explain the four original request failures. The exact validation defect was not
+retained by that invocation, so do not infer whether it was JSON, citation or
+coverage failure. No additional calls were made to obtain a passing response.
+
+The API now projects bounded HTTP/attempt diagnostics from the nearest transport
+exception cause, without exception messages or response bodies. Tests exercise
+the actual Router/Provider wrapping path with a simulated HTTP 429, invalid fields
+and cyclic causes. This is not evidence that the real earlier failures were 429s.
