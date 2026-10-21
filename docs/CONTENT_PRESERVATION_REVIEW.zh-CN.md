@@ -220,6 +220,30 @@ python -m praxile.eval.content_review_files \
 供应商分离减少了同模型自评依赖，但不证明 judge 已校准或评判正确。已有产物
 可单独评审，不需要重新调用 MiniMax 执行器；旧评审结果保留，新结果单独编号。
 
+## 同产物跨 Judge 分歧审查
+
+```sh
+python -m praxile.eval.content_disagreement \
+  --left /path/to/minimax-review \
+  --right /path/to/deepseek-review
+```
+
+该入口与 baseline/candidate 成果比较不同：要求**原文、产物、要求列表摘要
+全部一致**，才按 requirement ID 比较 judge 判断。显式列出分组额度、总预算、
+超时等计划差异；不同 judge 身份允许比较，但不是供应商优劣实验。两份报告
+必须完整，任何一侧弃权都返回 inconclusive，不把缺失判断当作反对票。
+
+不调用模型、不投票、不产生真值或准确率。分歧项与任一侧 uncertain 项进入
+`review_required_ids`，`reference_verdict` 保持 null，需独立人工复核；一致项也
+不代表正确。CLI 复用持久化目录的输入/引文/轨迹校验，拒绝不一致文件；
+Python `compare_judgments` 接口仅校验报告内部一致性，不能代替正文或来源认证。
+
+本次旧 MiniMax 报告通过 Python 接口分析，不改写成新目录格式；其身份是从
+旧输入回顾性提取，不能声称旧实验具备新 manifest 的全部绑定保证。DeepSeek
+使用新目录校验。[真实离线分歧记录](results/judge-disagreement-20261021.json)
+识别四项：packet-row-6、packet-row-14、roles、dates。左/右分别为 MiniMax/
+DeepSeek；旧标签没有被更乐观的新标签覆盖。仍缺人工参考标签与稳定准确率验收。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。

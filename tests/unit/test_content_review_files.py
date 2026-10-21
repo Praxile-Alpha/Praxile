@@ -88,6 +88,23 @@ def test_cli_uses_persisted_runs_without_calling_model(tmp_path, monkeypatch, ca
     assert router.chat.call_count == 2
 
 
+def test_disagreement_cli_validates_local_runs_and_never_replays(tmp_path, monkeypatch, capsys):
+    from praxile.eval.content_disagreement import main
+    left, right, router = generate(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.argv", ["content_disagreement", "--left", str(left), "--right", str(right)])
+    assert main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "triaged" and result["disagreement_count"] == 0
+    assert result["judge_identity_differs"] is False
+    assert result["local_file_consistency_checked"] is True
+    assert result["reference_labels_verified"] is False
+    (right / "inputs.json").write_text("{}")
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert router.chat.call_count == 2
+
+
 @pytest.mark.parametrize("raw", ['{"x":1,"x":2}', '{"x":NaN}', '[]'])
 def test_evidence_decoder_is_strict(tmp_path, raw):
     from praxile.eval.content_review_files import _read

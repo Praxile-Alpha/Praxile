@@ -1,0 +1,281 @@
+{
+  "schema_version": "praxile.content_disagreement.v1",
+  "scope": "same_artifact_judgment_triage",
+  "status": "triaged",
+  "left_judge_sha256": "f9e2bca92eb8c4605acdc4ea9a860ae83c80d885957f9e69ba471da863fe413b",
+  "right_judge_sha256": "25627c3db23018e8765590b56adeb2b5ce6e7115d729030ebab6a93716466e0c",
+  "left_plan_sha256": "83b50feb48906773d73dc88e8e04190b6e4bf59091a24b8490cb7c0fa3ec7d51",
+  "right_plan_sha256": "ff538d36c83d0d7d1d15fe3832757dbd0f0490a65efe83ba0c43cf7f9c8b07eb",
+  "judge_identity_differs": true,
+  "reference_labels_verified": false,
+  "semantic_accuracy_verified": false,
+  "provenance_verified": false,
+  "promotion_eligible": false,
+  "official_evaluation": false,
+  "winner": null,
+  "snapshot": {
+    "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+    "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+    "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd"
+  },
+  "condition_differences": [
+    {
+      "field": "groups",
+      "left": [
+        {
+          "ids": [
+            "packet-row-1",
+            "packet-row-2",
+            "packet-row-3",
+            "packet-row-4"
+          ],
+          "max_tokens": 1800
+        },
+        {
+          "ids": [
+            "packet-row-5",
+            "packet-row-6",
+            "packet-row-7",
+            "packet-row-8"
+          ],
+          "max_tokens": 1400
+        },
+        {
+          "ids": [
+            "packet-row-9",
+            "packet-row-10",
+            "packet-row-11",
+            "packet-row-12"
+          ],
+          "max_tokens": 1800
+        },
+        {
+          "ids": [
+            "packet-row-13",
+            "packet-row-14",
+            "roles",
+            "dates"
+          ],
+          "max_tokens": 3000
+        }
+      ],
+      "right": [
+        {
+          "ids": [
+            "packet-row-1",
+            "packet-row-2",
+            "packet-row-3",
+            "packet-row-4"
+          ],
+          "max_tokens": 4000
+        },
+        {
+          "ids": [
+            "packet-row-5",
+            "packet-row-6",
+            "packet-row-7",
+            "packet-row-8"
+          ],
+          "max_tokens": 4000
+        },
+        {
+          "ids": [
+            "packet-row-9",
+            "packet-row-10",
+            "packet-row-11",
+            "packet-row-12"
+          ],
+          "max_tokens": 4000
+        },
+        {
+          "ids": [
+            "packet-row-13",
+            "packet-row-14",
+            "roles",
+            "dates"
+          ],
+          "max_tokens": 4000
+        }
+      ]
+    },
+    {
+      "field": "timeout_per_call",
+      "left": 90,
+      "right": 120
+    },
+    {
+      "field": "total_output_tokens",
+      "left": 8000,
+      "right": 16000
+    }
+  ],
+  "rows": [
+    {
+      "id": "packet-row-1",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-2",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-3",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-4",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-5",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-6",
+      "left": "missing",
+      "right": "preserved",
+      "disagrees": true,
+      "needs_human_review": true,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-7",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-8",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-9",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-10",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-11",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-12",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-13",
+      "left": "preserved",
+      "right": "preserved",
+      "disagrees": false,
+      "needs_human_review": false,
+      "reference_verdict": null
+    },
+    {
+      "id": "packet-row-14",
+      "left": "uncertain",
+      "right": "preserved",
+      "disagrees": true,
+      "needs_human_review": true,
+      "reference_verdict": null
+    },
+    {
+      "id": "roles",
+      "left": "missing",
+      "right": "preserved",
+      "disagrees": true,
+      "needs_human_review": true,
+      "reference_verdict": null
+    },
+    {
+      "id": "dates",
+      "left": "missing",
+      "right": "preserved",
+      "disagrees": true,
+      "needs_human_review": true,
+      "reference_verdict": null
+    }
+  ],
+  "requirement_count": 16,
+  "disagreement_count": 4,
+  "review_required_ids": [
+    "packet-row-6",
+    "packet-row-14",
+    "roles",
+    "dates"
+  ],
+  "limitations": [
+    "Agreement is not evidence of correctness; labels require independent review.",
+    "Judge identity hashes are caller declarations, not authenticated provider identities.",
+    "Different budgets, grouping or reasoning may confound provider comparisons.",
+    "No votes, automatic adjudication, accuracy score or promotion is produced."
+  ],
+  "left_identity": {
+    "model": "MiniMax-M3.1-Flash",
+    "request_options": {
+      "reasoning_effort": "low"
+    },
+    "scope": "retrospective_identity_from_legacy_inputs_not_attested"
+  },
+  "right_identity": {
+    "role": "content_review_judge",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "private": false,
+    "config_digest": "11cb493d4d2e986e765979914d51d6aed516346fc911b553a3f1ccd5150277fa",
+    "review_code_sha256": "d3cd0740558fbaff890177d76c292275103fbcb69277d34a08ac32b0e2c66d40",
+    "batch_code_sha256": "354601b10792014cc92b9dff5d3c495776c4457a281ed4aa24524745d83dda3f"
+  },
+  "source_files_sha256": {
+    "left_report": "2c622db4b2f661abf2d74b1385227c9f2d61437cd6e0177c08135115dc322f81",
+    "left_inputs": "6fa18072756d8757a6cd7961ddbb290478dfb1761f5028b2cc1d71d23c5e1cae",
+    "right_report": "77c59c938f609b2eccfc9fa5d4dddb6075217c3f669db1945eabb9d133fc7201"
+  },
+  "local_file_consistency_checked": {
+    "left": false,
+    "right": true
+  }
+}
