@@ -133,6 +133,38 @@ promotion 率。标签只是调用方提供的参考，不由接口认证。
 事后评审仍需注明调参历史、顺序和有限样本，不能将挑选成功的旧单侧记录拼成
 公平对照。报告可以指明代码、模型和请求选项摘要，私有配置或凭据不得公开。
 
+## 持久化运行命令
+
+不再需要临时脚本来启动一次 batch 评审：
+
+```sh
+python -m praxile.eval.content_review_run --project /path/to/project \
+  --inputs /path/to/review-input.json --run-id review-001 \
+  --total-output-tokens 8000 --batch-size 4 \
+  --output-allocations 1800 1400 1800 3000
+```
+
+输入文件只包含 `source_text`、`output_text`、`requirements`，上限 1 MiB，严格
+JSON，不接受附带参考标签。必须配置显式 `model_roles.content_review_judge`
+角色的 provider/model；模型应声明 supports_tools。默认私有模式要求实际
+选中的端点是 localhost、127.0.0.1 或 ::1。获准发送给云端的公开材料须显式
+增加 `--public`，并使用自己配置的云模型与环境变量凭据。loopback 不是沙箱
+认证，调用方仍需信任本地服务，不能用代理转发冒充隐私保证。
+
+结果写入 `.praxile/eval/v2/content_reviews/<run-id>/`，包含 manifest、输入快照、
+trajectory 和 report。新运行目录权限为 0700，拒绝状态路径中的符号链接。
+manifest 记录主路由身份、去敏配置摘要、代码摘要和预算；这不是远程模型
+实现或原始文档来源的认证。已存在 ID 一律拒绝，成功或失败都不覆盖。
+
+每次响应后会保存轨迹，最终保存完整报告；进程被强杀可能留下 pending 状态。
+这种状态不能被视作从未调用，也不会自动恢复或重发。需要人工检查后使用新
+ID 发起新实验，明确记录它不是原运行的成功替换。
+
+完整模型响应默认不保存；需要本地诊断时可加 `--retain-responses`。输入、
+轨迹中的引用和可选原始响应都可能含敏感材料，不应提交 Git。退出码 0 仅表示
+批次评审完成，不表示内容全部保留；弃权返回 1，启动/配置/存储错误返回 2。
+网络重试、计费和总体 wall time 仍受各自约束，不由输出 token 总额认证。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。
