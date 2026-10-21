@@ -59,10 +59,25 @@ PRAXILE_TEST_XLSX_WHEELS（只含上述三个 wheel 的目录），以 --forked 
 该用例验证纯 Python 镜像中离线安装、功能检查和系统 Python 未被污染，不调用模型。
 
 DOCX profile 记录 python-docx、lxml、defusedxml 的实际版本；部署时还须固定
-它们的完整依赖 wheel（包括 typing-extensions），并匹配容器平台。当前 DOCX
-新增验证是本机真实文件回读和适配器协议测试，未完成该 profile 的固定依赖
-Docker 复验。不能用上述 XLSX Docker 结果替代 DOCX 的环境验收，也不自动安装
-完整 documents extra。
+它们的完整依赖 wheel（包括 typing-extensions），并匹配容器平台。DOCX Docker
+用例额外设置 PRAXILE_TEST_DOCX_WHEELS（只含下表四个 wheel 的目录）。它不自动
+安装完整 documents extra。此次下载沿用本机配置的 PyPI 镜像，记录实际文件摘要。
+
+| DOCX Wheel | SHA-256 |
+| --- | --- |
+| python_docx-1.2.0-py3-none-any.whl | 3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7 |
+| lxml-5.4.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl | 529024ab3a505fed78fe3cc5ddc079464e709f6c892733e3f5842007cec8ac6e |
+| typing_extensions-4.14.1-py3-none-any.whl | d1e1e3b58374dc93031d6eda2420a48ea44a36c2b4766a4fdeb3710755731d76 |
+| defusedxml-0.7.1-py2.py3-none-any.whl | a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61 |
+
+DOCX/XLSX 双 profile 容器复验使用 af8f2b3 开发 worker wheel，摘要
+`1b8d10446089b717acfc691dfa56838bfe894149f1346550689f18da4ad83137`，737277 字节。
+构建包含本地 README 改动，不是 pristine release。镜像引用沿用下述 python 摘要，
+实际平台 linux/arm64，本地 image ID 为
+`sha256:ce9a404c2c0138e747a43e6ea022d2f7e670ed868df35d627a663ba7fb940ea9`。
+此依赖组合仅验收 Python 3.12 ARM64，不代表其他平台或 DOCX 视觉/语义质量。
+`test_harbor_capabilities.py` 使用上述两组依赖和 --forked，在 Harbor 0.18.0 下
+15 passed（22.09 秒），0.22.0 下 15 passed（21.66 秒），含两个真实容器用例。
 
 2026-10-21 开发 worker wheel 摘要：
 `1aa21edda9206d842ad0590108111b3eaa84c248695ef64f452d1e876cbb3094`，

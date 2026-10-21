@@ -536,6 +536,12 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+DOCX 固定环境补验（2026-10-21）：af8f2b3 worker 与四个固定依赖 wheel 在
+Linux ARM64 / Python 3.12 Docker 中离线安装，docx_text.v1 实际创建、读取、
+opener 和标题/表格回读通过；系统 Python 未安装 docx。测试保持 XLSX profile
+回归，不调用模型。依赖和 worker 摘要见 WORKER_CAPABILITIES.zh-CN.md；不代表
+其他平台、公式重算、视觉或业务质量，完整专业能力总项仍不勾选。
+
 DOCX capability 增补（2026-10-21）：新增 docx_text.v1，实际创建/读取/打开含
 标题、段落、表格的文档并核对回读；复用独立 runner/CLI 的声明、冻结计划和
 恢复证据链。多 profile 必须分别满足自己的 checks/packages，不能混用 XLSX

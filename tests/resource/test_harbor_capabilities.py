@@ -126,24 +126,32 @@ def test_multiple_profiles_require_profile_specific_evidence(tmp_path, monkeypat
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.parametrize("profile, dependency_env, module, dependency_count", [
+    ("xlsx_values.v1", "PRAXILE_TEST_XLSX_WHEELS", "openpyxl", 3),
+    ("docx_text.v1", "PRAXILE_TEST_DOCX_WHEELS", "docx", 4),
+])
 @pytest.mark.skipif(not all(os.environ.get(name) for name in (
-    "PRAXILE_TEST_WHEEL", "PRAXILE_TEST_LEASE_IMAGE", "PRAXILE_TEST_XLSX_WHEELS")), reason="explicit Docker fixtures required")
-def test_real_offline_worker_capability(tmp_path):
+    "PRAXILE_TEST_WHEEL", "PRAXILE_TEST_LEASE_IMAGE")), reason="explicit Docker fixtures required")
+def test_real_offline_worker_capability(tmp_path, profile, dependency_env, module, dependency_count):
     from praxile.eval.harbor_lease import HarborDockerLease
+    if not os.environ.get(dependency_env):
+        pytest.skip("explicit profile dependency wheels required")
     wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
     dependencies = [{"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-                    for path in sorted(Path(os.environ["PRAXILE_TEST_XLSX_WHEELS"]).resolve().glob("*.whl"))]
-    assert len(dependencies) == 3
+                    for path in sorted(Path(os.environ[dependency_env]).resolve().glob("*.whl"))]
+    assert len(dependencies) == dependency_count
     agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
         wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), base_url="http://127.0.0.1:1/v1",
-        model_name="never-called", required_capabilities=["xlsx_values.v1"], dependency_wheels=dependencies)
+        model_name="never-called", required_capabilities=[profile], dependency_wheels=dependencies)
     async def exercise():
         async with HarborDockerLease(tmp_path, image=os.environ["PRAXILE_TEST_LEASE_IMAGE"]) as lease:
             await agent.setup(lease._environment)
             record = json.loads((tmp_path / "praxile-capabilities.json").read_text())
             assert record["reports"][0]["status"] == "passed"
+            assert record["reports"][0]["profile"] == profile
             assert record["reports"][0]["model_called"] is False
             assert agent._capabilities_verified is True
-            system = await lease.execute(["python3", "-I", "-c", "import importlib.util; assert importlib.util.find_spec('openpyxl') is None"], timeout=10)
+            system = await lease.execute(["python3", "-I", "-c",
+                f"import importlib.util; assert importlib.util.find_spec({module!r}) is None"], timeout=10)
             assert system.returncode == 0
     asyncio.run(exercise())
