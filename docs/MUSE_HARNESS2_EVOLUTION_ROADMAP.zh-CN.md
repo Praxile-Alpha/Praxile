@@ -232,6 +232,14 @@ worker 共 41 项资源测试通过（本地 HTTP fixture，无外部模型调�
 checkpoint 和禁用 checkpoint 的运行不获得追溯保障，Native 中途恢复仍未开放。
 详见 RUNTIME_ACTION_RECOVERY.zh-CN.md，完整 crash/resume 总项继续不勾选。
 
+R0-A 执行互斥增补（2026-10-21）：AgentRuntime.run 的正常执行与 resume 共用
+工作区级非阻塞 file_lock，初始化前冲突即拒绝，持有到工具清理结束，异常也释放。
+真实子进程验证同工作区互斥、不同工作区并行和 SIGKILL 后释放；同进程验证清理
+异常不会泄漏锁。仅覆盖协作式 run 入口，不保护外部直接写入、锁文件替换或内部
+方法绕过，不代替 checkpoint 一致性/动作副作用确认；完整恢复仍未开放。
+验证：fast suite 1249 passed / 13 skipped，相关恢复/交付资源测试 30 passed，
+本机 HTTP fixture 的 Native worker 回归 16 passed；无外部模型调用。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

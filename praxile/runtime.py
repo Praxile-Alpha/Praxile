@@ -5,6 +5,7 @@ import hashlib
 import re
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from typing import Any
 
 from .action_schema import ActionSchemaRegistry
@@ -31,7 +32,7 @@ from .task_analyzer import TaskAnalyzer
 from .task_input import TaskInput
 from .tools import MUTATING_ACTIONS, ToolRegistry
 from .trajectory import TrajectoryLogger
-from .utils import append_jsonl, shorten, utc_now
+from .utils import append_jsonl, file_lock, shorten, utc_now
 
 
 ProgressCallback = Callable[[str, str, Any], None]
@@ -74,7 +75,11 @@ class AgentRuntime:
         cancel_requested: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
+        ownership = ExitStack()
+        acquired = False
         try:
+            ownership.enter_context(file_lock(self.config.paths.state / "runtime-execution", timeout_seconds=0))
+            acquired = True
             if experimental_context is not None:
                 if (resume or use_experience or not isinstance(experimental_context, str)
                         or not experimental_context.strip() or len(experimental_context) > 6000):
@@ -271,7 +276,11 @@ class AgentRuntime:
                 progress_callback=progress_callback,
             )
         finally:
-            self.tools.close()
+            try:
+                if acquired:
+                    self.tools.close()
+            finally:
+                ownership.close()
 
     def _activation_observations(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         state = dict(snapshot)
