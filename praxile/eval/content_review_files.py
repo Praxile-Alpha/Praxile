@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .content_review import _digest, _validate_inputs, output_units
 from .content_review_compare import _checked, compare_content_reviews
+from .content_review_run import validate_execution_binding
 
 
 def _read(root, name):
@@ -39,6 +40,7 @@ def load_review_run(directory):
         raise ValueError("review directory must be a local directory")
     manifest, inputs, report, trajectory = [_read(root, name) for name in (
         "manifest.json", "inputs.json", "report.json", "trajectory.json")]
+    validate_execution_binding(manifest.get("execution_binding"))
     if (manifest.get("schema_version") != "praxile.content_review_run.v1"
             or manifest.get("input_sha256") != _digest(json.dumps(inputs, sort_keys=True))
             or set(inputs) != {"source_text", "output_text", "requirements"}):

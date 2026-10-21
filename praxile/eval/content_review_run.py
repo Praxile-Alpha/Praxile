@@ -14,13 +14,26 @@ from .content_review_batch import review_content_batched
 from .v2.manifest import _redact
 
 
+def validate_execution_binding(value):
+    if value is None:
+        return None
+    fields = {"task_fingerprint", "execution_sha256", "trajectory_sha256", "source_sha256",
+              "output_sha256", "evaluator_sha256"}
+    if (not isinstance(value, dict) or set(value) != fields
+            or any(not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
+                   for digest in value.values())):
+        raise ValueError("invalid execution evidence binding")
+    return dict(value)
+
+
 def run_content_review(config, *, run_id, inputs, total_output_tokens, batch_size=4,
                        output_allocations=None, private=True, retain_responses=False,
-                       timeout_per_call=90, role="content_review_judge"):
+                       timeout_per_call=90, role="content_review_judge", execution_binding=None):
     if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", run_id):
         raise ValueError("unsafe content review run ID")
     if not isinstance(inputs, dict) or set(inputs) != {"source_text", "output_text", "requirements"}:
         raise ValueError("inputs require source_text, output_text and requirements only")
+    execution_binding = validate_execution_binding(execution_binding)
     # Require an explicit role; a default coding route is not an independent judge declaration.
     role_config = config.get("model_roles", role, default={})
     if not isinstance(role_config, dict) or not role_config.get("provider") or not role_config.get("model"):
@@ -61,6 +74,8 @@ def run_content_review(config, *, run_id, inputs, total_output_tokens, batch_siz
             "output_allocations": output_allocations, "timeout_per_call": timeout_per_call,
             "retain_responses": retain_responses, "automatic_replay_allowed": False,
             "promotion_eligible": False}
+        if execution_binding is not None:
+            manifest["execution_binding"] = execution_binding
         write_json(run / "manifest.json", manifest)
         write_json(run / "inputs.json", inputs)
 

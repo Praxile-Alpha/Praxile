@@ -160,6 +160,17 @@ R0-A 命令入口增补（2026-10-21）：`python -m praxile.eval.owned_native_c
 基础环境实测 --help 无需 Harbor。计划模式不认证输入内容/基础设施/模型可用性；
 无 resume、无官方评分、无额外真实模型调用，其他未完成项继续保留。
 
+R0-A 独立内容评审桥接（2026-10-21）：新增 owned_content_review，对冻结任务
+fingerprint、执行终态/清理、输入清单、所选输入/输出字节和轨迹摘要先校验，
+再从执行目录外读取匹配 evaluator digest 的 requirements；只调用独立
+content_review_judge，不回灌执行 Agent。review manifest 保存六个 execution_binding
+摘要，读取端同步校验字段格式，旧无绑定记录兼容但不补造关联证据。
+30 项内容桥接/持久化/读取测试通过，包括篡改提前拒绝、评审存储边界和重复
+run ID 不重放。仅支持显式 praxile-content-review v1 开发评审、单个 UTF-8 源
+输入和文本输出；DOCX/PDF 抽取、官方 evaluator、独立 OS 身份隔离仍未实现。
+这是本地一致性与调用边界证据，非签名认证、真实 judge 准确率或官方成绩。
+详见 `OWNED_CONTENT_REVIEW.zh-CN.md`，路线图总项保持未完成。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
