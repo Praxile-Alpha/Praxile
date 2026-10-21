@@ -536,6 +536,13 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+worker 能力预检增补（2026-10-21）：Harbor Native 可显式 required_capabilities
+声明 xlsx_values.v1；离线安装后用 worker 解释器真实写出/读取/opener/值回读，
+失败在模型和凭据代理启动前停止，跳过 setup 的 run 也拒绝。声明进入 worker
+摘要/版本，实际检查和包版本留存。表格三个依赖 wheel 已固定摘要，真实 Docker
+验证只安装到 worker，不污染系统 Python。仍无新依赖环境下的官方任务模型复验，
+也不覆盖公式/视觉/其他 capability，完整专业能力总项不勾选。详见 WORKER_CAPABILITIES.zh-CN.md。
+
 真实新工具版本复验（2026-10-21）：96d468b 新 wheel 在固定 Office 库存任务
 完成一次 M3.1 Flash 基线，官方仍 13/15，产物留存/摘要一致/凭据撤销/资源清理
 已验证。但模型没有使用新 XLSX 工具，改用 Shell；两次文档 batch schema 拒绝，

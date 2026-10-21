@@ -31,12 +31,20 @@ class PraxileAgent(BaseAgent):
                  output_directory: str | None = None, renderer_executable: str = "",
                  deliverable_contract: dict | None = None,
                  dependency_wheels: list[dict] | None = None,
+                 required_capabilities: list[str] | None = None,
                  model_request_options: dict | None = None,
                  development_candidate_file: str | None = None,
                  development_candidate_sha256: str | None = None,
                  development_only: bool = False, repository: str | None = None, **kwargs):
         from ..model_options import validate_request_options
         self.model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
+        from ..capability_probe import PROFILES
+        if required_capabilities is not None and (not isinstance(required_capabilities, list)
+                or any(not isinstance(item, str) or item not in PROFILES for item in required_capabilities)
+                or len(set(required_capabilities)) != len(required_capabilities)):
+            raise ValueError("required_capabilities must contain unique supported versioned profiles")
+        self.required_capabilities = tuple(sorted(required_capabilities or []))
+        self._capabilities_verified = not self.required_capabilities
         from ..services.run_service import normalize_deliverable_contract
         public_contract = normalize_deliverable_contract(deliverable_contract)
         self._public_contract_json = (json.dumps(public_contract, sort_keys=True, separators=(",", ":"))
@@ -110,6 +118,8 @@ class PraxileAgent(BaseAgent):
             "dependencies": [{"filename": path.name, "sha256": digest}
                              for path, digest in self._dependency_wheels],
             "installation": "offline_no_dependency_resolution"}
+        if self.required_capabilities:
+            self.worker_environment["required_capabilities"] = list(self.required_capabilities)
         self.worker_environment_sha256 = hashlib.sha256(json.dumps(
             self.worker_environment, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         path = PurePosixPath(workspace)
@@ -124,7 +134,7 @@ class PraxileAgent(BaseAgent):
         if self.credential_file and timeout_seconds > 3540:
             raise ValueError("broker-backed execution requires timeout_seconds <= 3540")
         self.remote_root = "/tmp/praxile-native-" + wheel_sha256[:16]
-        if self._dependency_wheels:
+        if self._dependency_wheels or self.required_capabilities:
             self.remote_root += "-" + self.worker_environment_sha256[:16]
         super().__init__(*args, **kwargs)
         if not self.model_name:
@@ -137,11 +147,12 @@ class PraxileAgent(BaseAgent):
         return "praxile-native"
 
     def version(self) -> str:
-        if self._dependency_wheels:
+        if self._dependency_wheels or self.required_capabilities:
             return "sha256:" + self.wheel_sha256 + "+worker:" + self.worker_environment_sha256
         return "sha256:" + self.wheel_sha256
 
     async def setup(self, environment) -> None:
+        self._capabilities_verified = not self.required_capabilities
         # Recheck sources before transferring anything; constructor checks may be stale.
         for path, digest in [(self.wheel, self.wheel_sha256), *self._dependency_wheels]:
             if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
@@ -175,6 +186,33 @@ class PraxileAgent(BaseAgent):
             "status": "installed", "task_image_modified": False,
             "extra_dependency_environment": bool(dependencies),
             "strict_environment_equivalence_verified": False})
+        capability_reports = []
+        for profile in self.required_capabilities:
+            try:
+                result = await environment.exec(shlex.join([
+                    self.remote_root + "/venv/bin/python", "-I", "-m", "praxile.capability_probe",
+                    "--profile", profile]), timeout_sec=60)
+                if not isinstance(result.stdout, str) or len(result.stdout) > 65536:
+                    raise ValueError("invalid capability response")
+                report = json.loads(result.stdout)
+                if (not isinstance(report, dict) or report.get("schema_version") != "praxile.capability_probe.v1"
+                        or report.get("profile") != profile or report.get("status") not in {"passed", "failed"}):
+                    raise ValueError("invalid capability report")
+                if report["status"] == "passed" and (
+                        report.get("checks") != ["create", "read", "opener", "literal_roundtrip"]
+                        or not isinstance(report.get("packages"), dict)
+                        or set(report["packages"]) != {"openpyxl", "et-xmlfile", "defusedxml"}
+                        or any(not isinstance(value, str) or not value for value in report["packages"].values())):
+                    raise ValueError("incomplete capability evidence")
+                capability_reports.append(report)
+                write_json(self.logs_dir / "praxile-capabilities.json", {
+                    "worker_environment_sha256": self.worker_environment_sha256, "reports": capability_reports})
+                if result.return_code or report["status"] != "passed":
+                    raise RuntimeError("capability unavailable")
+            except Exception as error:
+                write_json(self.logs_dir / "praxile-capability-failure.json", {
+                    "profile": profile, "error_type": type(error).__name__, "model_started": False})
+                raise RuntimeError("Required worker capability failed before model execution") from error
         if self.renderer_executable:
             # Probe the worker interpreter, not the image's system Python.
             probe = ("import os,sys; from defusedxml.ElementTree import fromstring; "
@@ -191,6 +229,7 @@ class PraxileAgent(BaseAgent):
                     "and praxile[documents] dependencies in the worker environment before "
                     "running this experiment; no model request was started by setup"
                 ) from error
+        self._capabilities_verified = True
 
     async def _exec(self, environment, command: str, *, timeout_seconds: int | None = None):
         result = await environment.exec(command, timeout_sec=timeout_seconds or self.timeout_seconds)
@@ -200,6 +239,8 @@ class PraxileAgent(BaseAgent):
         return result
 
     async def run(self, instruction, environment, context) -> None:
+        if not self._capabilities_verified:
+            raise RuntimeError("Required worker capability setup has not passed")
         if self.credential_file is None:
             return await self._run_with_endpoint(instruction, environment, context)
         from ..eval.credential_broker import ChatCredentialBroker, read_private_key
