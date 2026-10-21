@@ -14,6 +14,30 @@ class ModelError(RuntimeError):
     pass
 
 
+class InvalidStructuredResponse(ModelError):
+    """A received but invalid submission; retain safe reported usage only."""
+    def __init__(self, code, payload):
+        allowed = {"submission_count_or_shape", "submission_function_mismatch",
+                   "submission_arguments_invalid", "submission_envelope_invalid"}
+        self.code = code if code in allowed else "submission_envelope_invalid"
+        super().__init__(self.code)
+        usage = payload.get("usage") if isinstance(payload, dict) else None
+        self.reported_usage = {}
+        if isinstance(usage, dict):
+            for key in ("prompt_tokens", "completion_tokens", "input_tokens", "output_tokens"):
+                if key not in usage:
+                    continue
+                value = usage.get(key)
+                self.reported_usage[key] = value if type(value) is int and 0 <= value <= 10**12 else None
+        self.finish_reason = "unknown"
+        try:
+            finish = payload["choices"][0]["finish_reason"]
+            if isinstance(finish, str) and finish in {"stop", "length", "max_tokens", "tool_calls", "end_turn"}:
+                self.finish_reason = finish
+        except (KeyError, IndexError, TypeError):
+            pass
+
+
 class ModelUnavailable(ModelError):
     pass
 
@@ -180,16 +204,16 @@ class OpenAICompatibleProvider:
         try:
             message = payload["choices"][0]["message"]
             if contract is not None:
-                from .structured_response import submission_content
+                from .structured_response import submission_content, SubmissionError
                 try:
                     content = submission_content(message, contract)
-                except ValueError as error:
-                    raise ModelError(str(error)) from error
+                except SubmissionError as error:
+                    raise InvalidStructuredResponse(error.code, payload) from error
             else:
                 content = message["content"]
         except (KeyError, IndexError, TypeError) as exc:
             if contract is not None:
-                raise ModelError("invalid structured response envelope") from exc
+                raise InvalidStructuredResponse("submission_envelope_invalid", payload) from exc
             raise ModelError(f"Unexpected OpenAI-compatible response shape: {payload}") from exc
         return {
             "content": content,

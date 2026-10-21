@@ -1,0 +1,84 @@
+{
+  "schema_version": "praxile.public_submission_failure_trial.v1",
+  "scope": "one_group_diagnostic_not_resume",
+  "model": "MiniMax-M3.1-Flash",
+  "request_options": {
+    "reasoning_effort": "low"
+  },
+  "report": {
+    "schema_version": "praxile.content_review.v1",
+    "scope": "caller_supplied_text",
+    "role": "content_review_judge",
+    "input_sha256": "f4fb32158a27267e432e26f075c111edc4fa189ba54884ebb41c95ace537a532",
+    "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+    "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+    "requirements_sha256": "0d4f9d738f7a804b6b58891a357b670c9305ce8e129e7c55e9784896f5400406",
+    "status": "abstained",
+    "official_evaluation": false,
+    "promotion_eligible": false,
+    "content_preservation_verified": false,
+    "requirement_coverage_verified": false,
+    "max_tokens": 2000,
+    "timeout_seconds": 90,
+    "logical_requests": 1,
+    "usage_available": true,
+    "transport_attempts_verified": false,
+    "response_mode": "function",
+    "citation_mode": "units",
+    "response_contract_sha256": "a2566b6c8b35bd1280f845460292c4fdc5baaaa888b4bd35244c7ba5b24450c7",
+    "submission_error_code": "submission_arguments_invalid",
+    "finish_reason": "length",
+    "output_budget_reached": true,
+    "failure_stage": "request",
+    "failure_category": "model_response_error"
+  },
+  "cost": {
+    "model_calls": 1,
+    "prompt_tokens": 3797,
+    "completion_tokens": 2000,
+    "tool_calls": 0,
+    "usage_evidence": {
+      "calls": 1,
+      "recorded_calls": 1,
+      "known_tokens": {
+        "prompt_tokens": 3797,
+        "completion_tokens": 2000
+      },
+      "reported_calls": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1
+      },
+      "complete_tokens": {
+        "prompt_tokens": 3797,
+        "completion_tokens": 2000
+      },
+      "schema_version": "praxile.trajectory_usage.v1",
+      "by_purpose": {
+        "content_review_judge": {
+          "calls": 1,
+          "recorded_calls": 1,
+          "known_tokens": {
+            "prompt_tokens": 3797,
+            "completion_tokens": 2000
+          },
+          "reported_calls": {
+            "prompt_tokens": 1,
+            "completion_tokens": 1
+          },
+          "complete_tokens": {
+            "prompt_tokens": 3797,
+            "completion_tokens": 2000
+          }
+        }
+      },
+      "unattributed_calls": 0,
+      "cost_usd": null,
+      "scope": "calls_recorded_by_trajectory_logger"
+    }
+  },
+  "same_input_and_contract_as_prior_failed_group": true,
+  "process_exit_code": 0,
+  "transport_retries_configured": 0,
+  "report_sha256": "8152cee076e9ec701ab5ba3c41c5b265d37a1f52d7bb9e368e8d89cac39711bc",
+  "promotion_eligible": false
+}

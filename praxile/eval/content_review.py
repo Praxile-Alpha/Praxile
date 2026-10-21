@@ -3,7 +3,7 @@ import hashlib
 import json
 
 from praxile.structured_response import parse_submission_object
-from praxile.model import ModelError, ModelUnavailable, ModelRequestCancelled
+from praxile.model import ModelError, ModelUnavailable, ModelRequestCancelled, InvalidStructuredResponse
 
 
 def _digest(text):
@@ -244,6 +244,14 @@ def review_content(router, logger, *, source_text, output_text, requirements,
                           item["verdict"] == "preserved" for item in items))
     except Exception as error:
         # Do not persist provider exception text, which can include secrets or bodies.
+        if isinstance(error, InvalidStructuredResponse) and stage == "request":
+            logger.add_model_cost(error.reported_usage, route={"purpose": role}, status="failure")
+            record["usage_available"] = bool(error.reported_usage)
+            record["submission_error_code"] = error.code
+            record["finish_reason"] = error.finish_reason
+            reported_output = error.reported_usage.get("completion_tokens")
+            record["output_budget_reached"] = (
+                reported_output >= max_tokens if type(reported_output) is int else None)
         category = "internal_error"
         if isinstance(error, ModelRequestCancelled):
             category = "cancelled"

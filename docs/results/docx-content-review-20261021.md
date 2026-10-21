@@ -141,3 +141,19 @@ usage and full run cost are unknown. This confirms the citation interface worked
 for three responses, not semantic correctness, reliability, or a quality gain
 over earlier stochastic calls. Complete and calibrated content acceptance remains
 unfinished. Raw checkpoints and reconstructed source text remain private.
+
+## Invalid submission usage diagnostic
+
+One new call used exactly the prior fourth group's input and function contract,
+with the same 2000-token budget, low reasoning and no transport retry. The new
+provider diagnostic reported `submission_arguments_invalid`, finish reason
+`length`, and reported output usage reaching the budget. The
+[receipt](docx-review-envelope-20261021.json) retains the failed call's token
+usage through the real provider/router/reviewer path. No body is published.
+
+This directly identifies a truncated/invalid submission in the new call, not the
+unretained prior response. It remains a separate diagnostic; it is not joined to
+the earlier twelve items as a completed batch. The reviewer's ledger now records
+received-but-invalid submissions as failures with known usage, or unknown where
+fields are absent/invalid. Other ModelError consumers have not all been migrated.
+No automatic retries, budget escalation or promotion followed.

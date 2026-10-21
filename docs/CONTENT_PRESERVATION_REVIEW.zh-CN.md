@@ -27,6 +27,13 @@ provider/transport 的重试仍由既有配置控制。异常正文不会写入�
 未知/重复 ID、判定值、理由、引文类型/长度、无法引用和覆盖不完整；不记录
 模型提供的未知字段或错误正文，不做格式修复或自动重试。
 
+provider 已收到响应、但 function submission 无效时，抛出兼容 ModelError 的
+`InvalidStructuredResponse`，仅保留固定 submission 错误码、白名单结束标记
+和 token 字段。内容评审器按失败调用计入 TrajectoryLogger，不执行补救请求。
+非法 token 值以 null 保留未知，不删除后误用另一别名补成完整数据。响应正文、
+请求头及未知 usage 字段不进入安全证据。其他调用方仍按 ModelError 处理；
+这不代表所有 runtime 消费者已统一补记失败用量。
+
 ## 私有响应检查点
 
 为避免诊断时重复请求，可显式传入 `response_checkpoint` 回调，默认关闭。

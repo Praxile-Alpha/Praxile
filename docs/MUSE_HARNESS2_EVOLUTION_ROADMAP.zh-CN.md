@@ -637,6 +637,10 @@ LLM 判断与环境验证继续分开，不能自动晋升。测试仅覆盖接�
 12 项引用校验通过，第四组 provider 响应处理失败，整体弃权且完整用量未知。
 见 [片段引用记录](results/docx-review-units-20261021.json)；引用真实性不等于
 语义判断正确，完整可靠性与校准仍未完成。
+无效 submission 用量增补：provider 新增 ModelError 兼容错误类型，保留固定
+错误码、结束标记与安全 token 字段；reviewer 按失败调用记账，非法别名保持未知。
+真实单次同输入探测明确收到 length + arguments_invalid，输出触顶 2000；不拼接
+回旧批次，不追溯推断旧失败。见 [响应诊断](results/docx-review-envelope-20261021.json)。
 
 ## 9. 阶段 R3：证明竞争力，而非只完成接口
 

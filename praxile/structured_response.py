@@ -4,6 +4,13 @@ import json
 import re
 
 
+class SubmissionError(ValueError):
+    """Bounded diagnostic code, never includes submitted values."""
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def validate_response_contract(value):
     if (not isinstance(value, dict) or set(value) != {"name", "schema"}
             or not isinstance(value["name"], str)
@@ -39,14 +46,17 @@ def submission_request(contract):
 def submission_content(message, contract):
     calls = message.get("tool_calls") if isinstance(message, dict) else None
     if not isinstance(calls, list) or len(calls) != 1 or not isinstance(calls[0], dict):
-        raise ValueError("expected exactly one structured result submission")
+        raise SubmissionError("submission_count_or_shape", "expected exactly one structured result submission")
     call = calls[0]
     function = call.get("function")
     if (call.get("type") != "function" or not isinstance(function, dict)
             or function.get("name") != contract["name"] or not isinstance(function.get("arguments"), str)):
-        raise ValueError("structured result function mismatch")
+        raise SubmissionError("submission_function_mismatch", "structured result function mismatch")
     content = function["arguments"]
-    parse_submission_object(content)
+    try:
+        parse_submission_object(content)
+    except ValueError as error:
+        raise SubmissionError("submission_arguments_invalid", "invalid structured result arguments") from error
     return content
 
 
