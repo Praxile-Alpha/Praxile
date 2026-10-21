@@ -165,6 +165,24 @@ ID 发起新实验，明确记录它不是原运行的成功替换。
 批次评审完成，不表示内容全部保留；弃权返回 1，启动/配置/存储错误返回 2。
 网络重试、计费和总体 wall time 仍受各自约束，不由输出 token 总额认证。
 
+## 从运行目录离线比较
+
+```sh
+python -m praxile.eval.content_review_files \
+  --baseline /path/to/project/.praxile/eval/v2/content_reviews/baseline-001 \
+  --candidate /path/to/project/.praxile/eval/v2/content_reviews/candidate-001
+```
+
+命令只读取文件，不调用模型。逐一核验 manifest 输入/身份摘要、计划与输入
+快照、分组额度、报告与轨迹内两处记录、引用片段与正文及偏移。拒绝符号链接
+证据文件、重复 JSON 字段和非有限数，每个文件上限 16 MiB。缺失、损坏或不
+一致退出 2；条件不匹配或未完成退出 1；可作描述性比较退出 0，仍不代表获胜。
+
+支持新 content_review_run 目录格式，不猜测旧临时脚本格式或自动迁移历史
+报告。pending/中断且缺完整计划的记录不能比较。身份摘要由本地记录者声明，
+即使所有文件自洽也不是防伪签名；同时改写完整输入和证据链的攻击不属于
+该校验的认证范围。最终仍标记 provenance_verified=False、promotion_eligible=False。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。
