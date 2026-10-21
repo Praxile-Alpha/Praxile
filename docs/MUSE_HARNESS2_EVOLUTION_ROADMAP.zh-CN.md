@@ -808,6 +808,10 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 - [ ] 激活条件包含任务语义、工具/应用版本、状态前置条件及 anti-scope；未知即 abstain。
   初次激活已增加基于控制面观测的 activation_requirements（精确工具版本与状态点路径），未知/不符/非法时 abstain，保留原语义与 anti-scope 门控及强制规则。条件随选中经验冻结到 checkpoint，恢复前重新观测，失效时拒绝恢复。运行中每次模型请求前也重新观测，失效则 checkpoint + needs_human，避免继续使用旧消息中的经验。10 项路由资源测试、13 项纯条件测试及 2 项中途失效测试通过。外部应用状态、浏览器及跨进程版本观测仍未覆盖；此机制也不是原子权限检查，完整项保持未勾选。
 - [ ] 用户偏好走独立 namespace 和用户确认，能力改善与个性化分别统计。
+  离线治理隔离：Reflect/Consolidation 的直接资产输入排除偏好，Reflect 公开
+  excluded_preference_assets，并排除被拒偏好提案及阻止输出指向偏好的候选。
+  防止按重复/过期/正负计数把偏好提升为通用能力或建议淘汰。SQLite 集成回归
+  保留普通资产治理；轨迹级挖掘、其他晋升入口及效果测量仍未全面审计，不勾选。
   归因分流增补：能力 AttributionJudge 跳过 preference namespace；SQLite 写入
   入口独立降级外部正负归因，不产生能力 outcome_attributed 事件或正负计数，
   保留引用观察和任务自身结果。真实 SQLite 测试覆盖成功/失败两种伪造归因，

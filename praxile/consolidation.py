@@ -146,11 +146,14 @@ class ConsolidationEngine:
         }
 
     def _duplicate_groups(self) -> list[dict[str, Any]]:
+        from .preferences import is_preference_asset
         assets: list[dict[str, Any]] = []
         for kind in ["memory", "failure", "eval", "skill"]:
             assets.extend(self.store.list_assets(kind))
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for item in assets:
+            if is_preference_asset(item):
+                continue
             key = self._key(item)
             if key:
                 grouped[key].append(item)
@@ -218,10 +221,11 @@ class ConsolidationEngine:
         return results
 
     def _governed_assets(self) -> list[dict[str, Any]]:
+        from .preferences import is_preference_asset
         assets: list[dict[str, Any]] = []
         for kind in ["memory", "failure", "eval", "skill", "rule"]:
             assets.extend(self.store.list_assets(kind))
-        return assets
+        return [item for item in assets if not is_preference_asset(item)]
 
     def _key(self, item: dict[str, Any]) -> str:
         title = str(item.get("title") or "")

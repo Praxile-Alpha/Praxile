@@ -10,6 +10,7 @@ from typing import Any
 from ..config import Config
 from ..evolution import EvolutionEngine
 from ..store import ExperienceStore
+from ..preferences import is_preference_asset, is_preference_proposal
 from ..utils import new_id, shorten, slugify, stable_hash, utc_now, write_json
 
 
@@ -81,6 +82,7 @@ class ReflectEngine:
             "inputs": {
                 "runs": [_compact_run(item) for item in context["runs"]],
                 "asset_count": len(context["assets"]),
+                "excluded_preference_assets": context["excluded_preference_assets"],
                 "proposal_count": len(context["proposals"]),
                 "feedback_count": len(context["feedback"]),
                 "silent_failure_signal_count": len(context["silent_failure_signals"]),
@@ -118,10 +120,13 @@ class ReflectEngine:
         assets: list[dict[str, Any]] = []
         for kind in ["memory", "failure", "eval", "skill", "rule"]:
             assets.extend(self.store.list_assets(kind))
+        excluded_preferences = [item["path"] for item in assets if is_preference_asset(item)]
+        assets = [item for item in assets if not is_preference_asset(item)]
         proposals = [
             item
             for item in self.store.list_proposals(status=None, limit=10000)
-            if not cutoff or _after_cutoff(item.get("updated_at") or item.get("created_at"), cutoff)
+            if not is_preference_proposal(item)
+            and (not cutoff or _after_cutoff(item.get("updated_at") or item.get("created_at"), cutoff))
         ]
         feedback = [
             item
@@ -136,6 +141,7 @@ class ReflectEngine:
         return {
             "runs": runs,
             "assets": assets,
+            "excluded_preference_assets": excluded_preferences,
             "proposals": proposals,
             "feedback": feedback,
             "silent_failure_signals": silent_signals,
@@ -349,6 +355,11 @@ class ReflectEngine:
         }
         seen: set[str] = set()
         for proposal in proposals:
+            if is_preference_proposal(proposal):
+                proposal["proposal_gate"] = {"passed": False,
+                    "reason": "Personalization requires dedicated user preference review, not capability reflection."}
+                suppressed.append(proposal)
+                continue
             fingerprint = stable_hash(json.dumps(proposal.get("changes") or [], sort_keys=True, ensure_ascii=False), length=16)
             if fingerprint in seen:
                 continue

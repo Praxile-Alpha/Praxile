@@ -32,13 +32,20 @@ capability_credit_excluded。不会生成 outcome_attributed 事件，也不增�
 positive_outcome_count/negative_outcome_count。任务自身 outcome 仍如实保留，
 不能把它当成偏好效果。旧计数/历史事件不被静默改写。
 
+离线 Reflect 的资产分析排除 preference namespace，并在 inputs 中列出
+excluded_preference_assets；被拒偏好提案也不进入通用规则反思。Reflect 提案
+出口拒绝携带 personalization 标记或指向偏好目录的候选。Consolidation 的
+重复/过期/冲突/低价值资产扫描同样排除该目录，避免把偏好按任务计数提炼成
+通用能力或建议淘汰。用户仍可通过专属提案、人工审批和回滚修改自己的偏好。
+
 ## 尚未完成
 
 - 这是项目内 namespace，不是多用户访问控制。共享同一项目状态的用户仍可读到
   已批准偏好；尚不支持个人身份隔离、全局偏好或自动跨项目迁移。
 - 旧 user.md 不自动迁移；已有 memory append、普通 memory_update 路径不强制
   重分类，仍需用户审阅内容。
-- 当前分流覆盖能力 judge 和 SQLite outcome credit，通用资产 usage 的任务结果、
-  其他离线分析/晋升入口仍需分别审计。独立运行摘要不能替代实验测量，也不能
+- 当前分流覆盖能力 judge、SQLite outcome credit、Reflect 与 Consolidation 的
+  直接资产输入；通用资产 usage 的任务结果、轨迹级模式挖掘和其他晋升入口仍需
+  分别审计。独立运行摘要不能替代实验测量，也不能
   据此认定完整 R2 偏好条目完成。
 - 没有自动挖掘偏好、真实模型偏好遵循率测试、偏好专属 Web 编辑器或满意度指标。

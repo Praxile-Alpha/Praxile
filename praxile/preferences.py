@@ -21,6 +21,12 @@ def usage_summary(assets):
             "personalization_effect": "not_measured", "capability_improvement": "not_measured"}
 
 
+def is_preference_proposal(proposal):
+    return (proposal.get("experience_purpose") == "personalization"
+            or any(is_preference_asset(change) for change in (proposal.get("changes") or []) if isinstance(change, dict))
+            or any(is_preference_asset({"path": path}) for path in (proposal.get("target_files") or [])))
+
+
 def compose_preference(config, *, key, text, applies_when, source_reference):
     if not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key):
         raise ValueError("preference key must be a bounded lowercase identifier")

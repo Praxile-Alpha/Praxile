@@ -55,3 +55,34 @@ def test_preference_never_receives_task_outcome_credit(tmp_path, outcome, level)
     assert usage[0]["semantic_attribution"]["capability_credit_excluded"] is True
     assert usage[0]["semantic_attribution"]["should_update_asset_outcome"] is False
     assert all(event["stage"] != "outcome_attributed" for event in store.activation_events_for_task("task_pref"))
+
+
+def test_offline_governance_excludes_preferences_and_rejected_preferences(tmp_path):
+    from praxile.consolidation import ConsolidationEngine
+    from praxile.reflect.engine import ReflectEngine, ReflectScope, ALL_MODES
+    config = Config.load(tmp_path)
+    store = ExperienceStore(config.paths)
+    store.initialize(config)
+    paths = []
+    for name in ("brief", "short"):
+        path = config.paths.state / f"memory/preferences/{name}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Same preference\n\nPrefer brief summaries.")
+        store.index_asset(path)
+        paths.append(path.relative_to(tmp_path).as_posix())
+    proposal = ProposalService(store).propose_preference(key="brief", text="Brief",
+        applies_when="summaries", source_reference="user request")
+    store.reject_proposal(proposal, "not my preference")
+    reflect = ReflectEngine(config, store)
+    context = reflect._context(cutoff=None)
+    assert set(context["excluded_preference_assets"]) == set(paths)
+    assert not any(item["proposal_id"] == proposal["proposal_id"] for item in context["proposals"])
+    report = reflect.run(ReflectScope(asset=paths[0], modes=frozenset(ALL_MODES)))
+    assert not report["generated_proposals"]
+    assert set(report["inputs"]["excluded_preference_assets"]) == set(paths)
+    accepted, suppressed = reflect._gate_proposals([proposal], "reflect_fixture")
+    assert not accepted and len(suppressed) == 1
+    assert suppressed[0]["proposal_gate"]["passed"] is False
+    consolidation = ConsolidationEngine(config, store)
+    assert not any(item["path"] in paths for item in consolidation._governed_assets())
+    assert not any(item["path"] in paths for group in consolidation._duplicate_groups() for item in group["items"])
