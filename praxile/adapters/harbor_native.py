@@ -168,6 +168,7 @@ class PraxileAgent(BaseAgent):
             "extra_dependency_environment": bool(dependencies),
             "strict_environment_equivalence_verified": False})
         capability_reports = []
+        from ..capability_probe import PROFILE_CHECKS, PROFILE_PACKAGES
         for profile in self.required_capabilities:
             try:
                 result = await environment.exec(shlex.join([
@@ -180,9 +181,9 @@ class PraxileAgent(BaseAgent):
                         or report.get("profile") != profile or report.get("status") not in {"passed", "failed"}):
                     raise ValueError("invalid capability report")
                 if report["status"] == "passed" and (
-                        report.get("checks") != ["create", "read", "opener", "literal_roundtrip"]
+                        report.get("checks") != PROFILE_CHECKS[profile]
                         or not isinstance(report.get("packages"), dict)
-                        or set(report["packages"]) != {"openpyxl", "et-xmlfile", "defusedxml"}
+                        or set(report["packages"]) != set(PROFILE_PACKAGES[profile])
                         or any(not isinstance(value, str) or not value for value in report["packages"].values())):
                     raise ValueError("incomplete capability evidence")
                 capability_reports.append(report)

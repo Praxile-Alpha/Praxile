@@ -536,6 +536,12 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+DOCX capability 增补（2026-10-21）：新增 docx_text.v1，实际创建/读取/打开含
+标题、段落、表格的文档并核对回读；复用独立 runner/CLI 的声明、冻结计划和
+恢复证据链。多 profile 必须分别满足自己的 checks/packages，不能混用 XLSX
+结果。已验证本地真实 DOCX 和协议失败拦截，尚无固定 DOCX 依赖容器复验，
+不涉及渲染、视觉、业务语义或质量提升，完整 capability 总项仍不勾选。
+
 owned runner 能力声明贯通（2026-10-21）：独立执行 API/CLI 可传入固定 dependency
 wheels 与 required capabilities；仅计划模式校验摘要，执行时先功能预检。
 能力/依赖身份进入 run ID 冻结计划，环境与能力报告纳入恢复证据校验，变更声明

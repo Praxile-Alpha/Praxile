@@ -94,6 +94,36 @@ def test_renderer_failure_does_not_unlock_required_capability_run(tmp_path, monk
     run.assert_not_called()
 
 
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_multiple_profiles_require_profile_specific_evidence(tmp_path, monkeypatch, corrupt):
+    from praxile.capability_probe import PROFILE_CHECKS, PROFILE_PACKAGES
+    agent = make_agent(tmp_path, ["xlsx_values.v1", "docx_text.v1"])
+    run = AsyncMock()
+    monkeypatch.setattr(agent, "_run_with_endpoint", run)
+    async def execute(command, **kwargs):
+        if "praxile.capability_probe" not in command:
+            return SimpleNamespace(return_code=0, stdout="")
+        profile = command.split()[-1]
+        evidence_profile = "xlsx_values.v1" if corrupt else profile
+        return SimpleNamespace(return_code=0, stdout=json.dumps({
+            "schema_version": "praxile.capability_probe.v1", "profile": profile,
+            "status": "passed", "checks": PROFILE_CHECKS[evidence_profile],
+            "packages": {name: "fixture" for name in PROFILE_PACKAGES[evidence_profile]}}))
+    environment = SimpleNamespace(exec=execute, upload_file=AsyncMock())
+    if corrupt:
+        with pytest.raises(RuntimeError, match="before model execution"):
+            asyncio.run(agent.setup(environment))
+        with pytest.raises(RuntimeError, match="setup has not passed"):
+            asyncio.run(agent.run("task", environment, None))
+        run.assert_not_called()
+    else:
+        asyncio.run(agent.setup(environment))
+        record = json.loads((tmp_path / "praxile-capabilities.json").read_text())
+        assert [r["profile"] for r in record["reports"]] == ["docx_text.v1", "xlsx_values.v1"]
+        asyncio.run(agent.run("task", environment, None))
+        run.assert_awaited_once()
+
+
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(not all(os.environ.get(name) for name in (

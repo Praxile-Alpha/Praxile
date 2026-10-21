@@ -8,9 +8,11 @@
 {"required_capabilities":["xlsx_values.v1"]}
 ```
 
-当前唯一支持的 profile 是 `xlsx_values.v1`，覆盖新建值型工作簿、指定 sheet 读取、
-安全 opener 和 literal 字符串/数值回读。不是公式计算、渲染、业务正确性或
-跨任务模型表现的证明。未知或重复 profile 在构造时拒绝。
+支持 `xlsx_values.v1` 和 `docx_text.v1`，可以同时声明，所有声明均须通过。
+前者覆盖新建值型工作簿、指定 sheet 读取、安全 opener 和 literal 字符串/数值
+回读；后者实际创建标题、段落和表格，读取正文，通过 opener 并核对标题样式、
+段落文本和表格单元格。不是公式计算、渲染、业务正确性或跨任务模型表现的证明。
+未知或重复 profile 在构造时拒绝，检查项目和包版本按 profile 分别校验。
 
 ## 启动顺序
 
@@ -47,6 +49,7 @@
 
 ```sh
 python -m praxile.capability_probe --profile xlsx_values.v1
+python -m praxile.capability_probe --profile docx_text.v1
 ```
 
 资源测试 `test_capability_probe.py` 使用实际 openpyxl 写出/回读/校验。
@@ -54,6 +57,12 @@ python -m praxile.capability_probe --profile xlsx_values.v1
 真实 Docker 用例需显式设置 PRAXILE_TEST_WHEEL、PRAXILE_TEST_LEASE_IMAGE、
 PRAXILE_TEST_XLSX_WHEELS（只含上述三个 wheel 的目录），以 --forked 执行。
 该用例验证纯 Python 镜像中离线安装、功能检查和系统 Python 未被污染，不调用模型。
+
+DOCX profile 记录 python-docx、lxml、defusedxml 的实际版本；部署时还须固定
+它们的完整依赖 wheel（包括 typing-extensions），并匹配容器平台。当前 DOCX
+新增验证是本机真实文件回读和适配器协议测试，未完成该 profile 的固定依赖
+Docker 复验。不能用上述 XLSX Docker 结果替代 DOCX 的环境验收，也不自动安装
+完整 documents extra。
 
 2026-10-21 开发 worker wheel 摘要：
 `1aa21edda9206d842ad0590108111b3eaa84c248695ef64f452d1e876cbb3094`，

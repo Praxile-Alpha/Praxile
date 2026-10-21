@@ -5,7 +5,45 @@ import json
 from pathlib import Path
 import tempfile
 
-PROFILES = ("xlsx_values.v1",)
+PROFILE_PACKAGES = {
+    "xlsx_values.v1": ("openpyxl", "et-xmlfile", "defusedxml"),
+    "docx_text.v1": ("python-docx", "lxml", "defusedxml"),
+}
+PROFILE_CHECKS = {
+    "xlsx_values.v1": ["create", "read", "opener", "literal_roundtrip"],
+    "docx_text.v1": ["create", "read", "opener", "heading_table_roundtrip"],
+}
+PROFILES = tuple(PROFILE_PACKAGES)
+
+
+def _docx_probe():
+    from .config import Config, ProjectPaths, default_config
+    from .security import SafetyPolicy
+    from .documents import create_docx, read_document
+    from .artifact_openers import inspect_document
+    from docx import Document
+    with tempfile.TemporaryDirectory(prefix="praxile-capability-") as directory:
+        root = Path(directory)
+        config = Config(default_config(root), ProjectPaths(root))
+        safety = SafetyPolicy(config)
+        spec = {"blocks": [{"type": "heading", "level": 1, "text": "Probe heading"},
+                           {"type": "paragraph", "text": "Probe body"},
+                           {"type": "table", "rows": [["Name", "Value"], ["Literal", "2"]]}]}
+        if create_docx(config, safety, "probe.docx", spec).status != "success":
+            raise RuntimeError("create_failed")
+        read = read_document(config, safety, "probe.docx")
+        if read.status != "success" or "Probe body" not in read.output:
+            raise RuntimeError("read_failed")
+        opened = inspect_document(root / "probe.docx", "docx")
+        if opened.get("status") != "passed":
+            raise RuntimeError("opener_failed")
+        document = Document(root / "probe.docx")
+        if ([p.text for p in document.paragraphs] != ["Probe heading", "Probe body"]
+                or document.paragraphs[0].style.style_id != "Heading1"
+                or len(document.tables) != 1
+                or [[cell.text for cell in row.cells] for row in document.tables[0].rows]
+                    != [["Name", "Value"], ["Literal", "2"]]):
+            raise RuntimeError("roundtrip_failed")
 
 
 def probe(profile):
@@ -15,6 +53,11 @@ def probe(profile):
               "status": "failed", "model_called": False, "formulas_recalculated": False,
               "visual_quality_verified": False}
     try:
+        if profile == "docx_text.v1":
+            _docx_probe()
+            report.update(status="passed", checks=PROFILE_CHECKS[profile],
+                          packages={name: version(name) for name in PROFILE_PACKAGES[profile]})
+            return report
         from .config import Config, ProjectPaths, default_config
         from .security import SafetyPolicy
         from .documents import create_xlsx, read_document
@@ -41,8 +84,8 @@ def probe(profile):
                     raise RuntimeError("roundtrip_failed")
             finally:
                 book.close()
-        report.update(status="passed", checks=["create", "read", "opener", "literal_roundtrip"],
-                      packages={name: version(name) for name in ("openpyxl", "et-xmlfile", "defusedxml")})
+        report.update(status="passed", checks=PROFILE_CHECKS[profile],
+                      packages={name: version(name) for name in PROFILE_PACKAGES[profile]})
     except Exception as error:
         report["error_type"] = type(error).__name__
     return report
