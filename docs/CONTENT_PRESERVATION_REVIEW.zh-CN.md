@@ -40,6 +40,32 @@ provider/transport 的重试仍由既有配置控制。异常正文不会写入�
 不负责替调用方证明正文不含秘密。常规评审日志仅标记检查点完成和响应摘要，
 不嵌入完整响应。可用检查点做本地重放；重放不得伪装成新的真实模型调用。
 
+## 固定预算分组
+
+`praxile.eval.content_review_batch.review_content_batched` 提供显式 Python API：
+
+```python
+report = review_content_batched(
+    router, logger, source_text=source, output_text=output,
+    requirements=requirements, total_output_tokens=8000, batch_size=4,
+    timeout_per_call=90, private=False, response_mode="function",
+)
+```
+
+必须先对全部要求完成引用、唯一 ID 和边界校验，再按输入顺序冻结分组。
+总输出预算平均分配，余数给前面的组；每组额度在调用前确定，不回收、转移
+剩余预算或自动重试。完整正文每组相同，不通过丢弃上下文换取通过。
+
+报告记录计划和摘要、每组额度、实际逻辑请求数及未完成 ID。任一组弃权即
+停止，保留已完成组的局部结果，但顶层不返回完整 items 或整体保留结论。
+只有所有组经过同一引用/覆盖验证，才汇总 LLM 判断；依旧不能自动晋升。
+检查点额外绑定计划摘要和组序号，保存失败同样停止。
+
+总额度限制的是向模型请求的输出 token，不是美元费用、输入 token 或硬性
+总耗时。重复发送正文会增加输入成本；provider 的计费与重试不能凭这个额度
+认证。传输重试、fallback 需单独配置。与单次评审比较必须冻结相同总预算；
+扩大到 8000 的验收不能冒充优于此前 3000 的公平效率结果。
+
 ## 证据边界
 
 - 引文校验只证明引用存在，不证明模型理解正确或要求列表完整。

@@ -1,0 +1,229 @@
+{
+  "schema_version": "praxile.public_batch_review_trial.v1",
+  "scope": "batch_completeness_not_matched_efficiency",
+  "model": "MiniMax-M3.1-Flash",
+  "request_options": {
+    "reasoning_effort": "low"
+  },
+  "report": {
+    "schema_version": "praxile.content_review_batch.v1",
+    "plan": {
+      "schema_version": "praxile.content_review_batch_plan.v1",
+      "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+      "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+      "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd",
+      "role": "content_review_judge",
+      "private": false,
+      "response_mode": "function",
+      "total_output_tokens": 8000,
+      "timeout_per_call": 90,
+      "groups": [
+        {
+          "ids": [
+            "packet-row-1",
+            "packet-row-2",
+            "packet-row-3",
+            "packet-row-4"
+          ],
+          "max_tokens": 2000
+        },
+        {
+          "ids": [
+            "packet-row-5",
+            "packet-row-6",
+            "packet-row-7",
+            "packet-row-8"
+          ],
+          "max_tokens": 2000
+        },
+        {
+          "ids": [
+            "packet-row-9",
+            "packet-row-10",
+            "packet-row-11",
+            "packet-row-12"
+          ],
+          "max_tokens": 2000
+        },
+        {
+          "ids": [
+            "packet-row-13",
+            "packet-row-14",
+            "roles",
+            "dates"
+          ],
+          "max_tokens": 2000
+        }
+      ]
+    },
+    "plan_sha256": "14045c5cad7324f523eda538e2e84890b99cb64bfa8402158a81748bdf1aa499",
+    "status": "abstained",
+    "groups": [
+      {
+        "schema_version": "praxile.content_review.v1",
+        "scope": "caller_supplied_text",
+        "role": "content_review_judge",
+        "input_sha256": "1205773a20d5794d690bb92c718ea7ef28bfb6e8ecba6a06dcf09f613530adfc",
+        "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+        "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+        "requirements_sha256": "7758a928d8e96cb00cd43f28e01f830c88aa34d438b2a42dbcaa4623522c982a",
+        "status": "reviewed",
+        "official_evaluation": false,
+        "promotion_eligible": false,
+        "content_preservation_verified": false,
+        "requirement_coverage_verified": false,
+        "max_tokens": 2000,
+        "timeout_seconds": 90,
+        "logical_requests": 1,
+        "usage_available": true,
+        "transport_attempts_verified": false,
+        "response_mode": "function",
+        "response_contract_sha256": "6e2d9e023f45ec381824cd6177072b54eca9974fe7db13746e7c43f1b646cdd6",
+        "output_budget_reached": false,
+        "response_sha256": "b7fe7cb72e5bab5aa5020fd0566fe5f1cefbdbbe6eb495367466fafa80ebb48d",
+        "finish_reason": "tool_calls",
+        "response_checkpoint_completed": true,
+        "expected_items": 4,
+        "returned_items": 4,
+        "judgment_source": "llm",
+        "all_declared_requirements_preserved": true,
+        "verdict_counts": {
+          "preserved": 4
+        }
+      },
+      {
+        "schema_version": "praxile.content_review.v1",
+        "scope": "caller_supplied_text",
+        "role": "content_review_judge",
+        "input_sha256": "6b13062a32ef317eb9f9850b8b96aa27745da7933b763200f6bcfbc96f5a71da",
+        "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+        "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+        "requirements_sha256": "1caa623dea65e42c4ff962ec47747133bed6dd45b02f5826586e948ad694d085",
+        "status": "reviewed",
+        "official_evaluation": false,
+        "promotion_eligible": false,
+        "content_preservation_verified": false,
+        "requirement_coverage_verified": false,
+        "max_tokens": 2000,
+        "timeout_seconds": 90,
+        "logical_requests": 1,
+        "usage_available": true,
+        "transport_attempts_verified": false,
+        "response_mode": "function",
+        "response_contract_sha256": "2b5a936b2c63ad715c1f8170f7eef2f19a7f7f6422a38941cdb24fd3d1f8ea07",
+        "output_budget_reached": false,
+        "response_sha256": "a57bea067fb8dc25c579fd4dd9202f34148c5ec5a2ec5eb668b148820e70a6f9",
+        "finish_reason": "tool_calls",
+        "response_checkpoint_completed": true,
+        "expected_items": 4,
+        "returned_items": 4,
+        "judgment_source": "llm",
+        "all_declared_requirements_preserved": false,
+        "verdict_counts": {
+          "preserved": 3,
+          "missing": 1
+        }
+      },
+      {
+        "schema_version": "praxile.content_review.v1",
+        "scope": "caller_supplied_text",
+        "role": "content_review_judge",
+        "input_sha256": "5b959d6880b60efe42fc52e86699beae8f4024141808470c9d4e26ca271611b5",
+        "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+        "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+        "requirements_sha256": "fe5e3b0748855955ae6c5a3d50746edfe99ab669a16298fe1d09f437d31ff9d8",
+        "status": "abstained",
+        "official_evaluation": false,
+        "promotion_eligible": false,
+        "content_preservation_verified": false,
+        "requirement_coverage_verified": false,
+        "max_tokens": 2000,
+        "timeout_seconds": 90,
+        "logical_requests": 1,
+        "usage_available": true,
+        "transport_attempts_verified": false,
+        "response_mode": "function",
+        "response_contract_sha256": "fecc6616cf76311d0e345b8c4938f172be24a59e851da30eff60c5931e3b34bd",
+        "output_budget_reached": false,
+        "response_sha256": "6d2cd2d4eb85675469aa5903058042f454eae13b6087f12349e714454af05652",
+        "finish_reason": "tool_calls",
+        "response_checkpoint_completed": true,
+        "expected_items": 4,
+        "returned_items": 4,
+        "failure_stage": "validation",
+        "failure_category": "invalid_review",
+        "validation_code": "unsupported_citation"
+      }
+    ],
+    "logical_requests": 3,
+    "allocated_output_tokens_requested": 6000,
+    "unreviewed_ids": [
+      "packet-row-9",
+      "packet-row-10",
+      "packet-row-11",
+      "packet-row-12",
+      "packet-row-13",
+      "packet-row-14",
+      "roles",
+      "dates"
+    ],
+    "official_evaluation": false,
+    "promotion_eligible": false,
+    "content_preservation_verified": false,
+    "requirement_coverage_verified": false,
+    "failed_group_index": 2
+  },
+  "cost": {
+    "model_calls": 3,
+    "prompt_tokens": 9365,
+    "completion_tokens": 4100,
+    "tool_calls": 0,
+    "usage_evidence": {
+      "calls": 3,
+      "recorded_calls": 3,
+      "known_tokens": {
+        "prompt_tokens": 9365,
+        "completion_tokens": 4100
+      },
+      "reported_calls": {
+        "prompt_tokens": 3,
+        "completion_tokens": 3
+      },
+      "complete_tokens": {
+        "prompt_tokens": 9365,
+        "completion_tokens": 4100
+      },
+      "schema_version": "praxile.trajectory_usage.v1",
+      "by_purpose": {
+        "content_review_judge": {
+          "calls": 3,
+          "recorded_calls": 3,
+          "known_tokens": {
+            "prompt_tokens": 9365,
+            "completion_tokens": 4100
+          },
+          "reported_calls": {
+            "prompt_tokens": 3,
+            "completion_tokens": 3
+          },
+          "complete_tokens": {
+            "prompt_tokens": 9365,
+            "completion_tokens": 4100
+          }
+        }
+      },
+      "unattributed_calls": 0,
+      "cost_usd": null,
+      "scope": "calls_recorded_by_trajectory_logger"
+    }
+  },
+  "process_exit_code": 0,
+  "transport_retries_configured": 0,
+  "report_sha256": "8561029c581a6451d910abfb4ab8713649a6b71afa973d7e45ee2fb019904c77",
+  "offline_inspection": {
+    "failed_group": 2,
+    "noncontiguous_quotes_present": true,
+    "whitespace_mismatch_present": true,
+    "automatic_quote_repair": false
+  }
+}

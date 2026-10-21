@@ -98,3 +98,25 @@ tests verify that a `tool_calls` finish never bypasses local coverage checks.
 Next implementation should partition requirements under a frozen total budget
 and combine only complete item coverage, rather than retrying the whole document
 until it passes. No such partitioned evaluation has run yet.
+
+## Fixed-budget partition trial
+
+The subsequent batch API froze four groups of four requirements, each allocated
+2000 output tokens (8000 total). This changed budget is not a matched efficiency
+comparison with earlier 3000-token requests. All groups used the same complete
+text snapshots. Requirements and groups were frozen before any request.
+
+The first two groups returned locally valid reviews for eight requirements. The
+third returned four items but failed exact-citation validation; the fourth was
+not called. Offline private-response inspection found noncontiguous quotes with
+ellipsis and a whitespace mismatch. No quotes were repaired or accepted by fuzzy
+matching. None of the three groups reached its output token allocation. This is
+a distinct failure from the earlier incomplete submission at the token limit.
+
+The [batch receipt](docx-review-batch-20261021.json) preserves the partial outcome:
+three logical calls, 6000 requested output-token allowance, 9365 input and 4100
+output tokens reported. The remaining eight requirements are unreviewed, not
+passed or failed. No complete top-level result, official score or promotion was
+issued. Next work is a source-bound citation interface that can represent multiple
+literal spans without trusting model-reconstructed prose, followed by calibrated
+evaluation. This trial does not complete content quality acceptance.

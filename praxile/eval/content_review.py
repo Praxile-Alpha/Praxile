@@ -49,15 +49,8 @@ def _transport_failure(error):
     return None
 
 
-def review_content(router, logger, *, source_text, output_text, requirements,
-                   role="content_review_judge", private=True, max_tokens=3000,
-                   timeout=90, response_mode="text", response_checkpoint=None):
-    """Review caller-supplied extracted text; caller owns extraction and scope.
-
-    Requirements must be frozen before comparative execution to support a planned
-    comparison. Post-hoc use is diagnostic only. Text hashes do not authenticate
-    source documents, completeness of extraction or requirement coverage.
-    """
+def _validate_inputs(source_text, output_text, requirements, role, private,
+                     max_tokens, timeout, response_mode, response_checkpoint):
     if not _text(source_text, 64000) or not _text(output_text, 64000):
         raise ValueError("review requires nonempty bounded source and output text")
     if (not isinstance(requirements, list) or not 1 <= len(requirements) <= 32
@@ -76,6 +69,19 @@ def review_content(router, logger, *, source_text, output_text, requirements,
                 or item["source_quote"] not in source_text):
             raise ValueError("requirements need unique IDs and exact source quotes")
         expected[item["id"]] = dict(item)
+    return expected
+
+
+def review_content(router, logger, *, source_text, output_text, requirements,
+                   role="content_review_judge", private=True, max_tokens=3000,
+                   timeout=90, response_mode="text", response_checkpoint=None):
+    """Review caller-supplied text, not authenticated document completeness.
+
+    Freeze requirements before execution for planned comparisons. Post-hoc use
+    is diagnostic only; citations do not prove extraction or coverage quality.
+    """
+    expected = _validate_inputs(source_text, output_text, requirements, role, private,
+                                max_tokens, timeout, response_mode, response_checkpoint)
     payload = json.dumps({"source_text": source_text, "output_text": output_text,
                           "requirements": list(expected.values())}, ensure_ascii=False,
                          sort_keys=True)
