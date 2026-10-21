@@ -107,6 +107,17 @@ R0-A 第一批实现（2026-10-19）：`praxile/eval/contracts.py` 提供通用�
 
 R0-A 第二批：`praxile/eval/lease.py` 增加本地工作区租约，支持执行、产物读取、取消、超时进程组回收与幂等释放；仅对显式传入的 release 回调委托环境销毁，默认不删除工作区。资源测试通过 `--forked` 隔离运行。该后端不是安全沙箱，目前仅支持 POSIX；reset 明确要求通过 preparer 创建新租约，尚未接入正式 runner。Harbor 管理容器、只读输入挂载、持久化恢复及两个 benchmark 的真实执行均仍未完成，因此环境协议总项不勾选。上游依赖需分别隔离：WorkBuddy 固定 Harbor 0.18.0，JobBench 固定 0.22.0。
 
+R0-A 独立 Harbor 租约增补（2026-10-21）：HarborDockerLease 已实现独立 session
+的 prepare/reset/execute/collect/cancel/cleanup，不接管现有 Trial 环境。
+固定镜像摘要、容器内受限读取、取消销毁及 reset 新代环境均完成真实 Docker 验证。
+stop 返回后独立查询自身标签下 container/network/volume，残留或查询失败不记 closed。
+Harbor 0.18.0 和 0.22.0 各 6 项测试通过（含 1 项完整真实 Docker 生命周期），
+fast suite 1192 passed / 11 skipped。测试镜像为
+`python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1`，
+宿主为 Mac ARM64 Docker Desktop；无模型调用或 benchmark 分数。
+只读挂载、启停硬期限、跨进程恢复、正式 runner 接入仍未完成，环境协议总项不勾选。
+使用与限制见 `HARBOR_LEASE.zh-CN.md`。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
