@@ -19,7 +19,7 @@ python -m praxile.eval.owned_review_cli \
   --run-id docx-review-001 --total-output-tokens 4000
 ```
 
-预检会读取并验证真实文件，DOCX 会启动本地解析子进程；不会初始化 judge 项目、
+预检会读取并验证真实文件，DOCX/PDF 会启动本地解析子进程；不会初始化 judge 项目、
 创建评审运行目录、实例化模型路由或发送请求。输出仅有摘要、格式和预算，不含
 文档正文、私有 requirements、文件来源路径或 endpoint。必须提前显式配置
 content_review_judge，且 judge 项目不能位于执行目录内。
@@ -44,7 +44,7 @@ source_path / output_path（必须是任务清单中的路径）。函数检查�
 - 执行器已返回，清理已确认，所有 required 输出声明已回收。
 - 所选源输入与输出的文件摘要、输出字节数、原始 Native 轨迹摘要匹配。
 - 文件读取拒绝软/硬链接和特殊文件，限制单文件 1 MiB；默认源输入与输出均为
-  UTF-8，源 DOCX 和输出 DOCX 分别显式选择下述抽取 profile。
+  UTF-8，源文档和输出文档分别显式选择下述抽取 profile。
 - 私有 evaluator 存储不能在 execution_dir 内，内容摘要必须匹配任务引用。
 
 只验证被选源文件和输出的实际字节；其余输出只检查回收声明，不声称全量质量
@@ -67,7 +67,7 @@ private_ref 是 evaluator_root 下的相对文件名，content_digest 是该文�
 ```
 
 要求与 source_quote 复用既有严格校验、逐项判断及引用机制。源文件只选一项，
-默认输出只支持 text/* 或 application/json；DOCX 使用显式 profile，PDF 等仍拒绝。
+默认输出只支持 text/* 或 application/json；DOCX/PDF 使用显式 profile，其余二进制格式仍拒绝。
 不根据扩展名偷偷转换或截断。
 
 ```python
@@ -102,7 +102,7 @@ media_type 为 application/vnd.openxmlformats-officedocument.wordprocessingml.do
 `praxile[documents]`。
 
 源材料为 DOCX 时，另传 `source_format="docx_body"`，同样先验证公开输入清单
-中的原始文件摘要，再运行受限抽取器。两侧可分别选择 text/docx_body，默认均为
+中的原始文件摘要，再运行受限抽取器。两侧可分别选择 text/docx_body/pdf_text，默认均为
 text；不自动按扩展名推断。InputArtifact 尚无 media_type 字段，源格式是控制面
 显式声明，必须经真实 DOCX 解析成功，不是把重命名后的任意文件当成 DOCX。
 
@@ -133,7 +133,29 @@ profile=praxile.docx_body_text.v1、python-docx 版本、worker 代码 SHA-256 �
 不能从正文评审推断通过。真实解析测试覆盖长段落、表格顺序、超限与损坏文件，
 桥接 fixture 覆盖显式启用、原始字节篡改拒绝、抽取证据持久化和加载时校验。
 另有真实 DOCX 源文件与产物一起通过冻结任务/执行报告校验的测试；文本/源 DOCX/
-输出 DOCX/双侧 DOCX 四种组合分别验证持久化。该测试没有调用真实 LLM judge。
+输出 DOCX/双侧 DOCX 分别验证持久化。该测试没有调用真实 LLM judge。
+
+## PDF 文字抽取
+
+两侧可分别显式选择 `--source-format pdf_text`、`--output-format pdf_text`，
+Python 参数为 `source_format="pdf_text"` / `output_format="pdf_text"`。
+输出契约必须声明 `application/pdf`；源格式是控制面声明，解析器实际验证格式。
+依赖既有 `praxile[documents]` 中的 pypdf，不增加核心安装依赖。
+
+先验证原始文件摘要，再启动限时子进程，以 pypdf strict 模式逐页提取文字，
+按页顺序用换行连接，不截断。profile 为 `praxile.pdf_page_text.v1`，记录 pypdf
+版本、worker 摘要和文本摘要，原始 PDF 摘要继续保留。源与产物可使用不同格式；
+跨实验比较仍要求同一侧的 profile、解析器版本和 worker 摘要一致。
+
+原始文件最多 1 MiB、1–100 页、总计 200000 字符；评审层仍限每侧 64000 字符。
+加密、损坏、超限、任一页面没有可提取文字均拒绝。即使只是合法空白页也会拒绝，
+需人工确认或另选显式管线，不能靠忽略该页获得完整性结论。
+真实解析与双侧 PDF 桥接测试覆盖这些边界；九种 text/DOCX/PDF 配对验证证据
+持久化和加载时校验，没有调用真实 judge。
+
+本模式不做 OCR、视觉检查、表格结构还原、批注/表单完整性验证，也不保证多栏
+文字阅读顺序。含文字的页面仍可能包含未提取的关键图片；可提取不等于完整。
+针对这些要求必须补视觉或人工证据，不能凭文字 judge 判定通过。
 
 ## 持久化比较的抽取条件
 

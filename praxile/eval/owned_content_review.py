@@ -57,12 +57,14 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     output = next((item for item in task.outputs if item.path == output_path), None)
     if source is None or output is None:
         raise ValueError("source and output must be declared in the frozen task")
-    if output_format not in {"text", "docx_body"}:
+    if output_format not in {"text", "docx_body", "pdf_text"}:
         raise ValueError("unsupported output extraction profile")
-    if source_format not in {"text", "docx_body"}:
+    if source_format not in {"text", "docx_body", "pdf_text"}:
         raise ValueError("unsupported source extraction profile")
     if output_format == "docx_body" and output.media_type != "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         raise ValueError("DOCX extraction requires declared DOCX media type")
+    if output_format == "pdf_text" and output.media_type != "application/pdf":
+        raise ValueError("PDF extraction requires declared PDF media type")
     if output_format == "text" and not (output.media_type.startswith("text/") or output.media_type == "application/json"):
         raise ValueError("binary output requires a separately verified extraction pipeline")
     read = _reader(execution_dir)
@@ -108,12 +110,18 @@ def prepare_owned_review(task: BenchmarkTask, *, execution_dir: Path, evaluator_
     if output_format == "docx_body":
         from .document_review_extraction import extract_docx_body
         output_text, extraction = extract_docx_body(output_raw)
+    elif output_format == "pdf_text":
+        from .document_review_extraction import extract_pdf_text
+        output_text, extraction = extract_pdf_text(output_raw)
     else:
         output_text = output_raw.decode("utf-8")
     source_extraction = None
     if source_format == "docx_body":
         from .document_review_extraction import extract_docx_body
         source_text, source_extraction = extract_docx_body(source_raw)
+    elif source_format == "pdf_text":
+        from .document_review_extraction import extract_pdf_text
+        source_text, source_extraction = extract_pdf_text(source_raw)
     else:
         source_text = source_raw.decode("utf-8")
     inputs = {"source_text": source_text, "output_text": output_text,

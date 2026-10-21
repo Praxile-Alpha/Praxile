@@ -128,6 +128,22 @@ def main():
                     document.add_paragraph(block["text"], style="List Bullet" if kind == "bullet" else None)
             document.save(path.parent / "result.docx")
             result = {"status": "success"}
+        elif options.get("operation") == "review_pdf_text":
+            from importlib.metadata import version
+            from pypdf import PdfReader
+            reader = PdfReader(path, strict=True)
+            if reader.is_encrypted or not 1 <= len(reader.pages) <= 100:
+                raise ValueError("encrypted or oversized PDF")
+            pages, length = [], 0
+            for page in reader.pages:
+                text = page.extract_text()
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError("PDF page has no extractable text; OCR or review required")
+                length += len(text) + (1 if pages else 0)
+                if length > 200000:
+                    raise ValueError("PDF text exceeds review bounds")
+                pages.append(text)
+            result = {"status": "success", "text": "\n".join(pages), "parser_version": version("pypdf")}
         elif options.get("operation") == "review_docx_body":
             from importlib.metadata import version
             with zipfile.ZipFile(path) as archive:

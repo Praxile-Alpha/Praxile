@@ -1,4 +1,4 @@
-"""Preflight owned text/DOCX evidence; call the independent judge only explicitly."""
+"""Preflight owned text/DOCX/PDF evidence; call the independent judge only explicitly."""
 import argparse
 import json
 from pathlib import Path
@@ -21,8 +21,8 @@ def main(argv=None):
     parser.add_argument("--evaluator-root", type=Path, required=True)
     parser.add_argument("--source-path", required=True)
     parser.add_argument("--output-path", required=True)
-    parser.add_argument("--source-format", choices=["text", "docx_body"], default="text")
-    parser.add_argument("--output-format", choices=["text", "docx_body"], default="text")
+    parser.add_argument("--source-format", choices=["text", "docx_body", "pdf_text"], default="text")
+    parser.add_argument("--output-format", choices=["text", "docx_body", "pdf_text"], default="text")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--total-output-tokens", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=4)

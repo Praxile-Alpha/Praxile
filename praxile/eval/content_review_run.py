@@ -30,7 +30,7 @@ def validate_execution_binding(value, *, output_text=None, source_text=None):
             continue
         extraction = value[name]
         if (not isinstance(extraction, dict) or set(extraction) != {"profile", "parser_version", "worker_sha256", "text_sha256"}
-                or extraction.get("profile") != "praxile.docx_body_text.v1"
+                or extraction.get("profile") not in ("praxile.docx_body_text.v1", "praxile.pdf_page_text.v1")
                 or not isinstance(extraction.get("parser_version"), str)
                 or not re.fullmatch(r"[A-Za-z0-9.+_-]{1,80}", extraction["parser_version"])
                 or any(not isinstance(extraction.get(key), str) or not re.fullmatch(r"[a-f0-9]{64}", extraction[key])

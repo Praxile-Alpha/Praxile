@@ -98,18 +98,18 @@ def test_private_evaluator_must_not_be_inside_execution_storage(tmp_path):
         prepare_owned_review(task, **options)
 
 
-@pytest.mark.parametrize("docx_body", [False, True])
-@pytest.mark.parametrize("source_docx", [False, True])
-def test_review_persists_binding_and_keeps_judge_separate(tmp_path, monkeypatch, docx_body, source_docx):
-    media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if docx_body else "text/plain"
+@pytest.mark.parametrize("output_format", ["text", "docx_body", "pdf_text"])
+@pytest.mark.parametrize("source_format", ["text", "docx_body", "pdf_text"])
+def test_review_persists_binding_and_keeps_judge_separate(tmp_path, monkeypatch, output_format, source_format):
+    media = {"text": "text/plain", "pdf_text": "application/pdf",
+             "docx_body": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[output_format]
     task, options = setup(tmp_path, media_type=media)
-    if docx_body:
-        options["output_format"] = "docx_body"
-    if source_docx:
-        options["source_format"] = "docx_body"
-    if docx_body or source_docx:
-        monkeypatch.setattr("praxile.eval.document_review_extraction.extract_docx_body", lambda raw:
+    options.update(output_format=output_format, source_format=source_format)
+    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_docx_body", lambda raw:
             (raw.decode(), {"profile": "praxile.docx_body_text.v1", "parser_version": "1.2.0",
+                            "worker_sha256": "c" * 64, "text_sha256": sha(raw)}))
+    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_pdf_text", lambda raw:
+            (raw.decode(), {"profile": "praxile.pdf_page_text.v1", "parser_version": "6.0.0",
                             "worker_sha256": "c" * 64, "text_sha256": sha(raw)}))
     judge_root = tmp_path / "judge"
     judge_root.mkdir()
@@ -136,7 +136,7 @@ def test_review_persists_binding_and_keeps_judge_separate(tmp_path, monkeypatch,
     from praxile.eval.content_review_files import load_review_run
     path = config.paths.state / "eval/v2/content_reviews/bound"
     load_review_run(path)
-    if source_docx:
+    if source_format != "text":
         extraction = manifest["execution_binding"]["source_extraction"]
         original = extraction["text_sha256"]
         extraction["text_sha256"] = "e" * 64
@@ -144,7 +144,7 @@ def test_review_persists_binding_and_keeps_judge_separate(tmp_path, monkeypatch,
         with pytest.raises(ValueError, match="source extraction binding"):
             load_review_run(path)
         extraction["text_sha256"] = original
-    if docx_body:
+    if output_format != "text":
         extraction = manifest["execution_binding"]["output_extraction"]
         original = extraction["text_sha256"]
         extraction["text_sha256"] = "d" * 64
@@ -158,25 +158,28 @@ def test_review_persists_binding_and_keeps_judge_separate(tmp_path, monkeypatch,
         load_review_run(path)
 
 
-def test_docx_profile_requires_opt_in_and_verified_bytes(tmp_path, monkeypatch):
-    task, options = setup(tmp_path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+@pytest.mark.parametrize("profile,media", [("pdf_text", "application/pdf"),
+    ("docx_body", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")])
+def test_binary_profile_requires_opt_in_and_verified_bytes(tmp_path, monkeypatch, profile, media):
+    task, options = setup(tmp_path, media_type=media)
     extract = Mock()
-    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_docx_body", extract)
+    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_" + profile, extract)
     with pytest.raises(ValueError, match="binary output"):
         prepare_owned_review(task, **options)
     (options["execution_dir"] / "outputs/output.txt").write_text("tampered")
     with pytest.raises(ValueError, match="digest mismatch"):
-        prepare_owned_review(task, **options, output_format="docx_body")
+        prepare_owned_review(task, **options, output_format=profile)
     extract.assert_not_called()
 
 
-def test_source_bytes_verified_before_extraction(tmp_path, monkeypatch):
+@pytest.mark.parametrize("profile", ["docx_body", "pdf_text"])
+def test_source_bytes_verified_before_extraction(tmp_path, monkeypatch, profile):
     task, options = setup(tmp_path)
     extract = Mock()
-    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_docx_body", extract)
+    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_" + profile, extract)
     with pytest.raises(ValueError, match="source extraction profile"):
         prepare_owned_review(task, **options, source_format="auto")
     (options["execution_dir"] / "inputs/source.txt").write_bytes(b"changed")
     with pytest.raises(ValueError, match="digest mismatch"):
-        prepare_owned_review(task, **options, source_format="docx_body")
+        prepare_owned_review(task, **options, source_format=profile)
     extract.assert_not_called()
