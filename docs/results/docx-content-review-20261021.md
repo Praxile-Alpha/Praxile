@@ -78,3 +78,23 @@ transport submission, not valid review or semantic quality. The invocation retai
 the coarse `invalid_item` code; subsequent code splits this into field/ID/verdict/
 reason/quote diagnostics, but cannot retroactively identify which check failed.
 No automatic repair, retries, candidate ranking or promotion followed this trial.
+
+## Checkpoint-backed diagnosis
+
+A separate single call retained its response in a private 0600 checkpoint under a
+0700 directory. The checkpoint content hash matches the review response hash.
+Offline inspection found only six of sixteen required items, with the sixth
+missing `reason`. Completion usage was exactly the 3000-token budget even though
+finish reason was `tool_calls`. Budget exhaustion is a plausible explanation,
+not a proven provider-side truncation cause. Earlier unretained responses cannot
+be diagnosed from this new sample.
+
+The [sanitized receipt](docx-review-checkpoint-20261021.json) publishes counts,
+missing known field names, hashes and usage, not the private response. Validation
+correctly abstained. The API now supports an explicit checkpoint callback and
+records returned/expected item counts plus a reported output-budget-reached flag.
+That flag is not itself a quality verdict or proof of complete billing. Regression
+tests verify that a `tool_calls` finish never bypasses local coverage checks.
+Next implementation should partition requirements under a frozen total budget
+and combine only complete item coverage, rather than retrying the whole document
+until it passes. No such partitioned evaluation has run yet.

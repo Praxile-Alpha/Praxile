@@ -51,7 +51,7 @@ def _transport_failure(error):
 
 def review_content(router, logger, *, source_text, output_text, requirements,
                    role="content_review_judge", private=True, max_tokens=3000,
-                   timeout=90, response_mode="text"):
+                   timeout=90, response_mode="text", response_checkpoint=None):
     """Review caller-supplied extracted text; caller owns extraction and scope.
 
     Requirements must be frozen before comparative execution to support a planned
@@ -64,7 +64,8 @@ def review_content(router, logger, *, source_text, output_text, requirements,
             or not _text(role, 80) or type(max_tokens) is not int
             or not 1 <= max_tokens <= 8000 or type(timeout) is not int
             or not 1 <= timeout <= 300 or type(private) is not bool
-            or response_mode not in ("text", "function")):
+            or response_mode not in ("text", "function")
+            or (response_checkpoint is not None and not callable(response_checkpoint))):
         raise ValueError("invalid review bounds")
     expected = {}
     for item in requirements:
@@ -132,12 +133,27 @@ def review_content(router, logger, *, source_text, output_text, requirements,
             "latency_ms": response.get("latency_ms")})
         usage = response.get("usage")
         record["usage_available"] = isinstance(usage, dict) and bool(usage)
+        reported_output = usage.get("completion_tokens") if isinstance(usage, dict) else None
+        record["output_budget_reached"] = (
+            reported_output >= max_tokens if type(reported_output) is int and reported_output >= 0 else None)
         content = response.get("content")
         if isinstance(content, str):
             record["response_sha256"] = _digest(content)
         finish = response.get("finish_reason")
         record["finish_reason"] = finish if finish in {
             "stop", "length", "max_tokens", "tool_calls", "end_turn"} else "unknown"
+        if response_checkpoint is not None:
+            stage = "response_checkpoint"
+            if not isinstance(content, str) or len(content.encode("utf-8")) > 1048576:
+                raise ValueError("checkpoint requires bounded response text")
+            response_checkpoint({
+                "schema_version": "praxile.content_review_response.v1",
+                "input_sha256": record["input_sha256"],
+                "response_sha256": record["response_sha256"],
+                "response_mode": response_mode, "finish_reason": record["finish_reason"],
+                "content": content,
+            })
+            record["response_checkpoint_completed"] = True
         stage = "validation"
         validation_code = "truncated_response"
         if response.get("finish_reason") in {"length", "max_tokens"}:
@@ -147,6 +163,8 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         validation_code = "invalid_shape"
         if set(decoded) != {"items"} or not isinstance(decoded["items"], list):
             raise ValueError("invalid review shape")
+        record["expected_items"] = len(expected)
+        record["returned_items"] = len(decoded["items"])
         seen = set()
         items = []
         for item in decoded["items"]:

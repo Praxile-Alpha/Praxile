@@ -90,6 +90,51 @@ def test_missing_items_has_safe_diagnostic():
     assert record["validation_code"] == "incomplete_coverage"
 
 
+def test_explicit_checkpoint_precedes_validation_and_cannot_mutate_response():
+    saved = []
+    def checkpoint(payload):
+        saved.append(dict(payload))
+        payload["content"] = "altered"
+    record, _, logger = run([], response_checkpoint=checkpoint)
+    assert record["status"] == "abstained"
+    assert record["validation_code"] == "incomplete_coverage"
+    assert record["response_checkpoint_completed"] is True
+    assert saved[0]["content"] == '{"items": []}'
+    assert saved[0]["input_sha256"] == record["input_sha256"]
+    assert saved[0]["response_sha256"] == record["response_sha256"]
+    assert "content" not in record
+    logger.add_model_cost.assert_called_once()
+
+
+def test_checkpoint_failure_blocks_acceptance_without_retry_or_secret_leak():
+    callback = Mock(side_effect=OSError("sensitive local path"))
+    record, router, logger = run(response_checkpoint=callback)
+    assert record["status"] == "abstained"
+    assert record["failure_stage"] == "response_checkpoint"
+    assert "items" not in record
+    assert "sensitive" not in json.dumps(record)
+    callback.assert_called_once()
+    router.chat.assert_called_once()
+    logger.add_model_cost.assert_called_once()
+
+
+def test_tool_calls_finish_does_not_prove_complete_submission():
+    router = Mock()
+    router.chat.return_value = {"finish_reason": "tool_calls", "usage": {"completion_tokens": 3000},
+        "content": json.dumps({"items": [{"id": "first", "verdict": "missing", "output_quote": ""}]})}
+    logger = SimpleNamespace(data={}, add_model_cost=Mock())
+    result = review_content(router, logger, source_text="source", output_text="output",
+        requirements=[{"id": name, "requirement": "Preserve source", "source_quote": "source"}
+                      for name in ("first", "second")], response_mode="function")
+    assert result["status"] == "abstained"
+    assert result["validation_code"] == "invalid_item_fields"
+    assert result["expected_items"] == 2
+    assert result["returned_items"] == 1
+    assert result["output_budget_reached"] is True
+    assert result["finish_reason"] == "tool_calls"
+    assert "items" not in result
+
+
 def test_bad_source_citation_prevents_model_call():
     router = Mock()
     with pytest.raises(ValueError):

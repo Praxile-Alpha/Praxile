@@ -1,0 +1,97 @@
+{
+  "schema_version": "praxile.public_review_checkpoint_trial.v1",
+  "scope": "single_checkpoint_trial_not_replacement",
+  "model": "MiniMax-M3.1-Flash",
+  "request_options": {
+    "reasoning_effort": "low"
+  },
+  "report": {
+    "schema_version": "praxile.content_review.v1",
+    "scope": "caller_supplied_text",
+    "role": "content_review_judge",
+    "input_sha256": "cb9290a9693027efeddc8103b0b798f8f418646545304e361bd991ce3bdc8cec",
+    "source_text_sha256": "17ea183a64f6dff2bb6ac22677035ba03c7d16cd74bf39d33261b62d91c2be24",
+    "output_text_sha256": "7997aa30cfe75be235c72cf4e906cf22d6f418da31e7d1e4918b106afb2de2d8",
+    "requirements_sha256": "68c99da5299c6ab2502e3c486f9594b06b4ac823a78a8cc83332b244a4e46bfd",
+    "status": "abstained",
+    "official_evaluation": false,
+    "promotion_eligible": false,
+    "content_preservation_verified": false,
+    "requirement_coverage_verified": false,
+    "max_tokens": 3000,
+    "timeout_seconds": 90,
+    "logical_requests": 1,
+    "usage_available": true,
+    "transport_attempts_verified": false,
+    "response_mode": "function",
+    "response_contract_sha256": "66e5d6148578f2a6801497e4d6972c30c4e464d4ef138e9da46f73b0a65cd0d4",
+    "response_sha256": "f0803b57b543e110eaa3d345b4eadde93d5248b3ff85770812598d5afd3c0871",
+    "finish_reason": "tool_calls",
+    "response_checkpoint_completed": true,
+    "failure_stage": "validation",
+    "failure_category": "invalid_review",
+    "validation_code": "invalid_item_fields"
+  },
+  "cost": {
+    "model_calls": 1,
+    "prompt_tokens": 4618,
+    "completion_tokens": 3000,
+    "tool_calls": 0,
+    "usage_evidence": {
+      "calls": 1,
+      "recorded_calls": 1,
+      "known_tokens": {
+        "prompt_tokens": 4618,
+        "completion_tokens": 3000
+      },
+      "reported_calls": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1
+      },
+      "complete_tokens": {
+        "prompt_tokens": 4618,
+        "completion_tokens": 3000
+      },
+      "schema_version": "praxile.trajectory_usage.v1",
+      "by_purpose": {
+        "content_review_judge": {
+          "calls": 1,
+          "recorded_calls": 1,
+          "known_tokens": {
+            "prompt_tokens": 4618,
+            "completion_tokens": 3000
+          },
+          "reported_calls": {
+            "prompt_tokens": 1,
+            "completion_tokens": 1
+          },
+          "complete_tokens": {
+            "prompt_tokens": 4618,
+            "completion_tokens": 3000
+          }
+        }
+      },
+      "unattributed_calls": 0,
+      "cost_usd": null,
+      "scope": "calls_recorded_by_trajectory_logger"
+    }
+  },
+  "process_exit_code": 0,
+  "transport_retries_configured": 0,
+  "promotion_eligible": false,
+  "offline_inspection": {
+    "expected_items": 16,
+    "returned_items": 6,
+    "missing_required_fields_by_position": [
+      {
+        "position": 5,
+        "missing": [
+          "reason"
+        ]
+      }
+    ],
+    "checkpoint_mode": "0600",
+    "output_tokens_equal_budget": true,
+    "truncation_cause_proven": false
+  }
+}
