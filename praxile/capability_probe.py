@@ -8,12 +8,60 @@ import tempfile
 PROFILE_PACKAGES = {
     "xlsx_values.v1": ("openpyxl", "et-xmlfile", "defusedxml"),
     "docx_text.v1": ("python-docx", "lxml", "defusedxml"),
+    "pdf_text.v1": ("pypdf", "pdfplumber", "pdfminer.six"),
 }
 PROFILE_CHECKS = {
     "xlsx_values.v1": ["create", "read", "opener", "literal_roundtrip"],
     "docx_text.v1": ["create", "read", "opener", "heading_table_roundtrip"],
+    "pdf_text.v1": ["read_pages", "opener", "review_extraction", "text_digest"],
 }
 PROFILES = tuple(PROFILE_PACKAGES)
+
+
+def _pdf_probe():
+    import hashlib
+    import io
+    from pypdf import PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
+    from .config import Config, ProjectPaths, default_config
+    from .security import SafetyPolicy
+    from .documents import read_document
+    from .artifact_openers import inspect_document
+    from .eval.document_review_extraction import extract_pdf_text
+
+    texts = ["First probe page", "Second probe page"]
+    with tempfile.TemporaryDirectory(prefix="praxile-capability-") as directory:
+        root = Path(directory)
+        config = Config(default_config(root), ProjectPaths(root))
+        safety = SafetyPolicy(config)
+        writer = PdfWriter()
+        try:
+            for text in texts:
+                page = writer.add_blank_page(width=612, height=792)
+                font = DictionaryObject({NameObject("/Type"): NameObject("/Font"),
+                    NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+                page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"):
+                    DictionaryObject({NameObject("/F1"): writer._add_object(font)})})
+                content = DecodedStreamObject()
+                content.set_data(b"BT /F1 12 Tf 72 720 Td (" + text.encode("ascii") + b") Tj ET")
+                page[NameObject("/Contents")] = writer._add_object(content)
+            stream = io.BytesIO()
+            writer.write(stream)
+            raw = stream.getvalue()
+        finally:
+            writer.close()
+        (root / "probe.pdf").write_bytes(raw)
+        for index, expected in enumerate(texts, 1):
+            result = read_document(config, safety, "probe.pdf", start=index, limit=1)
+            if result.status != "success" or expected not in result.output:
+                raise RuntimeError("read_failed")
+        opened = inspect_document(root / "probe.pdf", "pdf")
+        if opened.get("status") != "passed" or opened.get("structure", {}).get("pages") != 2:
+            raise RuntimeError("opener_failed")
+        text, evidence = extract_pdf_text((root / "probe.pdf").read_bytes())
+        if (text != "\n".join(texts) or evidence.get("profile") != "praxile.pdf_page_text.v1"
+                or evidence.get("text_sha256") != hashlib.sha256(text.encode()).hexdigest()):
+            raise RuntimeError("review_extraction_failed")
 
 
 def _docx_probe():
@@ -53,8 +101,8 @@ def probe(profile):
               "status": "failed", "model_called": False, "formulas_recalculated": False,
               "visual_quality_verified": False}
     try:
-        if profile == "docx_text.v1":
-            _docx_probe()
+        if profile in {"docx_text.v1", "pdf_text.v1"}:
+            (_docx_probe if profile == "docx_text.v1" else _pdf_probe)()
             report.update(status="passed", checks=PROFILE_CHECKS[profile],
                           packages={name: version(name) for name in PROFILE_PACKAGES[profile]})
             return report

@@ -97,7 +97,7 @@ def test_renderer_failure_does_not_unlock_required_capability_run(tmp_path, monk
 @pytest.mark.parametrize("corrupt", [False, True])
 def test_multiple_profiles_require_profile_specific_evidence(tmp_path, monkeypatch, corrupt):
     from praxile.capability_probe import PROFILE_CHECKS, PROFILE_PACKAGES
-    agent = make_agent(tmp_path, ["xlsx_values.v1", "docx_text.v1"])
+    agent = make_agent(tmp_path, ["xlsx_values.v1", "docx_text.v1", "pdf_text.v1"])
     run = AsyncMock()
     monkeypatch.setattr(agent, "_run_with_endpoint", run)
     async def execute(command, **kwargs):
@@ -119,7 +119,7 @@ def test_multiple_profiles_require_profile_specific_evidence(tmp_path, monkeypat
     else:
         asyncio.run(agent.setup(environment))
         record = json.loads((tmp_path / "praxile-capabilities.json").read_text())
-        assert [r["profile"] for r in record["reports"]] == ["docx_text.v1", "xlsx_values.v1"]
+        assert [r["profile"] for r in record["reports"]] == ["docx_text.v1", "pdf_text.v1", "xlsx_values.v1"]
         asyncio.run(agent.run("task", environment, None))
         run.assert_awaited_once()
 

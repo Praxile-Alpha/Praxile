@@ -8,11 +8,17 @@
 {"required_capabilities":["xlsx_values.v1"]}
 ```
 
-支持 `xlsx_values.v1` 和 `docx_text.v1`，可以同时声明，所有声明均须通过。
+支持 `xlsx_values.v1`、`docx_text.v1` 和 `pdf_text.v1`，可以同时声明，所有声明均须通过。
 前者覆盖新建值型工作簿、指定 sheet 读取、安全 opener 和 literal 字符串/数值
 回读；后者实际创建标题、段落和表格，读取正文，通过 opener 并核对标题样式、
 段落文本和表格单元格。不是公式计算、渲染、业务正确性或跨任务模型表现的证明。
 未知或重复 profile 在构造时拒绝，检查项目和包版本按 profile 分别校验。
+
+`pdf_text.v1` 生成不含任务数据的两页文本 PDF，分别通过 read_document 读取
+各页，再调用 opener 确认页数，最后使用隔离的独立评审抽取子进程核对页面顺序、
+完整文本及 text_sha256。记录 pypdf、pdfplumber、pdfminer.six 版本。不代表扫描
+PDF 的 OCR、表格结构还原、渲染或视觉质量；该 profile 暂只通过本机功能和
+适配器协议测试，完整固定依赖 Docker 环境尚待验收。
 
 ## 启动顺序
 
@@ -50,6 +56,7 @@
 ```sh
 python -m praxile.capability_probe --profile xlsx_values.v1
 python -m praxile.capability_probe --profile docx_text.v1
+python -m praxile.capability_probe --profile pdf_text.v1
 ```
 
 资源测试 `test_capability_probe.py` 使用实际 openpyxl 写出/回读/校验。

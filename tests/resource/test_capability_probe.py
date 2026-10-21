@@ -43,3 +43,22 @@ def test_docx_opener_failure_is_not_passed(monkeypatch):
     pytest.importorskip("docx")
     monkeypatch.setattr("praxile.artifact_openers.inspect_document", lambda *args: {"status": "failed"})
     assert probe("docx_text.v1")["status"] == "failed"
+
+
+def test_real_pdf_text_capability():
+    pytest.importorskip("pypdf")
+    pytest.importorskip("pdfplumber")
+    report = probe("pdf_text.v1")
+    assert report["status"] == "passed"
+    assert report["checks"] == ["read_pages", "opener", "review_extraction", "text_digest"]
+    assert set(report["packages"]) == {"pypdf", "pdfplumber", "pdfminer.six"}
+    assert report["model_called"] is False and report["visual_quality_verified"] is False
+
+
+def test_pdf_review_digest_failure_rejects_capability(monkeypatch):
+    pytest.importorskip("pypdf")
+    pytest.importorskip("pdfplumber")
+    monkeypatch.setattr("praxile.eval.document_review_extraction.extract_pdf_text",
+        lambda raw: ("First probe page\nSecond probe page", {
+            "profile": "praxile.pdf_page_text.v1", "text_sha256": "wrong"}))
+    assert probe("pdf_text.v1")["status"] == "failed"
