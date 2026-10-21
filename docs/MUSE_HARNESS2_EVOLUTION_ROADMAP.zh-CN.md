@@ -208,6 +208,20 @@ cleanup，记录 device/inode；SIGKILL 由内核释放锁。新增 lease_recove
 最终 CLI 数据丢失确认在 0.22 再次实测通过。此能力依赖本机 POSIX 协作锁，
 不是 PID 存活认证、无确认自动 janitor、NFS/跨主机支持、断电恢复或动作续跑。
 
+R0-A 持久化工作区增补（2026-10-21）：独占租约、Native runner 和 CLI 新增
+显式 persist_workspace / --persist-workspace，默认关闭；每代使用独立宿主目录，
+reset 创建空的新代，cleanup 与显式 recovery 不删除旧代文件。开关开启时进入
+run_id 的冻结计划，终态 resume 不允许切换存储条件；旧默认计划摘要保持兼容。
+真实 Docker 测试覆盖只读输入嵌套挂载、旧代保留/新代隔离、Native 产物采集、
+SIGKILL 后正式回收保留 checkpoint 样本，以及更改开关拒绝终态复用。
+Harbor 0.18.0 / 0.22.0 各 14 项资源测试通过；fast suite 为 1249 passed、
+13 skipped、213 deselected。资源测试使用固定镜像/worker wheel 与本地模拟模型，
+没有新增真实模型调用或官方 benchmark 成绩。
+该 checkpoint 是存储测试样本，不是可恢复的 Runtime 状态；实时 bind 也不是
+原子快照，且会遮蔽镜像预置 /workspace，仅适用于显式输入清单初始化的任务。
+动作去重、工具副作用确认、中途续跑、自动 GC 及完整 crash/resume 仍未完成，
+因此环境协议总项继续不勾选。使用限制见 OWNED_NATIVE_RUNNER.zh-CN.md。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

@@ -20,6 +20,9 @@ Docker environment，不接管 `Trial` 传给 `PraxileAgent` 的环境，不自�
   `/inputs` 挂载位于根外，不能通过路径安全检查，因此已迁入工作区。执行器应使用
   公开视图提供的路径，不拼接宿主路径；来源清单的路径不直接等于工具路径。
 - 每代环境创建随机 Compose project/session；reset 删除自己的旧环境后创建新代。
+- 可选 persist_workspace=True 将该代独立 `SESSION/workspace/` bind 到 /workspace；
+  默认 False 保持原容器内工作区。每次 reset 创建新目录，不自动恢复旧内容。
+  旧代工作区保留，cleanup/recovery 不删除宿主文件；公开输入仍来自独立只读快照。
 - 固定工作目录 `/workspace`；执行 argv 经 shell quoting 传入 Harbor。
 - 超时或取消会销毁整个租约容器，而不是尝试保留不确定的命令状态。继续工作需 reset。
 - 取消 prepare/reset 会先等待所属操作结束，再删除环境；重复取消不能遗失所有权。
@@ -105,6 +108,13 @@ integration + resource，必须显式设置固定 PRAXILE_TEST_LEASE_IMAGE，并
 和标签检查保护，不沿用此前仅由测试夹具证明 owner 已退出的前提。
 该证据证明强杀后记录可用、独立检查可发现遗留资源，不证明动作 checkpoint
 恢复、断电恢复或无人工确认的生产自动回收已经完成。
+
+持久化模式另验证了 reset 后旧代文件仍保留、新代不可见旧文件；Native runner
+生成的 answer.txt 在独立回收目录和保留工作区都存在；SIGKILL 后正式 recovery
+删除容器时宿主 checkpoint 样本不被删除。故障样本是测试文件，不是可恢复的
+真实 AgentRuntime checkpoint。可见工作区是实时挂载，不是多文件原子快照；
+不能在活动写入期间直接把它当作一致的恢复点。保留的 .praxile 状态和模型产物
+均应视为不可信输入，尚未开放自动续跑或自动加载经验。
 
 本后端不是敌对代码安全沙箱：只读输入已在显式清单路径实现，但尚未建立完整
 下载/私有评测存储隔离、网络隔离策略或宿主资源配额。宿主同权限进程仍可能在

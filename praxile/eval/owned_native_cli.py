@@ -42,6 +42,7 @@ def main(argv=None):
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
     parser.add_argument("--run-id", help="Exclusive durable identity; reuse requires --resume")
     parser.add_argument("--resume", action="store_true", help="Reuse verified completion only; never replay interrupted execution")
+    parser.add_argument("--persist-workspace", action="store_true", help="Retain per-generation workspace on host; does not enable action resume")
     args = parser.parse_args(argv)
     try:
         from .native_run_claim import validate_run_id
@@ -70,6 +71,7 @@ def main(argv=None):
                 "output_count": len(task.outputs), "max_steps": args.max_steps,
                 "timeout_seconds": args.timeout, "execute": args.execute,
                 "run_id": args.run_id, "resume": args.resume,
+                "persist_workspace": args.persist_workspace,
                 "official_evaluation": "not_run"}
         print(json.dumps(plan, ensure_ascii=False))
         if not args.execute:
@@ -80,7 +82,7 @@ def main(argv=None):
             image=task.environment.revision, wheel=args.wheel, wheel_sha256=args.wheel_sha256,
             model=args.model, base_url=args.base_url, input_source_root=args.input_source_root,
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
-            run_id=args.run_id, resume=args.resume))
+            run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")

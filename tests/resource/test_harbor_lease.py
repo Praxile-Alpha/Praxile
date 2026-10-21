@@ -162,7 +162,8 @@ def test_cancelled_preparation_drains_then_destroys(tmp_path, monkeypatch, metho
 
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_LEASE_IMAGE"), reason="requires pinned local Docker image")
-def test_real_owned_docker_lifecycle(tmp_path):
+@pytest.mark.parametrize("persist_workspace", [False, True])
+def test_real_owned_docker_lifecycle(tmp_path, persist_workspace):
     async def exercise():
         source = tmp_path / "source"
         source.mkdir()
@@ -171,7 +172,7 @@ def test_real_owned_docker_lifecycle(tmp_path):
         inputs = (InputArtifact("task.txt", "public.txt",
             "sha256:" + hashlib.sha256(b"frozen task").hexdigest()),)
         lease = HarborDockerLease(tmp_path, image=os.environ["PRAXILE_TEST_LEASE_IMAGE"],
-                                  inputs=inputs, input_source_root=source)
+                                  inputs=inputs, input_source_root=source, persist_workspace=persist_workspace)
         try:
             await lease.prepare()
             first_session = lease._session
@@ -193,6 +194,11 @@ def test_real_owned_docker_lifecycle(tmp_path):
                 "from pathlib import Path; Path('artifact').write_bytes(b'hello')"], timeout=10)
             assert result.returncode == 0
             assert await lease.collect("artifact") == b"hello"
+            first_workspace = lease.workspace_path
+            if persist_workspace:
+                assert (first_workspace / "artifact").read_bytes() == b"hello"
+            else:
+                assert first_workspace is None
             with pytest.raises(ValueError):
                 await lease.collect("artifact", max_bytes=2)
             await lease.execute(["ln", "-s", "/etc/passwd", "escape"], timeout=10)
@@ -201,6 +207,9 @@ def test_real_owned_docker_lifecycle(tmp_path):
             (source / "public.txt").write_text("source changed")
             await lease.reset()
             assert lease._session != first_session
+            if persist_workspace:
+                assert lease.workspace_path != first_workspace
+                assert (first_workspace / "artifact").read_bytes() == b"hello"
             assert (await lease.execute(["cat", "inputs/task.txt"], timeout=10)).stdout == "frozen task"
             with pytest.raises(ValueError):
                 await lease.collect("artifact")
@@ -219,6 +228,8 @@ def test_real_owned_docker_lifecycle(tmp_path):
         finally:
             await lease.cleanup()
         assert lease._state == "closed"
+        if persist_workspace:
+            assert (first_workspace / "artifact").read_bytes() == b"hello"
         observed = await inspect_lease(lease.root)
         assert observed["resources_absent"] is True
         assert len(observed["generations"]) == 3

@@ -27,7 +27,10 @@ from .owner_lock import OwnerLock
 
 class HarborDockerLease:
     def __init__(self, state_root: Path, *, image: str,
-                 inputs: tuple[InputArtifact, ...] = (), input_source_root: Path | None = None):
+                 inputs: tuple[InputArtifact, ...] = (), input_source_root: Path | None = None,
+                 persist_workspace: bool = False):
+        if type(persist_workspace) is not bool:
+            raise ValueError("persist_workspace must be boolean")
         if not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", image):
             raise ValueError("a digest-pinned Docker image is required")
         if version("harbor") not in {"0.18.0", "0.22.0"}:
@@ -35,6 +38,8 @@ class HarborDockerLease:
         if not isinstance(inputs, tuple) or bool(inputs) != (input_source_root is not None):
             raise ValueError("nonempty public inputs and source root must be supplied together")
         self.image = image
+        self.persist_workspace = persist_workspace
+        self.workspace_path = None
         self.root = state_root.resolve() / ("harbor-lease-" + uuid.uuid4().hex)
         self.root.mkdir(parents=True, exist_ok=False, mode=0o700)
         self._owner_lock = OwnerLock(self.root / "owner.lock", create=True)
@@ -67,6 +72,7 @@ class HarborDockerLease:
         write_json(self.root / "ownership.json", {
             "schema_version": "praxile.harbor_ownership.v1", "lease_id": self.root.name,
             "image": self.image, "owner_pid": os.getpid(), "owner_lock": self._owner_lock.identity,
+            "persist_workspace": self.persist_workspace,
             "generations": self._generations})
 
     async def _docker(self, *argv):
@@ -129,6 +135,10 @@ class HarborDockerLease:
         # Persist before any container creation; retain all reset generations.
         self._record_generation("starting", daemon_id=daemon_id)
         generation = self.root / self._session
+        if self.persist_workspace:
+            self.workspace_path = generation / "workspace"
+            self.workspace_path.mkdir(parents=True, exist_ok=False, mode=0o700)
+            mounts.insert(0, {"type": "bind", "source": str(self.workspace_path), "target": "/workspace"})
         environment_dir = generation / "environment"
         environment_dir.mkdir(parents=True)
         paths = TrialPaths(generation / "trial")

@@ -86,3 +86,24 @@ def test_interruption_returns_130(tmp_path, monkeypatch):
         raise KeyboardInterrupt()
     monkeypatch.setattr(owned_native_run, "run_owned_native", run)
     assert main([*setup_args(tmp_path), "--execute"]) == 130
+
+
+def test_persistent_workspace_is_explicit(tmp_path, monkeypatch):
+    from praxile.eval import owned_native_run
+    calls = []
+    async def run(task, **kwargs):
+        calls.append(kwargs)
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps({"cleanup_verified": True, "required_outputs_collected": True}))
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    args = setup_args(tmp_path)
+    assert main([*args, "--execute", "--persist-workspace"]) == 0
+    assert calls[0]["persist_workspace"] is True
+
+
+@pytest.mark.parametrize("value", ["true", 1, None])
+def test_persistent_workspace_requires_boolean_before_optional_dependencies(tmp_path, value):
+    from praxile.eval.harbor_lease import HarborDockerLease
+    with pytest.raises(ValueError, match="must be boolean"):
+        HarborDockerLease(tmp_path, image="unused", persist_workspace=value)

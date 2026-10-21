@@ -20,7 +20,10 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            input_source_root: Path | None = None,
                            credential_file: Path | None = None,
                            max_steps: int = 50, timeout_seconds: int = 900,
-                           run_id: str | None = None, resume: bool = False):
+                           run_id: str | None = None, resume: bool = False,
+                           persist_workspace: bool = False):
+    if type(persist_workspace) is not bool:
+        raise ValueError("persist_workspace must be boolean")
     if not isinstance(task, BenchmarkTask) or task.environment.kind != "harbor":
         raise ValueError("owned native execution requires a Harbor BenchmarkTask")
     if task.environment.revision != image:
@@ -33,11 +36,14 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
     claim = None
     if run_id is not None:
         from .native_run_claim import NativeRunClaim
-        claim = NativeRunClaim(state_root, run_id, {
+        plan = {
             "task_fingerprint": task.fingerprint, "image": image, "wheel_sha256": wheel_sha256,
             "model": model, "endpoint_sha256": hashlib.sha256(base_url.encode()).hexdigest(),
             "max_steps": max_steps, "timeout_seconds": timeout_seconds,
-            "credential_broker": credential_file is not None})
+            "credential_broker": credential_file is not None}
+        if persist_workspace:
+            plan["persist_workspace"] = True
+        claim = NativeRunClaim(state_root, run_id, plan)
         if resume:
             return claim.resume()
         claim.acquire()
@@ -45,7 +51,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
     from ..adapters.harbor_native import PraxileAgent
 
     lease = HarborDockerLease(state_root, image=image, inputs=task.inputs,
-                              input_source_root=input_source_root)
+                              input_source_root=input_source_root, persist_workspace=persist_workspace)
     logs = lease.root / "agent"
     logs.mkdir()
     report_path = lease.root / "execution.json"
@@ -55,6 +61,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "task_id": task.task_id, "task_fingerprint": task.fingerprint,
         "image": image, "wheel_sha256": wheel_sha256, "model": model,
         "max_steps": max_steps, "timeout_seconds": timeout_seconds,
+        "persist_workspace": persist_workspace,
         "public_inputs": lease.public_inputs, "status": "preparing",
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
@@ -72,6 +79,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
             credential_file=str(credential_file) if credential_file else None)
         await lease.prepare()
+        if lease.workspace_path is not None:
+            report["workspace"] = lease.workspace_path.relative_to(lease.root).as_posix()
         report["status"] = "running"
         write_json(report_path, report)
         context = AgentContext()

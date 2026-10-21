@@ -25,8 +25,12 @@ import asyncio, sys
 from pathlib import Path
 from praxile.eval.harbor_lease import HarborDockerLease
 async def main():
-    lease = HarborDockerLease(Path(sys.argv[1]), image=sys.argv[2])
+    lease = HarborDockerLease(Path(sys.argv[1]), image=sys.argv[2], persist_workspace=True)
     await lease.prepare()
+    result = await lease.execute(['python3', '-c',
+        "from pathlib import Path; p=Path('.praxile/checkpoints'); p.mkdir(parents=True); "
+        "(p/'fixture.json').write_text('persistent fixture, not a resumable checkpoint')"], timeout=10)
+    assert result.returncode == 0
     print('LEASE_READY=' + str(lease.root), flush=True)
     await asyncio.Event().wait()
 asyncio.run(main())
@@ -49,6 +53,9 @@ asyncio.run(main())
             assert ownership["owner_pid"] == child.pid
             assert ownership["generations"][0]["phase"] == "ready"
             sessions = [item["session"] for item in ownership["generations"]]
+            assert ownership["persist_workspace"] is True
+            checkpoint = root / sessions[0] / "workspace/.praxile/checkpoints/fixture.json"
+            checkpoint_bytes = checkpoint.read_bytes()
             with pytest.raises(RuntimeError, match="still active"):
                 await recover_lease(root, confirm_sessions=sessions)
             before = (root / "ownership.json").read_bytes()
@@ -76,6 +83,7 @@ asyncio.run(main())
             assert receipt["status"] == "cleaned" and receipt["resources_absent"] is True
             assert any(item["kind"] == "container" for item in receipt["removed"])
             assert receipt["execution_replayed"] is False
+            assert checkpoint.read_bytes() == checkpoint_bytes
         finally:
             if child.returncode is None:
                 os.killpg(child.pid, signal.SIGKILL)

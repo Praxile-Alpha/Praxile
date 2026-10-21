@@ -74,7 +74,7 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
     run_options = dict(state_root=tmp_path / "runs", image=image,
         wheel=wheel, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
         model="fixture", base_url="https://provider.invalid/v1", input_source_root=source,
-        credential_file=key, max_steps=6, timeout_seconds=90, run_id="owned-fixture")
+        credential_file=key, max_steps=6, timeout_seconds=90, run_id="owned-fixture", persist_workspace=True)
     report_path = asyncio.run(run_owned_native(task, **run_options))
     report = json.loads(report_path.read_text())
     assert report["status"] == "executor_returned"
@@ -85,6 +85,8 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
     usage = json.loads((report_path.parent / "agent/praxile-broker-usage.json").read_text())
     assert usage["revoked"] is True
     assert (report_path.parent / "outputs/answer.txt").read_text() == "fixture complete"
+    assert report["persist_workspace"] is True
+    assert (report_path.parent / report["workspace"] / "answer.txt").read_text() == "fixture complete"
     result = report_path.parent / "agent/praxile-result.json"
     assert report["source_result_sha256"] == hashlib.sha256(result.read_bytes()).hexdigest()
     actions = json.loads(result.read_text())["trajectory"]["actions"]
@@ -95,6 +97,8 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
     count = len(requests)
     assert asyncio.run(run_owned_native(task, **run_options, resume=True)) == report_path
     assert len(requests) == count
+    with pytest.raises(ValueError, match="frozen execution plan"):
+        asyncio.run(run_owned_native(task, **dict(run_options, persist_workspace=False), resume=True))
     with pytest.raises(FileExistsError):
         asyncio.run(run_owned_native(task, **run_options))
     (report_path.parent / "outputs/answer.txt").write_text("corrupted")
