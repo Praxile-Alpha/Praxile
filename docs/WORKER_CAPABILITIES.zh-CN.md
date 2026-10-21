@@ -62,5 +62,18 @@ PRAXILE_TEST_XLSX_WHEELS（只含上述三个 wheel 的目录），以 --forked 
 在新依赖环境下的真实模型调用尚未重跑，不能把预检通过当作任务验收通过。
 
 该 wheel 用于容器内探针；宿主适配器使用当前工作树代码，二者不是同一个
-源码快照。最终适配器另有 renderer 失败后禁止 run 的回归检查。能力声明
-目前仅接入 Harbor Native 参数，尚未自动推广到所有 owned runner 入口。
+源码快照。最终适配器另有 renderer 失败后禁止 run 的回归检查。
+
+## Owned Runner 与 CLI
+
+独立 `run_owned_native` 接受同名 `dependency_wheels` 和 `required_capabilities`
+参数。CLI `python -m praxile.eval.owned_native_cli` 在原有任务/镜像/模型参数外，
+可重复添加 `--dependency-wheel /absolute/package.whl SHA256` 和
+`--require-capability xlsx_values.v1`。每个依赖均须提供真实摘要，不下载或自动
+解析依赖。默认仍为 plan only，只有 `--execute` 才启动容器和模型。
+
+plan only 会校验声明、文件名及摘要，但不会执行功能探针。计划仅显示依赖
+文件名和摘要，不显示本机绝对路径。真实执行经过相同的适配器预检。
+依赖内容和 profile 进入 run ID 的冻结计划；变更后不能 `--resume` 旧结果。
+成功完成时 worker 环境与能力报告加入完成证据摘要，篡改报告会使恢复失败。
+未声明能力的历史运行保持兼容，不声称补做过预检；这也不提供中断动作重放。

@@ -37,6 +37,10 @@ def main(argv=None):
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--input-source-root", type=Path)
     parser.add_argument("--credential-file", type=Path)
+    parser.add_argument("--dependency-wheel", nargs=2, action="append", metavar=("PATH", "SHA256"),
+                        help="Repeat for each fixed offline dependency wheel")
+    parser.add_argument("--require-capability", action="append", default=[],
+                        help="Versioned worker capability checked before model execution")
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
@@ -65,6 +69,10 @@ def main(argv=None):
         if bool(task.inputs) != (args.input_source_root is not None):
             raise ValueError("public inputs require an explicit source root")
         check_worker_wheel(args.wheel, args.wheel_sha256)
+        from .worker_requirements import validate_requirements, identity
+        dependencies, capabilities = validate_requirements(
+            [{"path": path, "sha256": digest} for path, digest in args.dependency_wheel or []],
+            args.require_capability, worker_filename=args.wheel.name)
         plan = {"task_id": task.task_id, "task_fingerprint": task.fingerprint,
                 "image": task.environment.revision, "model": args.model,
                 "wheel_sha256": args.wheel_sha256, "input_count": len(task.inputs),
@@ -73,6 +81,7 @@ def main(argv=None):
                 "run_id": args.run_id, "resume": args.resume,
                 "persist_workspace": args.persist_workspace,
                 "official_evaluation": "not_run"}
+        plan["worker_requirements"] = identity(dependencies, capabilities)
         print(json.dumps(plan, ensure_ascii=False))
         if not args.execute:
             print("Plan only: no Docker/model calls; source inputs and infrastructure are not yet verified.")
@@ -82,7 +91,8 @@ def main(argv=None):
             image=task.environment.revision, wheel=args.wheel, wheel_sha256=args.wheel_sha256,
             model=args.model, base_url=args.base_url, input_source_root=args.input_source_root,
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
-            run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace))
+            run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace,
+            dependency_wheels=dependencies, required_capabilities=capabilities))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")

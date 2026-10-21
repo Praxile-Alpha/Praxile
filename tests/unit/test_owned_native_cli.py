@@ -37,6 +37,41 @@ def test_plan_does_not_run_or_print_private_fields(tmp_path, monkeypatch, capsys
     assert not (tmp_path / "runs").exists()
 
 
+def test_worker_requirements_plan_and_execution(tmp_path, monkeypatch, capsys):
+    from praxile.eval import owned_native_run
+    dependency = tmp_path / "dep-1-py3-none-any.whl"
+    dependency.write_bytes(b"fixture")
+    digest = hashlib.sha256(dependency.read_bytes()).hexdigest()
+    args = [*setup_args(tmp_path), "--dependency-wheel", str(dependency), digest,
+            "--require-capability", "xlsx_values.v1"]
+    assert main(args) == 0
+    plan = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert plan["worker_requirements"] == {"dependencies": [{"filename": dependency.name, "sha256": digest}],
+                                           "required_capabilities": ["xlsx_values.v1"]}
+    calls = []
+    async def run(task, **kwargs):
+        calls.append(kwargs)
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps({"cleanup_verified": True, "required_outputs_collected": True}))
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main([*args, "--execute"]) == 0
+    assert calls[0]["required_capabilities"] == ["xlsx_values.v1"]
+    assert calls[0]["dependency_wheels"] == [{"path": str(dependency.resolve()), "sha256": digest}]
+    dependency.write_bytes(b"changed")
+    assert main([*args, "--execute"]) == 2
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("profiles", [["unknown"], ["xlsx_values.v1"] * 2])
+def test_invalid_worker_profile_rejected_without_running(tmp_path, profiles):
+    args = setup_args(tmp_path)
+    for profile in profiles:
+        args += ["--require-capability", profile]
+    assert main(args) == 2
+    assert not (tmp_path / "runs").exists()
+
+
 @pytest.mark.parametrize("complete, expected", [(True, 0), (False, 1)])
 def test_execute_is_explicit_and_reports_incomplete_outputs(tmp_path, monkeypatch, complete, expected):
     from praxile.eval import owned_native_run

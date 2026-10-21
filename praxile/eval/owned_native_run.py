@@ -21,7 +21,13 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            credential_file: Path | None = None,
                            max_steps: int = 50, timeout_seconds: int = 900,
                            run_id: str | None = None, resume: bool = False,
-                           persist_workspace: bool = False):
+                           persist_workspace: bool = False,
+                           dependency_wheels: list[dict] | None = None,
+                           required_capabilities: list[str] | None = None):
+    from .worker_requirements import validate_requirements, identity
+    dependencies, capabilities = validate_requirements(dependency_wheels, required_capabilities,
+                                                       worker_filename=wheel.name)
+    requirements = identity(dependencies, capabilities)
     if type(persist_workspace) is not bool:
         raise ValueError("persist_workspace must be boolean")
     if not isinstance(task, BenchmarkTask) or task.environment.kind != "harbor":
@@ -43,6 +49,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             "credential_broker": credential_file is not None}
         if persist_workspace:
             plan["persist_workspace"] = True
+        if dependencies or capabilities:
+            plan["worker_requirements"] = requirements
         claim = NativeRunClaim(state_root, run_id, plan)
         if resume:
             return claim.resume()
@@ -65,6 +73,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "public_inputs": lease.public_inputs, "status": "preparing",
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
+    report["worker_requirements"] = requirements
     write_json(report_path, report)
     # Build an allowlisted execution view; never serialize evaluator/source refs.
     instruction = task.instruction + "\n\nPublic input paths and SHA-256:\n" + json.dumps(lease.public_inputs)
@@ -77,7 +86,9 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         agent = PraxileAgent(logs_dir=logs, wheel_path=str(wheel), wheel_sha256=wheel_sha256,
             workspace="/workspace", base_url=base_url, model_name=model,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
-            credential_file=str(credential_file) if credential_file else None)
+            credential_file=str(credential_file) if credential_file else None,
+            dependency_wheels=dependencies, required_capabilities=capabilities)
+        report["worker_environment_sha256"] = agent.worker_environment_sha256
         await lease.prepare()
         if lease.workspace_path is not None:
             report["workspace"] = lease.workspace_path.relative_to(lease.root).as_posix()
@@ -128,5 +139,11 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                  prefix + "agent/praxile-result.json": report["source_result_sha256"]}
         files.update({prefix + "inputs/" + item.path: item.content_digest.removeprefix("sha256:") for item in task.inputs})
         files.update({prefix + "outputs/" + item["path"]: item["sha256"] for item in report["outputs"] if item["status"] == "collected"})
+        for name in ("praxile-worker-environment.json", "praxile-capabilities.json"):
+            evidence = logs / name
+            if capabilities and not evidence.is_file():
+                raise ValueError("required worker capability evidence missing")
+            if evidence.is_file():
+                files[prefix + "agent/" + name] = hashlib.sha256(evidence.read_bytes()).hexdigest()
         claim.complete(files)
     return report_path

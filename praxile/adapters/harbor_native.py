@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import asyncio
 import json
-import re
 import shlex
 import tempfile
 import time
@@ -38,12 +37,10 @@ class PraxileAgent(BaseAgent):
                  development_only: bool = False, repository: str | None = None, **kwargs):
         from ..model_options import validate_request_options
         self.model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
-        from ..capability_probe import PROFILES
-        if required_capabilities is not None and (not isinstance(required_capabilities, list)
-                or any(not isinstance(item, str) or item not in PROFILES for item in required_capabilities)
-                or len(set(required_capabilities)) != len(required_capabilities)):
-            raise ValueError("required_capabilities must contain unique supported versioned profiles")
-        self.required_capabilities = tuple(sorted(required_capabilities or []))
+        from ..eval.worker_requirements import validate_requirements
+        dependencies, capabilities = validate_requirements(dependency_wheels, required_capabilities,
+                                                           worker_filename=Path(wheel_path).name)
+        self.required_capabilities = tuple(capabilities)
         self._capabilities_verified = not self.required_capabilities
         from ..services.run_service import normalize_deliverable_contract
         public_contract = normalize_deliverable_contract(deliverable_contract)
@@ -96,23 +93,7 @@ class PraxileAgent(BaseAgent):
         self.wheel = Path(wheel_path).resolve(strict=True)
         if not self.wheel.name.endswith(".whl") or hashlib.sha256(self.wheel.read_bytes()).hexdigest() != wheel_sha256:
             raise ValueError("Praxile wheel digest mismatch")
-        if dependency_wheels is not None and not isinstance(dependency_wheels, list):
-            raise ValueError("dependency_wheels must be a list of path/sha256 records")
-        self._dependency_wheels = []
-        names = {self.wheel.name}
-        for item in dependency_wheels or []:
-            if (not isinstance(item, dict) or set(item) != {"path", "sha256"}
-                    or not isinstance(item["path"], str) or not isinstance(item["sha256"], str)
-                    or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])):
-                raise ValueError("invalid dependency wheel record")
-            dependency = Path(item["path"]).resolve(strict=True)
-            if (not dependency.is_file() or not re.fullmatch(r"[A-Za-z0-9_.+!-]+\.whl", dependency.name)
-                    or dependency.name in names
-                    or hashlib.sha256(dependency.read_bytes()).hexdigest() != item["sha256"]):
-                raise ValueError("dependency wheel digest or filename mismatch")
-            names.add(dependency.name)
-            self._dependency_wheels.append((dependency, item["sha256"]))
-        self._dependency_wheels.sort(key=lambda item: item[0].name)
+        self._dependency_wheels = [(Path(item["path"]), item["sha256"]) for item in dependencies]
         self.worker_environment = {"schema_version": "praxile.worker_environment.v1",
             "praxile_wheel_sha256": wheel_sha256, "inherit_task_packages": inherit_task_packages,
             "dependencies": [{"filename": path.name, "sha256": digest}

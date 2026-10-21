@@ -536,6 +536,12 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+owned runner 能力声明贯通（2026-10-21）：独立执行 API/CLI 可传入固定 dependency
+wheels 与 required capabilities；仅计划模式校验摘要，执行时先功能预检。
+能力/依赖身份进入 run ID 冻结计划，环境与能力报告纳入恢复证据校验，变更声明
+或篡改报告不能复用旧完成结果。未声明的历史运行兼容，不补认能力，也不实现
+动作级断点恢复；完整 R0/R1 仍待验收。见 WORKER_CAPABILITIES.zh-CN.md。
+
 能力环境真实复验（2026-10-21）：cae4353 的固定 worker 依赖及 xlsx_values.v1
 预检在 Office 库存任务中通过；产物 opener 从 unsupported 变为 passed，
 check_deliverables 成功，产物留存/摘要一致和资源清理已核实。官方仍 13/15，

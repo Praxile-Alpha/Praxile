@@ -35,10 +35,11 @@ def test_preflight_failure_persists_report_and_releases_lease(tmp_path, monkeypa
     assert "PRIVATE_REFERENCE" not in reports[0].read_text()
 
 
+@pytest.mark.parametrize("with_capability", [False, True])
 @pytest.mark.slow
 @pytest.mark.skipif(not (os.environ.get("PRAXILE_TEST_LEASE_IMAGE") and os.environ.get("PRAXILE_TEST_WHEEL")),
                     reason="requires pinned Docker image and explicit worker wheel")
-def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch):
+def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch, with_capability):
     from praxile.eval.credential_broker import ChatCredentialBroker
     image = os.environ["PRAXILE_TEST_LEASE_IMAGE"]
     wheel = Path(os.environ["PRAXILE_TEST_WHEEL"]).resolve()
@@ -75,6 +76,12 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
         wheel=wheel, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
         model="fixture", base_url="https://provider.invalid/v1", input_source_root=source,
         credential_file=key, max_steps=6, timeout_seconds=90, run_id="owned-fixture", persist_workspace=True)
+    if with_capability:
+        if not os.environ.get("PRAXILE_TEST_XLSX_WHEELS"):
+            pytest.skip("explicit dependency wheels required")
+        run_options.update(required_capabilities=["xlsx_values.v1"], dependency_wheels=[
+            {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in sorted(Path(os.environ["PRAXILE_TEST_XLSX_WHEELS"]).glob("*.whl"))])
     report_path = asyncio.run(run_owned_native(task, **run_options))
     report = json.loads(report_path.read_text())
     assert report["status"] == "executor_returned"
@@ -97,6 +104,16 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
     count = len(requests)
     assert asyncio.run(run_owned_native(task, **run_options, resume=True)) == report_path
     assert len(requests) == count
+    if with_capability:
+        capabilities = report_path.parent / "agent/praxile-capabilities.json"
+        assert json.loads(capabilities.read_text())["reports"][0]["status"] == "passed"
+        with pytest.raises(ValueError, match="frozen execution plan"):
+            asyncio.run(run_owned_native(task, **dict(run_options, required_capabilities=[]), resume=True))
+        original = capabilities.read_bytes()
+        capabilities.write_text("{}")
+        with pytest.raises(ValueError, match="evidence changed"):
+            asyncio.run(run_owned_native(task, **run_options, resume=True))
+        capabilities.write_bytes(original)
     with pytest.raises(ValueError, match="frozen execution plan"):
         asyncio.run(run_owned_native(task, **dict(run_options, persist_workspace=False), resume=True))
     with pytest.raises(FileExistsError):
