@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 from .content_review_compare import _checked, verdict_policy
-from .content_review_files import load_review_run
+from .content_review_files import load_review_evidence, check_execution_conditions
 
 
 def compare_judgments(left, right, *, left_judge_sha256, right_judge_sha256):
@@ -52,12 +52,12 @@ def compare_judgments(left, right, *, left_judge_sha256, right_judge_sha256):
 
 
 def compare_judgment_runs(left_directory, right_directory):
-    left, left_identity = load_review_run(left_directory)
-    right, right_identity = load_review_run(right_directory)
+    left, left_identity, left_manifest = load_review_evidence(left_directory)
+    right, right_identity, right_manifest = load_review_evidence(right_directory)
     result = compare_judgments(left, right, left_judge_sha256=left_identity,
                                right_judge_sha256=right_identity)
     result["local_file_consistency_checked"] = True
-    return result
+    return check_execution_conditions(result, left_manifest, right_manifest, same_output=True)
 
 
 def main():

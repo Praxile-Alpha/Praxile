@@ -200,6 +200,13 @@ CLI/评审相关 62 项单元测试通过，真实 DOCX 双侧文件经新入口
 最终验证：fast suite 1271 passed / 13 skipped；真实 DOCX 抽取与 CLI 预检资源
 测试 4 passed；--help 入口实测成功，无付费请求。
 
+R0-A 评审可比性增补（2026-10-21）：持久化 A/B 与 judge 分歧入口核对任务/原始
+源材料/evaluator 及双侧抽取 profile、parser 版本和 worker 摘要；条件不同返回
+inconclusive 并移除可比分数。A/B 允许不同产物，same-artifact judge triage 另核对
+原始产物摘要。旧无执行绑定记录保留文本比较但标明 unbound_legacy，不改历史证据。
+54 项比较/持久化/桥接测试通过，不额外请求模型；声明一致不是原始产物认证或
+完整实验条件冻结，官方评价与受控收益验收仍未完成。
+
 R0-A 终态幂等恢复增补（2026-10-21）：owned runner/CLI 新增 run_id 与 resume。
 排他落盘 claim 在执行前占用身份；相同 ID 不带 resume 不得再次执行，计划变化
 不得复用。成功回收并确认清理后，以执行报告、轨迹、输入和输出摘要封存终态；

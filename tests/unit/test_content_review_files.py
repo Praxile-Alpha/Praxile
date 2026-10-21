@@ -37,6 +37,7 @@ def test_persisted_runs_compare_without_new_model_calls(tmp_path, monkeypatch):
     assert result["local_file_consistency_checked"] is True
     assert result["provenance_verified"] is False
     assert result["promotion_eligible"] is False
+    assert result["execution_conditions"]["status"] == "unbound_legacy"
     assert router.chat.call_count == 2
 
 
@@ -111,3 +112,63 @@ def test_evidence_decoder_is_strict(tmp_path, raw):
     (tmp_path / "test.json").write_text(raw)
     with pytest.raises(ValueError):
         _read(tmp_path, "test.json")
+
+
+def bind_files(directory):
+    from praxile.eval.content_review import _digest
+    path = directory / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["execution_binding"] = {key: "a" * 64 for key in (
+        "task_fingerprint", "execution_sha256", "trajectory_sha256", "source_sha256", "output_sha256", "evaluator_sha256")}
+    for side in ("source", "output"):
+        manifest["execution_binding"][side + "_extraction"] = {
+            "profile": "praxile.docx_body_text.v1", "parser_version": "1.2.0",
+            "worker_sha256": "b" * 64, "text_sha256": _digest("Approval required")}
+    write_json(path, manifest)
+    return manifest
+
+
+@pytest.mark.parametrize("field", ["task_fingerprint", "source_sha256", "evaluator_sha256",
+    "source_extraction.parser_version", "source_extraction.worker_sha256",
+    "output_extraction.parser_version", "output_extraction.worker_sha256", "output_extraction", "binding"])
+def test_bound_comparison_rejects_conditions_despite_equal_text(tmp_path, monkeypatch, field):
+    from praxile.eval.content_disagreement import compare_judgment_runs
+    left, right, router = generate(tmp_path, monkeypatch)
+    bind_files(left)
+    manifest = bind_files(right)
+    binding = manifest["execution_binding"]
+    if field == "binding":
+        manifest.pop("execution_binding")
+    elif field == "output_extraction":
+        binding.pop(field)
+    elif "." in field:
+        name, key = field.split(".")
+        binding[name][key] = "1.3.0" if key == "parser_version" else "c" * 64
+    else:
+        binding[field] = "c" * 64
+    write_json(right / "manifest.json", manifest)
+    for compare in (compare_review_runs, compare_judgment_runs):
+        result = compare(left, right)
+        assert result["status"] == "inconclusive"
+        assert result["reason"] == "execution_conditions_mismatch"
+        assert "rows" not in result and "candidate_preserved" not in result
+        assert result["execution_conditions"]["different_fields"]
+        assert result["promotion_eligible"] is False
+    assert router.chat.call_count == 2
+
+
+def test_ab_allows_new_output_but_same_artifact_triage_does_not(tmp_path, monkeypatch):
+    from praxile.eval.content_disagreement import compare_judgment_runs
+    left, right, router = generate(tmp_path, monkeypatch)
+    bind_files(left)
+    manifest = bind_files(right)
+    for key in ("output_sha256", "execution_sha256", "trajectory_sha256"):
+        manifest["execution_binding"][key] = "d" * 64
+    write_json(right / "manifest.json", manifest)
+    comparison = compare_review_runs(left, right)
+    assert comparison["status"] == "compared"
+    assert comparison["execution_conditions"]["status"] == "matched_declared_bindings"
+    triage = compare_judgment_runs(left, right)
+    assert triage["status"] == "inconclusive"
+    assert triage["execution_conditions"]["different_fields"] == ["output_sha256"]
+    assert router.chat.call_count == 2

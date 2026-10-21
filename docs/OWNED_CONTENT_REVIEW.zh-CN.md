@@ -134,3 +134,23 @@ profile=praxile.docx_body_text.v1、python-docx 版本、worker 代码 SHA-256 �
 桥接 fixture 覆盖显式启用、原始字节篡改拒绝、抽取证据持久化和加载时校验。
 另有真实 DOCX 源文件与产物一起通过冻结任务/执行报告校验的测试；文本/源 DOCX/
 输出 DOCX/双侧 DOCX 四种组合分别验证持久化。该测试没有调用真实 LLM judge。
+
+## 持久化比较的抽取条件
+
+`python -m praxile.eval.content_review_files --baseline DIR --candidate DIR` 在已有
+文本/预算/judge 检查外，核对双方声明的 execution_binding：任务 fingerprint、
+原始源文件和 evaluator 摘要必须相同；源/输出各自的抽取 profile、parser_version、
+worker_sha256 必须相同。抽取文本摘要在加载各自记录时已校验。
+
+A/B 可以有不同 output_sha256、执行报告和轨迹摘要，不将候选产物变化误当作
+条件冲突。`content_disagreement --left DIR --right DIR` 比较同一产物的 judge
+判断，则额外要求原始 output_sha256 相同，不能仅凭相同正文忽略不同二进制产物。
+
+一侧有执行绑定而另一侧没有，或任一条件不一致，结果为 inconclusive，reason 为
+execution_conditions_mismatch，并列出不同字段名；不保留可比 rows 或分数计数。
+两侧都是旧无绑定文本记录时保留原比较行为，但 execution_conditions.status 明确
+为 unbound_legacy，不能据此声称已核对原始文件/抽取环境。既有证据文件不重写。
+
+matched_declared_bindings 仅表示本地已保存声明一致，不是针对恶意宿主的认证，
+也没有认证执行模型、整个运行环境或重复试验条件；不能由此推出因果增益、官方
+得分或 promotion。纯报告函数缺少 manifest 时仍只有原有文本级比较语义。

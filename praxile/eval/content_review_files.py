@@ -34,7 +34,7 @@ def _read(root, name):
     return value
 
 
-def load_review_run(directory):
+def load_review_evidence(directory):
     root = Path(directory)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("review directory must be a local directory")
@@ -104,16 +104,55 @@ def load_review_run(directory):
                 if not isinstance(quote, str) or quote not in inputs["output_text"] or (
                         item["verdict"] in {"preserved", "contradicted"} and not quote.strip()):
                     raise ValueError("output quote binding mismatch")
-    return report, manifest["judge_identity_sha256"]
+    return report, manifest["judge_identity_sha256"], manifest
+
+
+def load_review_run(directory):
+    report, identity, _ = load_review_evidence(directory)
+    return report, identity
+
+
+def check_execution_conditions(result, left_manifest, right_manifest, *, same_output=False):
+    """Preserve legacy text comparisons without inventing binary provenance."""
+    left, right = (manifest.get("execution_binding") for manifest in (left_manifest, right_manifest))
+    differences = []
+    if left is None and right is None:
+        status = "unbound_legacy"
+    elif left is None or right is None:
+        status = "mismatch"
+        differences.append("execution_binding_presence")
+    else:
+        for key in ("task_fingerprint", "source_sha256", "evaluator_sha256", *(["output_sha256"] if same_output else [])):
+            if left[key] != right[key]:
+                differences.append(key)
+        for side in ("source", "output"):
+            name = side + "_extraction"
+            lvalue, rvalue = left.get(name), right.get(name)
+            if lvalue is None or rvalue is None:
+                if lvalue != rvalue:
+                    differences.append(name + ".presence")
+                continue
+            for key in ("profile", "parser_version", "worker_sha256"):
+                if lvalue[key] != rvalue[key]:
+                    differences.append(name + "." + key)
+        status = "mismatch" if differences else "matched_declared_bindings"
+    result["execution_conditions"] = {"status": status, "different_fields": differences,
+        "same_raw_output_required": same_output, "provenance_verified": False}
+    if differences:
+        result.update(status="inconclusive", reason="execution_conditions_mismatch")
+        for key in ("rows", "requirement_count", "baseline_preserved", "candidate_preserved",
+                    "uncertain_rows", "disagreement_count", "review_required_ids"):
+            result.pop(key, None)
+    return result
 
 
 def compare_review_runs(baseline_directory, candidate_directory):
-    baseline, left_identity = load_review_run(baseline_directory)
-    candidate, right_identity = load_review_run(candidate_directory)
+    baseline, left_identity, left_manifest = load_review_evidence(baseline_directory)
+    candidate, right_identity, right_manifest = load_review_evidence(candidate_directory)
     result = compare_content_reviews(baseline, candidate,
         baseline_judge_sha256=left_identity, candidate_judge_sha256=right_identity)
     result["local_file_consistency_checked"] = True
-    return result
+    return check_execution_conditions(result, left_manifest, right_manifest)
 
 
 def main():
