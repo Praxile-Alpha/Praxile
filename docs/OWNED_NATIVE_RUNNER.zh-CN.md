@@ -16,7 +16,7 @@ python -m praxile.eval.owned_native_cli \
   --model "$EXECUTOR_MODEL" --base-url "$EXECUTOR_ENDPOINT" \
   --input-source-root /absolute/path/to/public-inputs \
   --credential-file /absolute/path/to/private-key \
-  --max-steps 50 --timeout 900
+  --max-steps 50 --timeout 900 --run-id experiment-001
 ```
 
 确认计划后，在同一命令末尾加 `--execute` 才会启动实际执行。镜像取自任务的
@@ -25,6 +25,23 @@ environment.revision。无输入时省略 --input-source-root。计划模式尚�
 退出码：0 表示计划通过，或执行返回且声明产物回收/清理完成（不是质量评分）；
 1 表示产物或清理未满足；2 表示校验/执行失败；130 表示用户中断。错误只打印
 类别以避免泄露材料，执行阶段详情见独占目录中的 execution.json。
+
+## Run ID 与完成结果恢复
+
+建议始终提供 `--run-id`（Python API 为 run_id）。控制面用排他创建的持久化
+claim 占用该 ID，同 ID 无 --resume 再执行会拒绝，不会覆盖旧记录。计划绑定
+任务 fingerprint、镜像、模型、endpoint 摘要、worker 摘要、预算及是否使用凭据代理；
+不存储实际 Key。首次执行前占用，发生异常时不自动释放占用以避免重复消费。
+
+`--execute --run-id experiment-001 --resume` 仅复用已完成且清理确认的运行。
+复用前校验执行报告、轨迹、输入快照和回收输出的全部已绑定字节摘要，以及
+执行计划身份；参数变化、证据损坏或删除均拒绝。Python API 的 resume 不启动
+Harbor、容器或模型；CLI 仍先验证所提供 wheel。没有 claim 的旧记录不自动迁移。
+
+claim 仍为 claimed 时，表示执行/清理/完成落盘存在不确定性：必须人工核查，
+不能自动重新调用模型。此实现不是中途动作 checkpoint 恢复，也不回收崩溃遗留
+容器。没有 --run-id 的旧 API 调用仍为每次新实验，可能再次产生费用。摘要是本地
+一致性检查，不是针对同权限恶意宿主的签名认证。
 
 在安装固定 Harbor 0.18.0 或 0.22.0 的可选环境中调用：
 
@@ -75,7 +92,7 @@ needs_human 等结果仍须检查轨迹。`required_outputs_collected` 只验证
 来源文件名不进入模型请求，轨迹必须包含成功的 read_file 和 edit_file。
 这验证执行通路，不是实际模型性能或官方 benchmark 结果。
 
-这是 Python API 和模块 CLI 的 one-shot 执行入口：没有 resume/崩溃恢复，每次重复调用
-都会创建新实验并可能再次产生费用。输入公开性由调用方分类；完整评分隔离、
+这是 Python API 和模块 CLI 的 one-shot 执行入口，增加已完成结果复用，但没有
+中途动作/崩溃恢复。输入公开性由调用方分类；完整评分隔离、
 网络策略、启动硬期限以及高级 worker 参数透传仍待补齐。调用方必须使用兼容
 当前宿主 adapter 的 wheel；SHA-256 和必需模块预检不证明完整协议兼容。

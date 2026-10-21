@@ -71,10 +71,11 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
         return {"choices": [{"message": {"content": json.dumps(action)}}],
                 "usage": {"prompt_tokens": 12, "completion_tokens": 7}}
     monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
-    report_path = asyncio.run(run_owned_native(task, state_root=tmp_path / "runs", image=image,
+    run_options = dict(state_root=tmp_path / "runs", image=image,
         wheel=wheel, wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
         model="fixture", base_url="https://provider.invalid/v1", input_source_root=source,
-        credential_file=key, max_steps=6, timeout_seconds=90))
+        credential_file=key, max_steps=6, timeout_seconds=90, run_id="owned-fixture")
+    report_path = asyncio.run(run_owned_native(task, **run_options))
     report = json.loads(report_path.read_text())
     assert report["status"] == "executor_returned"
     assert report["cleanup_verified"] is True
@@ -91,3 +92,12 @@ def test_owned_runner_executes_native_and_collects_output(tmp_path, monkeypatch)
     assert any(a["action_type"] == "edit_file" and a["observation"]["status"] == "success" for a in actions)
     assert len(requests) >= 3
     assert any("inputs/task.txt" in json.dumps(body) for body in requests)
+    count = len(requests)
+    assert asyncio.run(run_owned_native(task, **run_options, resume=True)) == report_path
+    assert len(requests) == count
+    with pytest.raises(FileExistsError):
+        asyncio.run(run_owned_native(task, **run_options))
+    (report_path.parent / "outputs/answer.txt").write_text("corrupted")
+    with pytest.raises(ValueError, match="evidence changed"):
+        asyncio.run(run_owned_native(task, **run_options, resume=True))
+    assert len(requests) == count

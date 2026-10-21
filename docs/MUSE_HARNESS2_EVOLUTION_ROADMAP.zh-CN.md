@@ -171,6 +171,15 @@ run ID 不重放。仅支持显式 praxile-content-review v1 开发评审、单�
 这是本地一致性与调用边界证据，非签名认证、真实 judge 准确率或官方成绩。
 详见 `OWNED_CONTENT_REVIEW.zh-CN.md`，路线图总项保持未完成。
 
+R0-A 终态幂等恢复增补（2026-10-21）：owned runner/CLI 新增 run_id 与 resume。
+排他落盘 claim 在执行前占用身份；相同 ID 不带 resume 不得再次执行，计划变化
+不得复用。成功回收并确认清理后，以执行报告、轨迹、输入和输出摘要封存终态；
+resume 逐项校验后返回原报告，不启动模型或容器。claimed/失败/中断状态不自动
+重试，旧无 claim 记录不推测迁移。15 项 claim/CLI 测试与 Harbor 0.22 两项
+真实 Native/失败测试通过，确认复用及损坏拒绝均未增加 fixture 模型请求；
+fast suite 1229 passed / 12 skipped。这仅补齐已完成结果幂等复用，不是中途动作
+checkpoint 恢复或遗留容器回收，完整 crash/resume 验收仍未完成。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、

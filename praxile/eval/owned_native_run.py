@@ -19,10 +19,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            wheel: Path, wheel_sha256: str, model: str, base_url: str,
                            input_source_root: Path | None = None,
                            credential_file: Path | None = None,
-                           max_steps: int = 50, timeout_seconds: int = 900):
-    from harbor.models.agent.context import AgentContext
-    from ..adapters.harbor_native import PraxileAgent
-
+                           max_steps: int = 50, timeout_seconds: int = 900,
+                           run_id: str | None = None, resume: bool = False):
     if not isinstance(task, BenchmarkTask) or task.environment.kind != "harbor":
         raise ValueError("owned native execution requires a Harbor BenchmarkTask")
     if task.environment.revision != image:
@@ -30,11 +28,29 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
     for output in task.outputs:
         if output.path == "inputs" or output.path.startswith("inputs/"):
             raise ValueError("output contract overlaps mounted public inputs")
+    if resume and run_id is None:
+        raise ValueError("resume requires an explicit run ID")
+    claim = None
+    if run_id is not None:
+        from .native_run_claim import NativeRunClaim
+        claim = NativeRunClaim(state_root, run_id, {
+            "task_fingerprint": task.fingerprint, "image": image, "wheel_sha256": wheel_sha256,
+            "model": model, "endpoint_sha256": hashlib.sha256(base_url.encode()).hexdigest(),
+            "max_steps": max_steps, "timeout_seconds": timeout_seconds,
+            "credential_broker": credential_file is not None})
+        if resume:
+            return claim.resume()
+        claim.acquire()
+    from harbor.models.agent.context import AgentContext
+    from ..adapters.harbor_native import PraxileAgent
+
     lease = HarborDockerLease(state_root, image=image, inputs=task.inputs,
                               input_source_root=input_source_root)
     logs = lease.root / "agent"
     logs.mkdir()
     report_path = lease.root / "execution.json"
+    if claim is not None:
+        claim.bind_report(report_path)
     report = {"schema_version": "praxile.owned_native_execution.v1",
         "task_id": task.task_id, "task_fingerprint": task.fingerprint,
         "image": image, "wheel_sha256": wheel_sha256, "model": model,
@@ -97,4 +113,11 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             finally:
                 write_json(report_path, report)
         await await_owned(release())
+    if claim is not None and report.get("required_outputs_collected") is True:
+        prefix = lease.root.relative_to(claim.root).as_posix() + "/"
+        files = {prefix + "execution.json": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                 prefix + "agent/praxile-result.json": report["source_result_sha256"]}
+        files.update({prefix + "inputs/" + item.path: item.content_digest.removeprefix("sha256:") for item in task.inputs})
+        files.update({prefix + "outputs/" + item["path"]: item["sha256"] for item in report["outputs"] if item["status"] == "collected"})
+        claim.complete(files)
     return report_path

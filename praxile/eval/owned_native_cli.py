@@ -40,8 +40,15 @@ def main(argv=None):
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
+    parser.add_argument("--run-id", help="Exclusive durable identity; reuse requires --resume")
+    parser.add_argument("--resume", action="store_true", help="Reuse verified completion only; never replay interrupted execution")
     args = parser.parse_args(argv)
     try:
+        from .native_run_claim import validate_run_id
+        if args.run_id is not None:
+            validate_run_id(args.run_id)
+        if args.resume and not args.run_id:
+            raise ValueError("resume requires run ID")
         task = load_task(args.task)
         if task.environment.kind != "harbor" or not re.fullmatch(
                 r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision):
@@ -62,6 +69,7 @@ def main(argv=None):
                 "wheel_sha256": args.wheel_sha256, "input_count": len(task.inputs),
                 "output_count": len(task.outputs), "max_steps": args.max_steps,
                 "timeout_seconds": args.timeout, "execute": args.execute,
+                "run_id": args.run_id, "resume": args.resume,
                 "official_evaluation": "not_run"}
         print(json.dumps(plan, ensure_ascii=False))
         if not args.execute:
@@ -71,7 +79,8 @@ def main(argv=None):
         report_path = asyncio.run(run_owned_native(task, state_root=args.state_root,
             image=task.environment.revision, wheel=args.wheel, wheel_sha256=args.wheel_sha256,
             model=args.model, base_url=args.base_url, input_source_root=args.input_source_root,
-            credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout))
+            credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
+            run_id=args.run_id, resume=args.resume))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")
