@@ -536,6 +536,13 @@ R0 出口：两个 benchmark 都能执行、评分、恢复、追溯和清理。
 
 ## 7. 阶段 R1：专业任务交付能力
 
+值型表格写出增补（2026-10-21）：新增 create_xlsx 声明式动作，多 sheet/矩形
+标量数据，不再必须授权自由 Shell 才能生成 XLSX。字符串强制 literal，公式、
+宏、链接执行和任意模板均不支持。正式 schema/工具/权限/dry-run/快照/轨迹/
+摘要保护回滚已接入，executor profile 可声明该能力但不授予权限。真实 openpyxl
+回读与 DOCX 共用发布逻辑回归通过；公式重算、已有工作簿修订、渲染和官方任务
+复验仍缺，专业交付总项继续不勾选。详见 DOCUMENT_TOOLS.zh-CN.md。
+
 页数检查增补：`check_document_layout` 正式接入工具/schema/路径权限，用户
 显式配置可信 LibreOffice 后，以快照和限时进程组获取真实页数，超页失败；
 不继承模型密钥、不覆盖原稿。真实两页与一页修订 fixture 通过，旧 checklist

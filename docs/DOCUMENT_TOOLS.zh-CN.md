@@ -1,5 +1,31 @@
 # 文档读取工具
 
+## 值型 XLSX 新建
+
+`create_xlsx` 使用 `praxile[documents]` 中的 openpyxl，在限时子进程中写出，
+无需模型生成 Python 或取得 Shell 权限。例如：
+
+```json
+{"type":"create_xlsx","path":"output/inventory.xlsx","workbook":{"sheets":[{"name":"Inventory","rows":[["Name","Count"],["Item A",2]]}]}}
+```
+
+目标父目录必须已存在，只能新建 `.xlsx`，不覆盖现有文件。支持 1–10 个大小写
+不重名工作表，每表 1–1000 行、1–100 列矩形数据，总计最多 20000 单元格；spec
+最多 256 KiB，生成文件最多 1 MiB。单元格支持字符串、有限数值、布尔值、null；
+数值绝对值最多 1e15，字符串最多 32767 字符。长编号应传字符串，避免电子表格
+数值精度损失。非法名称、控制字符、非标量、非有限值和超限在分发前拒绝。
+
+所有字符串强制按文字写出，包括 `=SUM(A1:A3)`、`#N/A` 和 URL，不解释成公式、
+错误单元格或超链接。本版不支持公式、宏、外部链接、模板执行、样式配置、已有
+工作簿修改或公式重算。写出成功只代表文件生成，不代表专业交付质量。
+
+新建复用 DOCX 的临时 worker、同目录 staging 与不覆盖 hard-link 发布；dry-run
+禁止分发，写权限/快照刷新/轨迹已接入。回滚仅删除摘要仍匹配的新文件，保留
+后续人工修改。该机制不保证恶意宿主并发下的路径安全或断电后的多文件事务。
+真实测试回读两张表和文字/数值/布尔类型，并验证拒绝覆盖和摘要保护回滚。
+
+## 文档读取
+
 `read_document` 是 Runtime/Action Schema 中正式的只读动作，不需要允许通用
 Python shell。安装 `praxile[documents]` 后使用：
 
@@ -24,7 +50,7 @@ Python shell。安装 `praxile[documents]` 后使用：
 
 `edit_file` 同样拒绝 `.docx/.xlsx/.pptx/.pdf`，包含大小写变体；不能把文本或
 base64 当成二进制产物，也不会先解码并备份已有二进制文件。DOCX 应使用
-create_docx，其他格式尚未提供正式写出时明确不支持，不以错误扩展名降级。
+create_docx，XLSX 提示使用 create_xlsx；其他格式尚未提供正式写出时明确不支持，不以错误扩展名降级。
 
 子进程 25 秒超时并回收；POSIX 限制 CPU 20 秒与单个输出文件 1 MiB，Linux
 另限制地址空间 1 GiB。macOS 没有该地址空间限制，Windows 没有 POSIX rlimit；
@@ -114,7 +140,7 @@ XLSX 默认表 22 行。这只证明本地解析可用，不代表完整读取�
 另有 3 项创建资源测试验证真实 DOCX 回读、禁止覆盖、路径拒绝和按摘要回滚，
 7 项 spec/schema 测试验证拒绝非法块及 mutating 分类。
 
-当前已补齐读取和基础结构化 DOCX 新建。XLSX/PDF 写出、渲染检查、公式重算、完整
+当前已补齐读取、基础结构化 DOCX 和值型 XLSX 新建。PDF 写出、渲染检查、公式重算、完整
 产物链路与 JobBench 全量验收仍需后续实现和实测。不能因提取成功而勾选整个
 R1 专业交付能力，也不能宣称 benchmark 得分提升。
 

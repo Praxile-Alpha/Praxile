@@ -235,8 +235,8 @@ class FileSystemEnv:
         target = (self.root / path).resolve()
         if target.suffix.lower() in {".docx", ".xlsx", ".pptx", ".pdf"}:
             return Observation("failure", "edit_file writes UTF-8 text, not binary document formats. "
-                "Use create_docx with structured blocks for a new DOCX; other binary writers are not supported here.",
-                {"path": path, "changed": False, "suggested_action": "create_docx" if target.suffix.lower() == ".docx" else None})
+                "Use create_docx for a new DOCX or create_xlsx for a new value-only XLSX; other binary writers are not supported here.",
+                {"path": path, "changed": False, "suggested_action": {".docx": "create_docx", ".xlsx": "create_xlsx"}.get(target.suffix.lower())})
         before_exists = target.exists()
         before = target.read_text(encoding="utf-8", errors="replace") if before_exists else ""
         if before == content:
@@ -600,7 +600,7 @@ class ProjectEnv:
                 restored.append(rollback_revision(self.config, self.fs.safety,
                     (action.get("observation", {}) or {}).get("data", {}) or {}))
                 continue
-            if action.get("action_type") == "create_docx" and action.get("status") == "success":
+            if action.get("action_type") in {"create_docx", "create_xlsx"} and action.get("status") == "success":
                 data = (action.get("observation", {}) or {}).get("data", {}) or {}
                 rel = data.get("path")
                 if not isinstance(rel, str) or data.get("before_exists") is not False:

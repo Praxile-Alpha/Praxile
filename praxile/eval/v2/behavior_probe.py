@@ -19,7 +19,7 @@ def probe_repetition(prediction, alignment):
     if not isinstance(alignment, Mapping) or alignment.get("schema_version") != "praxile.operation_alignment.v1":
         return {**result, "reason": "alignment_missing"}
     unsupported = alignment.get("unsupported")
-    known_kinds = {"search", "read_file", "run_command", "edit_file", "create_docx", "revise_docx",
+    known_kinds = {"search", "read_file", "run_command", "edit_file", "create_docx", "create_xlsx", "revise_docx",
                    "finish", "list_files", "list_dir", "read_document", "check_deliverables", "check_document_layout"}
     kinds = alignment.get("unsupported_kinds", {})
     if not isinstance(unsupported, Mapping) or not isinstance(kinds, Mapping):

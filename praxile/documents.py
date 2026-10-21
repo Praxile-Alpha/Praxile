@@ -12,36 +12,50 @@ from .document_spec import validate_docx_spec
 
 
 def create_docx(config, safety, path, spec):
+    return _create_document(config, safety, path, spec, "docx", validate_docx_spec,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def create_xlsx(config, safety, path, spec):
+    from .spreadsheet_spec import validate_xlsx_spec
+    return _create_document(config, safety, path, spec, "xlsx", validate_xlsx_spec,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _create_document(config, safety, path, spec, kind, validate, media_type):
+    label = kind.upper()
     decision = safety.check_path(path, write=True)
     if not decision.allowed:
         return Observation("blocked", decision.reason, risk_level=decision.risk_level)
     try:
-        validate_docx_spec(spec)
+        validate(spec)
         root = config.paths.root.resolve()
         target = root / path
-        if (target.suffix.lower() != ".docx" or not target.resolve().is_relative_to(root)
+        if (target.suffix.lower() != "." + kind or not target.resolve().is_relative_to(root)
                 or target.is_symlink() or not target.parent.is_dir()):
-            return Observation("blocked", "DOCX requires an existing project directory and .docx target")
+            return Observation("blocked", f"{label} requires an existing project directory and .{kind} target")
         if target.exists():
-            return Observation("blocked", "create_docx never overwrites an existing file; use a new output path")
-        with tempfile.TemporaryDirectory(prefix="praxile-docx-") as directory:
+            return Observation("blocked", f"create_{kind} never overwrites an existing file; use a new output path")
+        with tempfile.TemporaryDirectory(prefix="praxile-document-") as directory:
             source = Path(directory) / "spec.json"
             source.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
             with tempfile.TemporaryFile() as output:
                 process = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("document_worker.py")),
-                    str(source), '{"operation":"create_docx"}'], cwd=directory,
+                    str(source), json.dumps({"operation": "create_" + kind})], cwd=directory,
                     stdout=output, stderr=subprocess.DEVNULL, timeout=25)
                 if process.returncode:
-                    return Observation("failure", "DOCX writer failed or exceeded resource limits")
+                    return Observation("failure", f"{label} writer failed or exceeded resource limits")
                 output.seek(0)
                 report = json.loads(output.read(1024 * 1024))
             if report["status"] != "success":
                 return Observation("failure", report["error"])
-            content = (Path(directory) / "result.docx").read_bytes()
+            content = (Path(directory) / ("result." + kind)).read_bytes()
+            if len(content) > 1024 * 1024:
+                return Observation("failure", f"{label} output exceeds 1 MiB")
         # Publish a complete file atomically, without an overwrite race.
         staging = None
         try:
-            with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".praxile-docx-", delete=False) as handle:
+            with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".praxile-" + kind + "-", delete=False) as handle:
                 staging = Path(handle.name)
                 handle.write(content)
                 handle.flush()
@@ -50,14 +64,14 @@ def create_docx(config, safety, path, spec):
         finally:
             if staging is not None:
                 staging.unlink(missing_ok=True)
-        return Observation("success", "Created DOCX; visual layout and factual quality remain unverified.",
+        return Observation("success", f"Created {label}; visual layout and factual quality remain unverified.",
             {"path": path, "changed": True, "before_exists": False, "backup_path": None,
              "sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content),
-             "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
+             "media_type": media_type})
     except subprocess.TimeoutExpired:
-        return Observation("failure", "DOCX writer timed out after 25 seconds")
+        return Observation("failure", f"{label} writer timed out after 25 seconds")
     except (OSError, ValueError, KeyError, TypeError):
-        return Observation("failure", "Unable to create DOCX; validate spec, destination and dependencies")
+        return Observation("failure", f"Unable to create {label}; validate spec, destination and dependencies")
 
 
 def read_document(config, safety, path, *, start=1, limit=5, sheet=None, char_offset=0):

@@ -25,6 +25,9 @@ def profile_context(profile):
     description = {"profile": deepcopy(profile), "interfaces": interfaces,
                    "document_constraints": docx_spec_prompt() if set(names) & {"create_docx", "revise_docx"} else None,
                    "permission_granted": False, "runtime_availability_verified": False}
+    if "create_xlsx" in names:
+        from ...spreadsheet_spec import xlsx_spec_prompt
+        description["spreadsheet_constraints"] = xlsx_spec_prompt()
     if profile["schema_version"] == "praxile.executor_action_profile.v2":
         bounds = {
             "read_document": {"start": {"minimum": 1, "maximum": 100000},

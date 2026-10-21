@@ -78,7 +78,25 @@ def main():
             resource.setrlimit(resource.RLIMIT_AS, (1024 ** 3, 1024 ** 3))
     path, options = Path(sys.argv[1]), json.loads(sys.argv[2])
     try:
-        if options.get("operation") == "create_docx":
+        if options.get("operation") == "create_xlsx":
+            from openpyxl import Workbook
+            from openpyxl.cell import WriteOnlyCell
+            spec = json.loads(path.read_text())
+            workbook = Workbook(write_only=True)
+            for sheet in spec["sheets"]:
+                worksheet = workbook.create_sheet(sheet["name"])
+                for row in sheet["rows"]:
+                    cells = []
+                    for value in row:
+                        cell = WriteOnlyCell(worksheet, value=value)
+                        if isinstance(value, str):
+                            cell.data_type = "s"
+                        cells.append(cell)
+                    worksheet.append(cells)
+            workbook.save(path.parent / "result.xlsx")
+            workbook.close()
+            result = {"status": "success"}
+        elif options.get("operation") == "create_docx":
             import docx
             from docx.shared import Pt, Inches
             document = docx.Document()
