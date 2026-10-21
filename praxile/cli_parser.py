@@ -482,6 +482,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_memory_search = memory_sub.add_parser("search", help="Search project memory")
     p_memory_search.add_argument("query")
     p_memory_search.set_defaults(func=cmd_memory_search)
+    p_memory_preference = memory_sub.add_parser("propose-preference", help="Propose project-local personalization for human approval")
+    p_memory_preference.add_argument("key")
+    p_memory_preference.add_argument("text")
+    p_memory_preference.add_argument("--applies-when", required=True)
+    p_memory_preference.add_argument("--source", required=True)
+    p_memory_preference.set_defaults(func=cmd_memory_preference)
 
     p_skill = sub.add_parser("skill", help="Skill commands")
     skill_sub = p_skill.add_subparsers(dest="skill_command", required=True)

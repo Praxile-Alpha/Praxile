@@ -808,6 +808,12 @@ React 契约界面增补：独立 React Console 支持可选 JSON 契约输入�
 - [ ] 激活条件包含任务语义、工具/应用版本、状态前置条件及 anti-scope；未知即 abstain。
   初次激活已增加基于控制面观测的 activation_requirements（精确工具版本与状态点路径），未知/不符/非法时 abstain，保留原语义与 anti-scope 门控及强制规则。条件随选中经验冻结到 checkpoint，恢复前重新观测，失效时拒绝恢复。运行中每次模型请求前也重新观测，失效则 checkpoint + needs_human，避免继续使用旧消息中的经验。10 项路由资源测试、13 项纯条件测试及 2 项中途失效测试通过。外部应用状态、浏览器及跨进程版本观测仍未覆盖；此机制也不是原子权限检查，完整项保持未勾选。
 - [ ] 用户偏好走独立 namespace 和用户确认，能力改善与个性化分别统计。
+  项目偏好增补：memory propose-preference 通过 ProposalService 创建待审批
+  memory_update，单独写 memory/preferences，来源/适用范围/目的明确；人工
+  accept 后才可检索，沿原机制 rollback。运行摘要单列偏好加载、旧 user memory
+  未分类及其他资产，效果均 not_measured。隔离测试覆盖 CLI→审批→检索→回滚。
+  多用户身份隔离、全局偏好、通用归因/晋升分流与真实效果测量尚缺，完整项不勾选。
+  详见 PROJECT_PREFERENCES.zh-CN.md。
 
 浏览器观测增补：runtime 统一观测入口可读取已有会话存活、去敏 origin 和 Chromium 版本，不自动启动浏览器。22 项针对性测试通过；真实 Chromium 断言已添加，本轮因本地端口沙箱权限及审批服务容量失败未执行，不算验收完成。尚不覆盖 DOM/业务状态、跨进程观测和子任务中途重新选择。
 

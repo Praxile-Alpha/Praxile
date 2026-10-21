@@ -658,6 +658,7 @@ class AgentRuntime:
             }
 
     def _evolution_summary(self, trajectory: dict[str, Any], proposals: list[dict[str, Any]]) -> dict[str, Any]:
+        from .preferences import usage_summary
         loaded_assets = trajectory.get("loaded_assets") or []
         used_assets = [item for item in loaded_assets if item.get("used_in_prompt", True)]
         loaded_counts: dict[str, int] = {}
@@ -675,6 +676,7 @@ class AgentRuntime:
             confidence_counts[level] = confidence_counts.get(level, 0) + 1
         return {
             "used_assets": len(used_assets),
+            "experience_purpose_usage": usage_summary(loaded_assets),
             "retrieved_assets": len(loaded_assets),
             "used_asset_counts": loaded_counts,
             "produced_proposals": len(proposals),

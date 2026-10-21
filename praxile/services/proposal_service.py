@@ -157,6 +157,16 @@ class ProposalService:
             raise ServiceError(404, "No pending proposal found")
         return self.store.apply_proposal(pending)
 
+    def propose_preference(self, *, key: str, text: str, applies_when: str,
+                           source_reference: str) -> dict[str, Any]:
+        from ..preferences import compose_preference
+        if self.store.config is None:
+            raise ValueError("Preference proposals require an initialized project store")
+        proposal = compose_preference(self.store.config, key=key, text=text,
+            applies_when=applies_when, source_reference=source_reference)
+        self.store.write_proposal(proposal)
+        return proposal
+
     def validate(self, proposal_id: str, suite_path, *, keep_workspaces: bool | None = None) -> dict[str, Any]:
         proposal = self.store.find_proposal(proposal_id)
         if not proposal:

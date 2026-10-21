@@ -65,6 +65,17 @@ def cmd_memory_search(args: argparse.Namespace, project_root: Path) -> int:
         print(indent_block(shorten(item["snippet"], 500), "  "))
     return 0
 
+
+def cmd_memory_preference(args: argparse.Namespace, project_root: Path) -> int:
+    from ..services.proposal_service import ProposalService
+    config, store = load(project_root)
+    store.initialize(config)
+    proposal = ProposalService(store).propose_preference(key=args.key, text=args.text,
+        applies_when=args.applies_when, source_reference=args.source)
+    print(f"Pending preference proposal: {proposal['proposal_id']}")
+    print("Review and accept this proposal explicitly before it becomes project memory.")
+    return 0
+
 def cmd_skill_list(args: argparse.Namespace, project_root: Path) -> int:
     config, _store = load(project_root)
     skills = SkillSystem(config).list()
