@@ -6,6 +6,26 @@ HarborDockerLease 的首条执行通路。现有 Harbor Job/Trial 与 mini-SWE r
 
 ## 调用与状态
 
+命令入口默认只校验任务 JSON、镜像格式、预算、wheel 摘要和必要模块，不加载
+Harbor、不启动 Docker、不读取 Key、不访问模型；计划输出不包含私有正文或评审引用：
+
+```bash
+python -m praxile.eval.owned_native_cli \
+  --task task.json --state-root .praxile/owned-runs \
+  --wheel /absolute/path/to/praxile.whl --wheel-sha256 "$WHEEL_SHA256" \
+  --model "$EXECUTOR_MODEL" --base-url "$EXECUTOR_ENDPOINT" \
+  --input-source-root /absolute/path/to/public-inputs \
+  --credential-file /absolute/path/to/private-key \
+  --max-steps 50 --timeout 900
+```
+
+确认计划后，在同一命令末尾加 `--execute` 才会启动实际执行。镜像取自任务的
+environment.revision。无输入时省略 --input-source-root。计划模式尚未校验源输入
+内容、Docker/Harbor 状态或模型可用性，不能把它当作完整 doctor。
+退出码：0 表示计划通过，或执行返回且声明产物回收/清理完成（不是质量评分）；
+1 表示产物或清理未满足；2 表示校验/执行失败；130 表示用户中断。错误只打印
+类别以避免泄露材料，执行阶段详情见独占目录中的 execution.json。
+
 在安装固定 Harbor 0.18.0 或 0.22.0 的可选环境中调用：
 
 ```python
@@ -55,7 +75,7 @@ needs_human 等结果仍须检查轨迹。`required_outputs_collected` 只验证
 来源文件名不进入模型请求，轨迹必须包含成功的 read_file 和 edit_file。
 这验证执行通路，不是实际模型性能或官方 benchmark 结果。
 
-这是 Python API 的 one-shot 执行入口：没有 CLI/resume/崩溃恢复，每次重复调用
+这是 Python API 和模块 CLI 的 one-shot 执行入口：没有 resume/崩溃恢复，每次重复调用
 都会创建新实验并可能再次产生费用。输入公开性由调用方分类；完整评分隔离、
 网络策略、启动硬期限以及高级 worker 参数透传仍待补齐。调用方必须使用兼容
-当前宿主 adapter 的 wheel；仅有正确文件 SHA-256 不证明协议兼容。
+当前宿主 adapter 的 wheel；SHA-256 和必需模块预检不证明完整协议兼容。

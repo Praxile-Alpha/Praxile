@@ -21,9 +21,9 @@ def test_preflight_failure_persists_report_and_releases_lease(tmp_path, monkeypa
         environment=EnvironmentSpec("harbor", "fixture", image),
         evaluator=EvaluatorReference("private", "1", "PRIVATE_REFERENCE", "sha256:" + "f" * 64))
     def reject(**kwargs):
-        raise ValueError("fixture invalid worker")
+        raise AssertionError("worker preflight must fail before adapter construction")
     monkeypatch.setattr(harbor_native, "PraxileAgent", reject)
-    with pytest.raises(ValueError, match="invalid worker"):
+    with pytest.raises(ValueError, match="regular wheel"):
         asyncio.run(run_owned_native(task, state_root=tmp_path, image=image,
             wheel=tmp_path / "unused.whl", wheel_sha256="a" * 64,
             model="fixture", base_url="https://provider.invalid/v1"))

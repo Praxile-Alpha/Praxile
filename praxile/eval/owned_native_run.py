@@ -49,6 +49,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         {"path": item.path, "media_type": item.media_type, "required": item.required}
         for item in task.outputs])
     try:
+        from .worker_preflight import check_worker_wheel
+        check_worker_wheel(wheel, wheel_sha256)
         agent = PraxileAgent(logs_dir=logs, wheel_path=str(wheel), wheel_sha256=wheel_sha256,
             workspace="/workspace", base_url=base_url, model_name=model,
             max_steps=max_steps, timeout_seconds=timeout_seconds,

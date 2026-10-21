@@ -151,6 +151,15 @@ wheel 缺少监督模块的失败已保留，未计入模型效果。无付费�
 旧 Trial/mini-SWE 路径不变，CLI/resume、私有评分阶段和全部 benchmark 验收仍缺。
 见 `OWNED_NATIVE_RUNNER.zh-CN.md`。
 
+R0-A 命令入口增补（2026-10-21）：`python -m praxile.eval.owned_native_cli`
+默认仅输出无私有字段的计划，显式 --execute 才进入 owned runner。任务 JSON
+拒绝重复键/非有限值，预算和 endpoint 先校验；worker 摘要与必要模块检查共用
+独立 preflight 模块，Python API 也在容器启动前拒绝缺少监督器的旧 wheel。
+8 项 CLI/预检测试覆盖不执行默认行为、显式执行、失败产物退出码、敏感 URL
+脱敏及中断；Harbor 0.22 的完整 Native fixture 与失败落盘 2 项通过。
+基础环境实测 --help 无需 Harbor。计划模式不认证输入内容/基础设施/模型可用性；
+无 resume、无官方评分、无额外真实模型调用，其他未完成项继续保留。
+
 R0-A 取消所有权增补（2026-10-21）：新增 await_owned 等待机制，调用方连续取消
 不再取消已开始的后台收尾；完成后仍传播取消，内部失败/取消不伪装成功。
 本地 lease 在进程创建、终止和排空输出期间保留所有权；worktree 创建、重置、
