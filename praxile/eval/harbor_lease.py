@@ -18,14 +18,19 @@ import uuid
 from . import artifact_read
 from .async_ownership import await_owned
 from .lease import ExecutionResult, LocalWorkspaceLease
+from .contracts import InputArtifact
+from .input_snapshot import freeze_public_inputs, verify_public_inputs
 
 
 class HarborDockerLease:
-    def __init__(self, state_root: Path, *, image: str):
+    def __init__(self, state_root: Path, *, image: str,
+                 inputs: tuple[InputArtifact, ...] = (), input_source_root: Path | None = None):
         if not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", image):
             raise ValueError("a digest-pinned Docker image is required")
         if version("harbor") not in {"0.18.0", "0.22.0"}:
             raise ValueError("owned leases support Harbor 0.18.0 or 0.22.0")
+        if not isinstance(inputs, tuple) or bool(inputs) != (input_source_root is not None):
+            raise ValueError("nonempty public inputs and source root must be supplied together")
         self.image = image
         self.root = state_root.resolve() / ("harbor-lease-" + uuid.uuid4().hex)
         self.root.mkdir(parents=True, exist_ok=False, mode=0o700)
@@ -35,6 +40,10 @@ class HarborDockerLease:
         self._environment = None
         self._session = None
         self._root_identity = None
+        self._inputs = inputs
+        self._input_identity = None
+        if inputs:
+            self._input_identity = freeze_public_inputs(input_source_root, inputs, self.root / "inputs")
 
     async def _docker(self, *argv):
         async with LocalWorkspaceLease(self.root) as host:
@@ -75,6 +84,15 @@ class HarborDockerLease:
         from harbor.models.trial.paths import TrialPaths
 
         self._state = "preparing"
+        mounts = []
+        if self._inputs:
+            try:
+                verify_public_inputs(self.root / "inputs", self._inputs, self._input_identity)
+            except BaseException:
+                self._state = "failed"
+                raise
+            mounts = [{"type": "bind", "source": str(self.root / "inputs"),
+                       "target": "/inputs", "read_only": True}]
         self._session = "praxile-lease-" + uuid.uuid4().hex
         generation = self.root / self._session
         environment_dir = generation / "environment"
@@ -85,6 +103,7 @@ class HarborDockerLease:
             environment_dir=environment_dir, environment_name=self._session,
             session_id=self._session, trial_paths=paths, keep_containers=False,
             task_env_config=EnvironmentConfig(docker_image=self.image, workdir="/workspace"),
+            mounts=mounts,
         )
         try:
             await self._environment.start(force_build=False)

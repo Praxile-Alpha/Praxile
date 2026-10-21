@@ -8,6 +8,13 @@ Docker environment，不接管 `Trial` 传给 `PraxileAgent` 的环境，不自�
 
 - 可选运行环境固定 Harbor 0.18.0 或 0.22.0；不加入基础安装依赖。
 - 镜像必须以 `@sha256:` 固定，内含 Linux/POSIX Python 3 和 shell。
+- 可选 `inputs: tuple[InputArtifact, ...]` 与 `input_source_root` 必须同时提供。
+  `source_ref` 在此接口仅接受来源根目录下的相对文件路径，不下载 URL。
+  显式清单中的文件逐一校验 SHA-256、拒绝软/硬链接，复制为独立快照后以只读
+  bind mount 挂到 `/inputs/<InputArtifact.path>`；来源目录及未声明文件不挂载。
+  每文件最多 32 MiB、总计 128 MiB、最多 256 项；拒绝重复和祖先路径冲突。
+  reset 重新校验快照的内容、根身份及文件集合，不重新读取可变来源文件。
+  输入公开性仍由调用方负责分类；不能自动识别被错误声明为公开输入的 rubric。
 - 每代环境创建随机 Compose project/session；reset 删除自己的旧环境后创建新代。
 - 固定工作目录 `/workspace`；执行 argv 经 shell quoting 传入 Harbor。
 - 超时或取消会销毁整个租约容器，而不是尝试保留不确定的命令状态。继续工作需 reset。
@@ -36,8 +43,9 @@ async with HarborDockerLease(Path(".praxile/leases"), image=IMAGE_DIGEST) as lea
 测试覆盖创建、执行、受限采集、reset、超时、取消和释放后的资源查询；fixture
 覆盖 Harbor 吞掉清理错误、重复取消和清理重试。
 
-本后端不是敌对代码安全沙箱：尚未建立输入只读挂载、网络隔离策略、私有评测
-存储隔离或宿主资源配额。Harbor 启动/停止自身没有整体硬期限；Docker daemon
+本后端不是敌对代码安全沙箱：只读输入已在显式清单路径实现，但尚未建立完整
+下载/私有评测存储隔离、网络隔离策略或宿主资源配额。宿主同权限进程仍可能在
+校验后修改快照；只读挂载不等于对恶意宿主的防护。Harbor 启动/停止自身没有整体硬期限；Docker daemon
 失联、SIGKILL、断电后的跨进程恢复尚未验收。Python 执行输出仍由 Harbor 缓冲，
 不能把 collect 的字节上限等同于所有命令的输出上限。正式 runner 接入和完整
 benchmark 验收仍待完成，不据此勾选路线图的整个环境协议项。

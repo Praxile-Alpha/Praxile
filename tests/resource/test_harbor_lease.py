@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -7,6 +8,7 @@ import pytest
 
 pytest.importorskip("harbor")
 from praxile.eval.harbor_lease import HarborDockerLease
+from praxile.eval.contracts import InputArtifact
 
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 IMAGE = "python@sha256:" + "a" * 64
@@ -98,10 +100,25 @@ def test_cancelled_preparation_drains_then_destroys(tmp_path, monkeypatch, metho
 @pytest.mark.skipif(not os.environ.get("PRAXILE_TEST_LEASE_IMAGE"), reason="requires pinned local Docker image")
 def test_real_owned_docker_lifecycle(tmp_path):
     async def exercise():
-        lease = HarborDockerLease(tmp_path, image=os.environ["PRAXILE_TEST_LEASE_IMAGE"])
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "public.txt").write_bytes(b"frozen task")
+        (source / "rubric.txt").write_text("private judge only")
+        inputs = (InputArtifact("task.txt", "public.txt",
+            "sha256:" + hashlib.sha256(b"frozen task").hexdigest()),)
+        lease = HarborDockerLease(tmp_path, image=os.environ["PRAXILE_TEST_LEASE_IMAGE"],
+                                  inputs=inputs, input_source_root=source)
         try:
             await lease.prepare()
             first_session = lease._session
+            result = await lease.execute(["python3", "-c",
+                "from pathlib import Path; p=Path('/inputs'); "
+                "assert sorted(x.name for x in p.iterdir()) == ['task.txt']; "
+                "assert (p/'task.txt').read_bytes() == b'frozen task'"], timeout=10)
+            assert result.returncode == 0
+            for command in (["touch", "/inputs/new"], ["rm", "/inputs/task.txt"],
+                            ["sh", "-c", "echo changed > /inputs/task.txt"]):
+                assert (await lease.execute(command, timeout=10)).returncode != 0
             result = await lease.execute(["python3", "-c",
                 "from pathlib import Path; Path('artifact').write_bytes(b'hello')"], timeout=10)
             assert result.returncode == 0
@@ -111,8 +128,10 @@ def test_real_owned_docker_lifecycle(tmp_path):
             await lease.execute(["ln", "-s", "/etc/passwd", "escape"], timeout=10)
             with pytest.raises(ValueError):
                 await lease.collect("escape")
+            (source / "public.txt").write_text("source changed")
             await lease.reset()
             assert lease._session != first_session
+            assert (await lease.execute(["cat", "/inputs/task.txt"], timeout=10)).stdout == "frozen task"
             with pytest.raises(ValueError):
                 await lease.collect("artifact")
             result = await lease.execute(["python3", "-c", "import time; time.sleep(60)"], timeout=.2)
