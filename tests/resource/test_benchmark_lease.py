@@ -11,6 +11,72 @@ pytestmark = [pytest.mark.resource, pytest.mark.integration,
               pytest.mark.skipif(os.name != "posix", reason="POSIX lease backend")]
 
 
+def test_cleanup_owns_release_through_repeated_cancellation(tmp_path):
+    async def exercise():
+        started, finish = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def release():
+            calls.append(True)
+            started.set()
+            await finish.wait()
+
+        lease = LocalWorkspaceLease(tmp_path, release=release)
+        await lease.prepare()
+        first = asyncio.create_task(lease.cleanup())
+        second = None
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            second = asyncio.create_task(lease.cleanup())
+            for _ in range(3):
+                first.cancel()
+                await asyncio.sleep(.01)
+                assert not first.done()
+            assert lease._state == "closing"
+            with pytest.raises(RuntimeError):
+                await lease.prepare()
+            with pytest.raises(RuntimeError):
+                await lease.execute([sys.executable, "-c", "pass"], timeout=1)
+            with pytest.raises(RuntimeError):
+                await lease.collect("out.txt")
+        finally:
+            finish.set()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(first, 5)
+            if second is not None:
+                await asyncio.wait_for(second, 5)
+        await lease.cleanup()
+        assert calls == [True]
+        assert lease._state == "closed"
+
+    asyncio.run(exercise())
+
+
+def test_failed_release_blocks_reactivation_but_allows_cleanup_retry(tmp_path):
+    async def exercise():
+        calls = []
+
+        async def release():
+            calls.append(True)
+            if len(calls) == 1:
+                raise OSError("release failed")
+
+        lease = LocalWorkspaceLease(tmp_path, release=release)
+        await lease.prepare()
+        with pytest.raises(OSError, match="release failed"):
+            await lease.cleanup()
+        assert lease._state == "failed"
+        with pytest.raises(RuntimeError):
+            await lease.prepare()
+        with pytest.raises(RuntimeError):
+            await lease.execute([sys.executable, "-c", "pass"], timeout=1)
+        await lease.cleanup()
+        assert calls == [True, True]
+        assert lease._state == "closed"
+
+    asyncio.run(exercise())
+
+
 def test_repeated_cancellation_keeps_process_owned_until_reaped(tmp_path, monkeypatch):
     async def exercise():
         lease = LocalWorkspaceLease(tmp_path)

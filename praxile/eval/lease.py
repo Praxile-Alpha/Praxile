@@ -47,14 +47,15 @@ class LocalWorkspaceLease:
         self._process: asyncio.subprocess.Process | None = None
         self._state = "new"
         self._busy = False
+        self._release_lock = asyncio.Lock()
 
     def _bind_root_identity(self) -> None:
         info = self.root.stat()
         self._root_identity = (info.st_dev, info.st_ino)
 
     async def prepare(self) -> None:
-        if self._state == "closed":
-            raise RuntimeError("lease is closed")
+        if self._state not in {"new", "ready"}:
+            raise RuntimeError("lease cannot be prepared in its current state")
         if os.name != "posix":
             raise NotImplementedError("local leases require POSIX process-group cancellation")
         self._state = "ready"
@@ -122,12 +123,24 @@ class LocalWorkspaceLease:
         return read_artifact(self.root, relative_path, root_identity=self._root_identity, max_bytes=max_bytes)
 
     async def cleanup(self) -> None:
+        await await_owned(self._cleanup_owned())
+
+    async def _cleanup_owned(self) -> None:
+        async with self._release_lock:
+            await self._release_workspace()
+
+    async def _release_workspace(self) -> None:
         if self._state == "closed":
             return
         if self._busy:
             raise RuntimeError("cancel and await execution before cleanup")
-        if self._release is not None:
-            await self._release()
+        self._state = "closing"
+        try:
+            if self._release is not None:
+                await self._release()
+        except BaseException:
+            self._state = "failed"
+            raise
         self._state = "closed"
 
     async def __aenter__(self) -> LocalWorkspaceLease:

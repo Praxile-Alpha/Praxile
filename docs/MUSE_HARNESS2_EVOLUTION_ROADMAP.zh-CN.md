@@ -117,6 +117,13 @@ Git worktree/子进程验证连续取消，Harbor 0.22 fixture 验证 broker 收
 时限由原有实现控制；该机制不保证 SIGKILL/断电恢复，不补齐 Harbor 通用租约
 或跨进程恢复，因此环境协议总项保持未完成。
 
+R0-A 本地释放状态增补（2026-10-21）：LocalWorkspaceLease 的 release 回调在
+重复取消下仍等待完成；并发 cleanup 串行化，成功后不重复释放。closing/failed
+状态禁止 prepare、execute 和 collect；释放失败允许显式重试 cleanup，但不能
+重新激活工作区。14 项本地/worktree 资源测试通过，包含释放期间连续取消、
+并发清理和失败重试。回调自身仍须提供 I/O 时限和幂等重试语义；这不保证
+进程强杀恢复，也不补齐 Harbor 通用租约，总项保持未完成。
+
 R0-A 产物采集增补：LocalWorkspaceLease.collect 使用目录描述符逐级打开，
 禁止跟随任何路径组件的符号链接；根目录 dev/inode 绑定到创建或受控 reset，
 拒绝额外硬链接、特殊文件和读取中观察到的身份/大小/时间戳变化。默认单文件
