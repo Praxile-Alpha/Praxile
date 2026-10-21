@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from praxile.eval.content_review import review_content
+from praxile.model import ModelUnavailable
 
 
 def run(items=None, **kwargs):
@@ -29,6 +30,9 @@ def test_anchored_review_is_not_verifier_or_promotion():
     assert record["promotion_eligible"] is False
     assert record["requirement_coverage_verified"] is False
     assert record["official_evaluation"] is False
+    assert record["usage_available"] is True
+    assert record["logical_requests"] == 1
+    assert len(record["response_sha256"]) == 64
     assert router.chat.call_args.kwargs["purpose"] == "content_review_judge"
     assert router.chat.call_args.kwargs["private"] is True
     logger.add_model_cost.assert_called_once()
@@ -69,12 +73,16 @@ def test_bad_source_citation_prevents_model_call():
 
 def test_provider_failure_does_not_leak_exception_or_retry():
     router = Mock()
-    router.chat.side_effect = RuntimeError("secret credential")
+    router.chat.side_effect = ModelUnavailable("secret credential")
     logger = SimpleNamespace(data={}, add_model_cost=Mock())
     result = review_content(router, logger, source_text="source", output_text="output",
         requirements=[{"id": "x", "requirement": "x", "source_quote": "source"}])
     assert result["status"] == "abstained"
     assert result["failure_stage"] == "request"
+    assert result["failure_category"] == "model_unavailable"
+    assert result["logical_requests"] == 1
+    assert result["usage_available"] is False
+    assert result["transport_attempts_verified"] is False
     assert "secret" not in json.dumps(result)
     router.chat.assert_called_once()
     logger.add_model_cost.assert_not_called()

@@ -3,6 +3,7 @@ import hashlib
 import json
 
 from praxile.structured_response import parse_submission_object
+from praxile.model import ModelError, ModelUnavailable, ModelRequestCancelled
 
 
 def _digest(text):
@@ -49,6 +50,8 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         "status": "pending", "official_evaluation": False, "promotion_eligible": False,
         "content_preservation_verified": False, "requirement_coverage_verified": False,
         "max_tokens": max_tokens, "timeout_seconds": timeout,
+        "logical_requests": 1, "usage_available": False,
+        "transport_attempts_verified": False,
     }
     logger.data.setdefault("content_reviews", []).append(record)
     stage = "request"
@@ -70,6 +73,14 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         logger.add_model_cost(response.get("usage", {}), route={
             **response.get("route", {}), "purpose": role,
             "latency_ms": response.get("latency_ms")})
+        usage = response.get("usage")
+        record["usage_available"] = isinstance(usage, dict) and bool(usage)
+        content = response.get("content")
+        if isinstance(content, str):
+            record["response_sha256"] = _digest(content)
+        finish = response.get("finish_reason")
+        record["finish_reason"] = finish if finish in {
+            "stop", "length", "max_tokens", "tool_calls", "end_turn"} else "unknown"
         stage = "validation"
         if response.get("finish_reason") in {"length", "max_tokens"}:
             raise ValueError("truncated review")
@@ -97,7 +108,16 @@ def review_content(router, logger, *, source_text, output_text, requirements,
         record.update(status="reviewed", judgment_source="llm", items=items,
                       all_declared_requirements_preserved=all(
                           item["verdict"] == "preserved" for item in items))
-    except Exception:
+    except Exception as error:
         # Do not persist provider exception text, which can include secrets or bodies.
-        record.update(status="abstained", failure_stage=stage)
+        category = "internal_error"
+        if isinstance(error, ModelRequestCancelled):
+            category = "cancelled"
+        elif isinstance(error, ModelUnavailable):
+            category = "model_unavailable"
+        elif isinstance(error, ModelError):
+            category = "model_response_error"
+        elif stage == "validation" and isinstance(error, ValueError):
+            category = "invalid_review"
+        record.update(status="abstained", failure_stage=stage, failure_category=category)
     return record
