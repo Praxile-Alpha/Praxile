@@ -118,3 +118,22 @@ def test_compound_receipt_preserves_mismatch_and_does_not_claim_new_policy_valid
         if r["expected"] != r["predicted"]] == [("compound-04", "missing", "contradicted")]
     assert receipt["new_policy_real_validation"] == "not_run"
     assert receipt["promotion_eligible"] is report["reference_labels_verified"] is False
+
+
+def test_policy_real_repeat_is_bound_to_previous_trial_and_current_policy():
+    from praxile.eval.content_review import VERDICT_POLICY, VERDICT_POLICY_VERSION
+    root = Path(__file__).resolve().parents[2]
+    results = root / "docs/results"
+    old = json.loads((results / "deepseek-compound-calibration-20261021.json").read_text())
+    new = json.loads((results / "deepseek-verdict-policy-v1-20261021.json").read_text())
+    assert new["previous_report_sha256"] == old["source_sha256"]["report.json"]
+    assert new["report"]["suite_sha256"] == old["report"]["suite_sha256"]
+    assert new["conditions"]["suite_file_sha256"] == old["suite_file_sha256"]
+    assert new["policy"]["verdict_policy_version"] == VERDICT_POLICY_VERSION
+    assert new["policy"]["verdict_policy_sha256"] == hashlib.sha256(VERDICT_POLICY.encode()).hexdigest()
+    assert new["report"]["correct_count"] == 6
+    assert old["report"]["correct_count"] == 5
+    assert [(row["case_id"], row["previous"], row["current"]) for row in new["paired_rows"]
+        if row["previous"] != row["current"]] == [("compound-04", "contradicted", "missing")]
+    assert new["report"]["reference_labels_verified"] is False
+    assert new["promotion_eligible"] is new["causal_effect_verified"] is False
