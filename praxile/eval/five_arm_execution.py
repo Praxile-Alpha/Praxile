@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
+from copy import deepcopy
 
 from .five_arm_plan import iter_schedule, plan_digest
 from .native_context import owned_candidate_identity
@@ -103,5 +104,87 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
         raise
     finally:
         report["elapsed_seconds"] = time.monotonic() - started
+        write_json(report_path, report)
+    return report_path
+
+
+async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None):
+    """Execute every development cell in frozen order; stop on uncertain failure.
+
+    A separate quota is created per cell. Roles within a cell must share that
+    quota; this entry point currently dispatches only executor-side roles.
+    """
+    from .contracts import BenchmarkTask
+    plan = deepcopy(plan)
+    # Force validation before claiming any directory, without materializing all cells.
+    next(iter_schedule(plan))
+    required = {"wheel", "wheel_sha256", "model", "base_url", "credential_file", "output_budget",
+                "development_candidate_file", "development_candidate_sha256", "repository"}
+    optional = {"max_steps", "dependency_wheels", "required_capabilities"}
+    if not isinstance(execution, dict) or not required <= execution.keys() or set(execution) - required - optional:
+        raise ValueError("study execution requires explicit native options without per-arm overrides")
+    options = deepcopy(execution)
+    tasks = deepcopy(tasks)
+    expected = set(plan["spec"]["task_ids"])
+    if not isinstance(tasks, dict) or set(tasks) != expected:
+        raise ValueError("study requires exactly its declared development tasks")
+    roots = dict(input_source_roots or {})
+    if set(roots) - expected:
+        raise ValueError("input roots contain undeclared tasks")
+    identities = {}
+    for task_id, task in tasks.items():
+        if (not isinstance(task, BenchmarkTask) or task.task_id != task_id or task.split != "development"
+                or task.environment.kind != "harbor"):
+            raise ValueError("invalid development task binding")
+        if bool(task.inputs) != (roots.get(task_id) is not None):
+            raise ValueError("public task inputs require a matching source root")
+        identities[task_id] = owned_candidate_identity(task, options["development_candidate_file"],
+            options["development_candidate_sha256"], options["repository"], development_only=True)
+    budget = plan["spec"]["budget"]
+    if (type(options["output_budget"]) is not int
+            or not 1 <= options["output_budget"] <= min(100_000_000, budget["total_tokens"])
+            or budget["model_calls"] > 10000 or budget["wall_seconds"] > 3540
+            or type(options.get("max_steps", 50)) is not int or not 1 <= options.get("max_steps", 50) <= 1000
+            or options["credential_file"] is None):
+        raise ValueError("unsupported native study budget or missing credential broker")
+    root = Path(directory).absolute()
+    root.mkdir(parents=True, exist_ok=False, mode=0o700)
+    write_json(root / "plan.json", plan)
+    report_path = root / "study.json"
+    report = {"schema_version": "praxile.five_arm_study_execution.v1", "plan_digest": plan_digest(plan),
+        "status": "preparing", "planned_cells": len(tasks) * plan["spec"]["repetitions"] * len(plan["arms"]),
+        "task_fingerprints": {key: task.fingerprint for key, task in tasks.items()},
+        "candidate_identities": identities, "cells": [], "promotion_eligible": False,
+        "controlled_execution_verified": False, "provenance_verified": False,
+        "selection_performed": False, "official_evaluation": "not_run"}
+    write_json(report_path, report)
+    try:
+        for index, cell in enumerate(iter_schedule(plan)):
+            entry = {"cell_id": cell["cell_id"], "status": "dispatching"}
+            report["cells"].append(entry)
+            report["status"] = "running"
+            write_json(report_path, report)
+            try:
+                cell_root = root / "cells" / str(index)
+                path = await execute_cell(plan, cell["cell_id"], tasks[cell["task_id"]], directory=cell_root,
+                    input_source_root=roots.get(cell["task_id"]), **options)
+                raw = path.read_bytes()
+                result = json.loads(raw)
+                if (result.get("plan_digest") != report["plan_digest"] or result.get("cell") != cell
+                        or result.get("status") not in {"executed_not_scored", "budget_exhausted"}):
+                    raise ValueError("cell result does not match frozen dispatch")
+                entry.update(status=result["status"], report=path.relative_to(root).as_posix(),
+                             sha256=hashlib.sha256(raw).hexdigest())
+            except BaseException as error:
+                entry.update(status="outcome_unknown", error_type=type(error).__name__)
+                raise
+            finally:
+                write_json(report_path, report)
+        report["status"] = "dispatched_not_scored"
+    except BaseException as error:
+        report["status"] = "interrupted" if not isinstance(error, Exception) else "failed"
+        report["error_type"] = type(error).__name__
+        raise
+    finally:
         write_json(report_path, report)
     return report_path

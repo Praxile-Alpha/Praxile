@@ -18,11 +18,32 @@ owned-native；本入口当前仅接受匹配 task_id 的 development 任务。
 摘要。失败/取消保留 outcome_unknown 并停止，不继续尝试或自动重放已有目录。
 返回 executed_not_scored 仅表示所有尝试已返回且报告确认 cleanup，不表示
 任务成功。selected_attempt 为 null；不调用 judge、不读 held-out rubric、不
-自动选优或晋升。跨 cell 的全研究调度、terminal selection、judge 共享额度接入
-和真实五组验收仍待实现；controlled_execution_verified 保持 false。
+自动选优或晋升。terminal selection、judge 共享额度接入和真实五组验收仍待
+实现；controlled_execution_verified 保持 false。
+
+## 完整 Development 研究调度
+
+`execute_study(plan, tasks, directory=..., execution=..., input_source_roots=...)`
+顺序执行计划内全部 cell。tasks 是 task_id 到 BenchmarkTask 的精确映射，不能
+缺任务、增加隐藏任务或替换 development split；public inputs 按任务显式提供
+source root。execution 是所有组共用的 owned-native 配置：wheel、wheel_sha256、
+model、base_url、credential_file、output_budget、development_candidate_file、
+development_candidate_sha256、repository；可选 max_steps、dependency_wheels、
+required_capabilities。不接受逐组覆盖机制开关。
+
+在创建研究目录前校验任务映射及全部候选身份。按冻结 repetition/task/arm 顺序
+执行，cell 独立配额；组内重复尝试共享 quota。研究目录独占创建，plan.json 保存
+计划，study.json 保存任务 fingerprint、候选身份、逐 cell 意图及报告摘要。
+异常/取消保留已返回 cell 并停止；进程重启不能自动重放同一研究。额度耗尽
+可作为该 cell 的终态记录，不补齐重试或偷偷增额。
+
+dispatched_not_scored 表示调度已结束，不代表任务完成或研究有效；部分 cell
+可能 budget_exhausted。本阶段测试使用真实 cell/quota 调度与模拟 executor，
+并非真实 Docker/model 五组验收。依然缺 terminal selection、judge 配额接入、
+冻结身份来源认证及完整成本/效果分析，不授予 promotion。
 
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
-分析见后文；真实五组执行、预算控制和来源验证尚未接入，不能把成功生成
+分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成
 manifest 当成五组实验已完成。
 
 ## 输入

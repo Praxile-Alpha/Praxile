@@ -1092,7 +1092,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   Cell 调度增补：execute_cell 从冻结计划映射五组机制，重复组每次独立租约，
   同 cell 共用持久化请求/输出额度及剩余时间；调度前检查点、异常停止和目录
   独占防止不确定重放。已返回尝试绑定报告摘要，无自动 selection/评分/晋升。
-  完整研究调度、总 token、judge 预算及真实五组验收仍未完成。
+  完整研究调度增补：execute_study 校验精确 development 任务映射，按冻结
+  repetition/task/arm 顺序执行全部 cell；共用 executor 配置，独立 cell 配额，
+  保存 plan/study 检查点及逐 cell 摘要，异常停止且禁止自动重放。测试覆盖两轮
+  五组和失败保留，不是实际 Docker/model 验收；terminal selection、总 token、
+  judge 预算及真实五组效果仍未完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
