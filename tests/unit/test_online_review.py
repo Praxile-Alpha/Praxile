@@ -33,14 +33,18 @@ def completed(tmp_path, monkeypatch, request):
         "public": True, "total_output_tokens": 100, "evaluator_root": evaluator,
         "artifacts": {task.task_id: {"source_path": "source.txt", "output_path": "result.txt"}}}
     tasks = [task]
-    if getattr(request, "param", False) == "multi":
+    if getattr(request, "param", False) in ("multi", "budget"):
         tasks.append(BenchmarkTask.from_dict({**task.to_dict(), "task_id": "online-second"}))
         judge["artifacts"]["online-second"] = dict(judge["artifacts"][task.task_id])
     stream = stream_module.OnlineStream.create(tmp_path / "stream", tasks, repository="docs",
+        chat_budget={"max_calls": 3, "output_budget": 1000, "ttl_seconds": 600, "request_byte_budget": 1000000}
+                    if getattr(request, "param", False) == "budget" else None,
         judge=judge if getattr(request, "param", False) else None,
         input_source_roots={item.task_id: tmp_path for item in tasks}, execution={"wheel": tmp_path / "worker.whl",
             "wheel_sha256": "a" * 64, "model": "executor", "base_url": "https://provider.invalid/v1", "credential_file": key})
     async def run(task, **options):
+        if options.get("shared_chat_budget"):
+            options["shared_chat_budget"].reserve("executor", 10, request_bytes=10)
         root = options["state_root"] / "lease"
         for name in ("inputs", "outputs", "agent"):
             (root / name).mkdir(parents=True)
@@ -62,6 +66,46 @@ def completed(tmp_path, monkeypatch, request):
     for _ in tasks:
         asyncio.run(stream.run_next())
     return stream, judge
+
+
+@pytest.mark.parametrize("completed", ["budget"], indirect=True)
+def test_replaced_stream_quota_is_not_accepted(completed):
+    from praxile.eval.persistent_chat_budget import PersistentChatBudget
+    stream, _ = completed
+    (stream.root / "quota.sqlite").unlink()
+    PersistentChatBudget.create(stream.root / "quota.sqlite", max_calls=100, output_budget=100000,
+                                ttl_seconds=600)
+    with pytest.raises(ValueError, match="frozen limits"):
+        stream.shared_budget()
+
+
+@pytest.mark.parametrize("completed", ["budget"], indirect=True)
+def test_shared_stream_quota_survives_reopen_and_caps_judge(completed, tmp_path, monkeypatch):
+    stream, judge = completed
+    assert stream.status()["chat_budget"]["remaining_calls"] == 1
+    calls = []
+    def fail(*args):
+        calls.append(1)
+        raise TimeoutError("fixture transport")
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", fail)
+    for index, task_id in enumerate(stream.status()["completed_task_ids"]):
+        reopened = stream_module.OnlineStream(stream.root)
+        settings = {**judge, "artifacts": {task_id: judge["artifacts"][task_id]}}
+        path = run_online_review(reopened.root, index, judge=settings, directory=tmp_path / f"review-{index}")
+        receipt = json.loads(path.read_text())
+        assert receipt["shared_stream_budget"] is True
+        assert receipt["status"] == "abstained"
+        assert not (path.parent / "quota.sqlite").exists()
+    assert calls == [1]
+    budget = stream.status()["chat_budget"]
+    assert budget["remaining_calls"] == 0
+    assert budget["roles"]["executor"]["reserved_calls"] == 2
+    assert budget["roles"]["judge"]["reserved_calls"] == 1
+    assert budget["remaining_request_bytes"] < 1000000 - 20
+    (stream.root / "quota.sqlite").unlink()
+    with pytest.raises(ValueError):
+        stream.status()
+    assert not (stream.root / "quota.sqlite").exists()
 
 
 @pytest.mark.parametrize("completed", ["multi"], indirect=True)

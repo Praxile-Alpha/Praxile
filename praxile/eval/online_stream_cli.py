@@ -28,6 +28,7 @@ def main(argv=None):
     create.add_argument("--repository", required=True)
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
+    create.add_argument("--chat-budget", type=Path, help="Freeze shared executor/reflection/judge admission budget")
     for name in ("status", "next", "accept", "design", "review", "audit-review", "summary"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
@@ -73,6 +74,7 @@ def main(argv=None):
                 raise ValueError("input roots must be a task-to-path mapping")
             stream = OnlineStream.create(args.stream, tasks, execution=options, repository=args.repository,
                 judge=_load(args.judge_config) if args.judge_config else None,
+                chat_budget=_load(args.chat_budget) if args.chat_budget else None,
                 input_source_roots={key: Path(value).absolute() for key, value in roots.items()})
             result = {**stream.status(), "action": "created_not_executed"}
         else:

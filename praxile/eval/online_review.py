@@ -41,6 +41,7 @@ def _prepare_online_review(stream_directory, index, *, judge, directory, require
         "task_id": task.task_id, "task_index": index, "task_fingerprint": task.fingerprint,
         "completion_event_sha256": target["completion_event_sha256"], "execution_binding": binding,
         "judge_identity": identity, "official_evaluation": False, "promotion_eligible": False,
+        "shared_stream_budget": target["shared_stream_budget"],
         "judge_precommitted_before_execution": frozen is not None, "learning_feedback_allowed": False}
     return {"root": root, "inputs": inputs, "binding": binding, "receipt": receipt, "judge": judge}
 
@@ -55,9 +56,11 @@ def run_online_review(stream_directory, index, *, judge, directory):
         identity = receipt["judge_identity"]
         requirement_count = len(prepared["inputs"]["requirements"])
         calls = (requirement_count + identity["batch_size"] - 1) // identity["batch_size"]
-        quota = PersistentChatBudget.create(root / "quota.sqlite", max_calls=calls,
-            output_budget=identity["total_output_tokens"],
-            ttl_seconds=min(3600, calls * identity["timeout_per_call"] + 30))
+        quota = OnlineStream(stream_directory).shared_budget()
+        if quota is None:
+            quota = PersistentChatBudget.create(root / "quota.sqlite", max_calls=calls,
+                output_budget=identity["total_output_tokens"],
+                ttl_seconds=min(3600, calls * identity["timeout_per_call"] + 30))
         report = run_broker_content_review(directory=root / "judge", inputs=prepared["inputs"],
             execution_binding=prepared["binding"], credential_file=judge["credential_file"],
             endpoint=judge["endpoint"], model=judge["model"], shared_budget=quota, public=True,
@@ -97,6 +100,7 @@ def audit_online_review(stream_directory, index, *, judge, directory, receipt_sh
     if _sha(raw) != receipt_sha256:
         raise ValueError("online review receipt digest mismatch")
     receipt = _json(raw)
+    receipt.setdefault("shared_stream_budget", False)
     if any(receipt.get(key) != value for key, value in prepared["receipt"].items()):
         raise ValueError("online review receipt differs from stream and judge binding")
     names = {"report.json", "manifest.json", "trajectory.json", "inputs.json", "broker-usage.json"}

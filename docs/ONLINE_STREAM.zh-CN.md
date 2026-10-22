@@ -110,6 +110,27 @@ online_stream 和 source_ledger_sha256。两个候选及组合仍是未经验证
 后续任务或批准事件改变来源账本摘要时需新的 design-id。Python 对应接口为
 `run_online_design(config, stream_directory, design_id=..., applies_to=...)`。
 
+## 跨任务请求配额
+
+create 可添加 `--chat-budget budget.json`，Python 对应 `chat_budget={...}`：
+
+```json
+{"max_calls": 200, "output_budget": 500000, "ttl_seconds": 86400, "request_byte_budget": 10000000}
+```
+
+request_byte_budget 可省略，其他三项必填。控制器独占创建 stream/quota.sqlite，
+冻结上限和过期时间；后续任务的 executor、任务内 reflection 及独立 judge 共用
+这份持久化配额。每次请求发出前原子预留调用数、最大输出 token 和可选的实际
+序列化请求字节数；超时不退还，重启不重置，数据库丢失或上限变更直接拒绝。
+每个 broker 仍保留自身更小的调用/输出限制。status 显示余额、角色预留及有效期。
+
+这一配置只覆盖 executor/reflection/judge，不覆盖在线 design 的 proposal_composer
+或任何绕过 broker 的外部调用。预算 scope 明确标为 executor_reflection_judge_only。
+output_budget 是最大输出预留量，不是实际消耗；request_byte_budget 不是输入 token。
+不保证供应商金额、全流程 token 或墙钟上限，不应称为完整费用控制。配额依赖
+可信本地控制器，不能防御拥有宿主文件权限的用户恢复旧数据库或绕过代理。
+没有配置该选项的既有 stream 保持原行为，judge 使用单次评审配额。
+
 ## 独立内容评审
 
 已完成任务可单独评审，不影响后续经验选择：
@@ -216,6 +237,6 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 
 目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
 全链路。独立内容评审、运行前冻结身份及审计后的在线描述性汇总已接入，尚缺在线
-probe 后再组合、全流总预算和真实模型多任务验收。
+probe 后再组合、覆盖候选生成等全部阶段的总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

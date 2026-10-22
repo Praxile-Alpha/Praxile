@@ -59,7 +59,7 @@ class OnlineStream:
     """
 
     @classmethod
-    def create(cls, directory, tasks, *, execution, repository, input_source_roots=None, judge=None):
+    def create(cls, directory, tasks, *, execution, repository, input_source_roots=None, judge=None, chat_budget=None):
         tasks = list(tasks)
         if (not tasks or len(tasks) > 10000 or any(not isinstance(task, BenchmarkTask)
                 or task.split != "online_stream" or task.environment.kind != "harbor" for task in tasks)
@@ -121,10 +121,21 @@ class OnlineStream:
         if len(canonical_json(spec).encode()) > 8 * 1024**2:
             raise ValueError("stream plan exceeds 8 MiB")
         _digest(spec)
+        if chat_budget is not None:
+            from .credential_broker import SharedChatBudget
+            if (not isinstance(chat_budget, dict)
+                    or not {"max_calls", "output_budget", "ttl_seconds"} <= chat_budget.keys()
+                    or set(chat_budget) - {"max_calls", "output_budget", "ttl_seconds", "request_byte_budget"}):
+                raise ValueError("invalid stream chat budget")
+            SharedChatBudget(**chat_budget)
         root = Path(directory).absolute()
         if root.resolve() != root:
             raise ValueError("stream directory cannot contain symlinks")
         root.mkdir(parents=True, exist_ok=False, mode=0o700)
+        if chat_budget is not None:
+            from .persistent_chat_budget import PersistentChatBudget
+            quota = PersistentChatBudget.create(root / "quota.sqlite", **chat_budget)
+            spec["chat_budget"] = {**deepcopy(chat_budget), "expires_at": quota.status()["expires_at"]}
         _persist(root / "stream.json", {"schema_version": "praxile.online_stream.v1", "spec": spec,
                                          "spec_sha256": _digest(spec), "events": []})
         return cls(root)
@@ -194,11 +205,35 @@ class OnlineStream:
 
     def status(self):
         state, completed, pending, candidate = self._read()
+        quota = self.shared_budget()
         return {"track": "online_stream", "completed_task_ids": completed, "pending_index": pending,
                 "task_count": len(state["spec"]["tasks"]), "candidate_digest": candidate.digest if candidate else None,
                 "ledger_sha256": state["events"][-1]["sha256"] if state["events"] else state["spec_sha256"],
                 "judge_precommitted_before_execution": "judge_identity" in state["spec"],
+                "chat_budget": quota.status() if quota else None,
+                "budget_scope": "executor_reflection_judge_only" if quota else None,
                 "promotion_eligible": False, "official_evaluation": False}
+
+    def shared_budget(self):
+        """Reopen the fixed quota; missing or changed databases never reset it."""
+        from .persistent_chat_budget import PersistentChatBudget
+        state, _, _, _ = self._read()
+        spec = state["spec"].get("chat_budget")
+        if spec is None:
+            return None
+        quota = PersistentChatBudget(self.root / "quota.sqlite")
+        current = quota.status()
+        roles = current["roles"].values()
+        if (current["expires_at"] != spec["expires_at"]
+                or current["remaining_calls"] + sum(role["reserved_calls"] for role in roles) != spec["max_calls"]
+                or current["remaining_output"] + sum(role["reserved_output"] for role in roles) != spec["output_budget"]):
+            raise ValueError("stream quota differs from frozen limits")
+        expected_bytes = spec.get("request_byte_budget")
+        if (current["remaining_request_bytes"] is None) != (expected_bytes is None) or (
+                expected_bytes is not None and current["remaining_request_bytes"]
+                + sum(role.get("reserved_request_bytes", 0) for role in roles) != expected_bytes):
+            raise ValueError("stream byte quota differs from frozen limits")
+        return quota
 
     def completed_sources(self):
         """Snapshot verified learning inputs; never expose future tasks or evaluators."""
@@ -235,6 +270,7 @@ class OnlineStream:
             path, digest = matches[0]
             return {"task": BenchmarkTask.from_dict(state["spec"]["tasks"][index]),
                     "frozen_judge_identity": deepcopy(state["spec"].get("judge_identity")),
+                    "shared_stream_budget": "chat_budget" in state["spec"],
                     "execution_dir": (self.root / path).parent, "execution_sha256": digest,
                     "completion_event_sha256": event["sha256"], "task_index": index}
 
@@ -271,6 +307,7 @@ class OnlineStream:
             for key in ("wheel", "credential_file"):
                 options[key] = Path(options[key]) if options[key] is not None else None
             extra = {}
+            quota = self.shared_budget()
             if candidate:
                 path = self.root / f"candidate-{len(state['events'])}.json"
                 if path.exists() or path.is_symlink():
@@ -286,7 +323,8 @@ class OnlineStream:
             step_root = self.root / "tasks" / str(index)
             source_root = state["spec"]["input_source_roots"].get(task.task_id)
             result = await run_owned_native(task, state_root=step_root, image=task.environment.revision,
-                input_source_root=Path(source_root) if source_root is not None else None, **options, **extra)
+                input_source_root=Path(source_root) if source_root is not None else None,
+                **({"shared_chat_budget": quota} if quota else {}), **options, **extra)
             relative = Path(result).relative_to(self.root).as_posix()
             if not relative.startswith(f"tasks/{index}/"):
                 raise ValueError("execution report belongs to a different stream step")
