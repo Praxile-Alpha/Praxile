@@ -1,7 +1,8 @@
 # 五组研究计划
 
-本模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。真实五组执行、
-预算控制和统计分析尚未接入；不能把成功生成 manifest 当成五组实验已完成。
+计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
+分析见后文；真实五组执行、预算控制和来源验证尚未接入，不能把成功生成
+manifest 当成五组实验已完成。
 
 ## 输入
 
@@ -59,3 +60,31 @@ shared_budget 是整个 cell 的额度。生成前重新编译并比对计划，
 
 本次测试覆盖计划冻结、拆分隔离声明、调度顺序、预算共享语义、输入非法值、
 篡改检测及 CLI；没有真实五组效果、统计显著性或能力提升结论。
+
+## 声明结果分析
+
+```bash
+python -m praxile.eval.five_arm_analysis \
+  --plan /path/to/study-plan/manifest.json \
+  --results cell-results.json --output study-analysis.json
+```
+
+results 是数组，每项仅含 cell_id、plan_digest、source_sha256、status、score、
+maximum。cell_id 来自 iter_schedule；plan_digest 来自冻结命令；source_sha256
+为来源报告的 `sha256:` 摘要。status 为 completed/failed/unknown。completed
+要求 0 <= score <= maximum，其他状态 score 必须为 null，不能凭失败状态补零。
+maximum 必须有限且大于零，同一任务跨组和重复保持一致。
+
+分析器拒绝计划摘要不符、未知 cell、重复 cell、分母变化和非法分数。先按
+每个任务在每组内的 repetitions 求归一化均值，再计算相对 frozen_executor
+的四个任务级配对差值；不同任务等权，不把 repetitions 当独立样本。
+
+所有比较使用五组共同完整的任务集合。任一 cell 缺失或未完成，其所属任务
+对所有组均排除，并列出缺失/未完成 ID；输出描述性均值但不输出置信区间。
+只有全部计划任务齐全，才输出四个预设比较的 Bonferroni 修正 Hoeffding
+familywise_ci95。区间假设任务簇相互独立，相关任务族需另外设计聚类。
+
+source_sha256 和分数目前只是声明，本分析器不打开来源报告、不验证签名或
+runtime 配置，也不实现终局选择、预算强制或效果晋升。因此结果完整也只是
+complete_declared_results，controlled_execution_verified 与 promotion_eligible
+始终为 false。真实五组验收仍未完成。
