@@ -52,6 +52,8 @@ def main(argv=None):
     parser.add_argument("--development-candidate", type=Path)
     parser.add_argument("--development-candidate-sha256")
     parser.add_argument("--development-only", action="store_true")
+    parser.add_argument("--frozen-protocol", type=Path)
+    parser.add_argument("--frozen-protocol-sha256")
     parser.add_argument("--repository", help="Explicit candidate activation repository identity")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
@@ -80,9 +82,14 @@ def main(argv=None):
                     or quota["remaining_calls"] < 1 or quota["remaining_output"] < 1):
                 raise ValueError("shared budget is unavailable")
         task = load_task(args.task)
+        if bool(args.frozen_protocol) != bool(args.frozen_protocol_sha256):
+            raise ValueError("frozen protocol requires file and digest")
+        from .frozen_native_protocol import load_protocol
+        frozen_protocol = load_protocol(args.frozen_protocol, args.frozen_protocol_sha256) if args.frozen_protocol else None
         from .native_context import owned_candidate_identity
         candidate_identity = owned_candidate_identity(task, args.development_candidate,
-            args.development_candidate_sha256, args.repository, development_only=args.development_only)
+            args.development_candidate_sha256, args.repository, development_only=args.development_only,
+            frozen_protocol=frozen_protocol)
         if task.environment.kind != "harbor" or not re.fullmatch(
                 r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision):
             raise ValueError("task requires digest-pinned Harbor image")
@@ -131,7 +138,7 @@ def main(argv=None):
             shared_chat_budget=shared_budget, task_local_memory_enabled=args.task_local_memory,
             development_candidate_file=args.development_candidate,
             development_candidate_sha256=args.development_candidate_sha256,
-            development_only=args.development_only, repository=args.repository))
+            development_only=args.development_only, repository=args.repository, frozen_protocol=frozen_protocol))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")

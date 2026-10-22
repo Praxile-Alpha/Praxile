@@ -10,20 +10,26 @@ from .v2.executor_profile import common_parent_capability
 from ..task_input import TaskInput
 
 
-def owned_candidate_identity(task, path, digest, repository, *, development_only=False):
+def owned_candidate_identity(task, path, digest, repository, *, development_only=False, frozen_protocol=None):
     """Preflight a candidate without exposing its content or granting activation."""
     if path is None and digest is None:
-        if development_only is not False or repository is not None:
+        if development_only is not False or repository is not None or frozen_protocol is not None:
             raise ValueError("development flags require a candidate file and digest")
         return None
     if path is None or not isinstance(digest, str):
         raise ValueError("development candidate requires file and digest")
-    if task.split != "development":
+    if frozen_protocol is None and task.split != "development":
         raise ValueError("owned candidate execution requires development task split")
     value = load_candidate(Path(path), digest)
-    validation = plan_candidate(value, "Preflight only", repository, development_only=development_only)
-    return {"track": "development", "repository": repository, "source_file_sha256": digest,
-            "candidate_digest": validation["candidate_digest"], "promotion_eligible": False}
+    protocol_digest = None
+    if frozen_protocol is not None:
+        from .frozen_native_protocol import validate_protocol
+        protocol_digest = validate_protocol(frozen_protocol, task, value, digest, repository)
+    validation = plan_candidate(value, "Preflight only", repository, development_only=development_only,
+                                heldout_frozen=frozen_protocol is not None)
+    return {"track": validation["track"], "repository": repository, "source_file_sha256": digest,
+            "candidate_digest": validation["candidate_digest"], "promotion_eligible": False,
+            **({"protocol_digest": protocol_digest} if protocol_digest else {})}
 
 
 def load_candidate(path: Path, digest: str):
@@ -46,8 +52,9 @@ def load_candidate(path: Path, digest: str):
     return value
 
 
-def plan_candidate(value, instruction, repository, *, development_only):
-    if development_only is not True or not isinstance(repository, str) or not repository.strip():
+def plan_candidate(value, instruction, repository, *, development_only, heldout_frozen=False):
+    if (type(heldout_frozen) is not bool or type(development_only) is not bool
+            or development_only == heldout_frozen or not isinstance(repository, str) or not repository.strip()):
         raise ValueError("native candidate execution requires explicit development mode and repository identity")
     candidate = ContextCandidate.from_dict(value)
     if candidate.representation_options:
@@ -67,7 +74,7 @@ def plan_candidate(value, instruction, repository, *, development_only):
     task = SimpleNamespace(task_id="native-" + task_digest[:16], instruction=body,
         metadata={}, repository=SimpleNamespace(repo=repository))
     activation = ContextActivationGate().evaluate(candidate, task).to_dict()
-    return {"schema_version": "praxile.native_development_context.v1", "track": "development",
+    return {"schema_version": "praxile.native_development_context.v1", "track": "heldout_frozen" if heldout_frozen else "development",
         "candidate_digest": candidate.digest, "task_body_sha256": task_digest,
         "activation": activation, "content": content if activation["activated"] else None,
         "promotion_eligible": False, "permission_granted": False}

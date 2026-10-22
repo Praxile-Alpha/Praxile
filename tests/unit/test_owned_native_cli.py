@@ -86,6 +86,44 @@ def test_candidate_plan_and_execute_do_not_print_content(tmp_path, monkeypatch, 
     assert main([*args, "--execute"]) == 0
 
 
+def test_frozen_protocol_cli_binds_heldout_plan_and_dispatch(tmp_path, monkeypatch, capsys):
+    from praxile.eval import owned_native_run
+    args = setup_args(tmp_path) + candidate_args(tmp_path)
+    args.remove("--development-only")
+    path = tmp_path / "task.json"
+    task = json.loads(path.read_text())
+    task["split"] = "heldout"
+    path.write_text(json.dumps(task))
+    path = tmp_path / "candidate.json"
+    candidate = json.loads(path.read_text())
+    candidate["source_task_ids"] = ["development-source"]
+    path.write_text(json.dumps(candidate))
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    args[args.index("--development-candidate-sha256") + 1] = digest
+    protocol = {"schema_version": "praxile.frozen_native_protocol.v1", "development_task_ids": ["development-source"],
+        "heldout_task_ids": ["cli-fixture"], "candidate_file_sha256": digest, "repository": "public/docs"}
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(protocol))
+    args += ["--frozen-protocol", str(path), "--frozen-protocol-sha256", hashlib.sha256(path.read_bytes()).hexdigest()]
+    assert main(args) == 0
+    output = capsys.readouterr().out
+    assert "PRIVATE" not in output and "development-source" not in output
+    assert json.loads(output.splitlines()[0])["development_context_identity"]["track"] == "heldout_frozen"
+    calls = []
+    async def run(task, **kwargs):
+        calls.append(kwargs)
+        assert kwargs["frozen_protocol"] == protocol
+        assert kwargs["development_only"] is False
+        report = tmp_path / "report.json"
+        report.write_text('{"cleanup_verified": true, "required_outputs_collected": true}')
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main(args + ["--execute"]) == 0
+    path.write_text("{}")
+    assert main(args + ["--execute"]) == 2
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("defect", ["heldout", "no_opt_in", "changed", "no_digest", "orphan_flags"])
 def test_candidate_preflight_rejects_before_resources(tmp_path, monkeypatch, defect):
     from praxile.eval import owned_native_run

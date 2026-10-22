@@ -21,11 +21,12 @@ def native_run_to_events(result: dict[str, Any]) -> list[AgentEvent]:
     if mode == "fresh_disabled":
         if result.get("development_context") is not None or trajectory.get("experimental_context") is not None:
             raise ValueError("baseline cannot contain experimental context")
-    elif mode == "development_candidate":
+    elif mode in {"development_candidate", "heldout_frozen_candidate"}:
+        track = "heldout_frozen" if mode == "heldout_frozen_candidate" else "development"
         context = result.get("development_context")
         decision = context.get("activation") if isinstance(context, dict) else None
         if (not isinstance(decision, dict) or context.get("schema_version") != "praxile.native_development_context.v1"
-                or context.get("track") != "development" or type(context.get("injected")) is not bool
+                or context.get("track") != track or type(context.get("injected")) is not bool
                 or type(decision.get("activated")) is not bool
                 or context.get("promotion_eligible") is not False or context.get("permission_granted") is not False
                 or (context["injected"] and not decision["activated"])):
@@ -45,7 +46,7 @@ def native_run_to_events(result: dict[str, Any]) -> list[AgentEvent]:
         trajectory["native_development_context"] = {
             "candidate_digest": context.get("candidate_digest"), "task_body_sha256": context.get("task_body_sha256"),
             "activation": deepcopy(decision), "injected": context["injected"],
-            "content_sha256": content_digest, "track": "development"}
+            "content_sha256": content_digest, "track": track}
     else:
         raise ValueError("unsupported native experience mode")
     return v1_trajectory_to_events(trajectory)
@@ -127,12 +128,12 @@ def v1_trajectory_to_events(trajectory: dict[str, Any]) -> list[AgentEvent]:
     if development is not None:
         activation = add("CONTEXT_ACTIVATION", "control_plane", {
             "source": "native_development_context", "candidate_digest": development["candidate_digest"],
-            "task_body_sha256": development["task_body_sha256"], "track": "development",
+            "task_body_sha256": development["task_body_sha256"], "track": development.get("track", "development"),
             "decision": development["activation"], "projection": "native_result_envelope"})
         if development["injected"]:
             add("CONTEXT_INJECT", "agent", {
                 "source": "native_development_context", "candidate_digest": development["candidate_digest"],
-                "content_sha256": development["content_sha256"], "track": "development",
+                "content_sha256": development["content_sha256"], "track": development.get("track", "development"),
                 "projection": "native_result_envelope"}, evidence_refs=("event:" + activation.event_id,))
 
     loaded_assets = trajectory.get("loaded_assets") or []

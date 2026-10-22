@@ -152,7 +152,8 @@ def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch,
     assert not (tmp_path / "praxile-result.json").exists()
 
 
-def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, monkeypatch):
+@pytest.mark.parametrize("heldout", [False, True])
+def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, monkeypatch, heldout):
     import shlex
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -174,7 +175,7 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
         repository="public/docs")
     with pytest.raises(ValueError, match="explicit development"):
         PraxileAgent(**kwargs)
-    agent = PraxileAgent(**kwargs, development_only=True)
+    agent = PraxileAgent(**kwargs, development_only=not heldout, heldout_frozen=heldout)
     path.write_text("changed after construction")
     commands, uploads = [], {}
     class Environment:
@@ -187,7 +188,8 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
     monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
     asyncio.run(agent.run("Make a checklist", Environment(), AgentContext()))
     argv = commands[0]
-    assert "--development-only" in argv
+    assert ("--heldout-frozen" if heldout else "--development-only") in argv
+    assert ("--development-only" if heldout else "--heldout-frozen") not in argv
     assert argv[argv.index("--repository") + 1] == "public/docs"
     uploaded = uploads[argv[argv.index("--development-candidate") + 1]]
     assert json.loads(uploaded) == candidate.to_dict()
@@ -199,13 +201,14 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
     class ResultEnvironment:
         async def download_file(self, remote, local):
             local.write_text(json.dumps(result))
-    valid_context = {"schema_version": "praxile.native_development_context.v1", "track": "development",
+    track = "heldout_frozen" if heldout else "development"
+    valid_context = {"schema_version": "praxile.native_development_context.v1", "track": track,
         "candidate_digest": agent.development_context_identity["candidate_digest"],
         "activation": {"repository": "public/docs", "activated": False}, "injected": False,
         "promotion_eligible": False, "permission_granted": False}
     for change in ({"candidate_digest": "forged"}, {"injected": True}, {"promotion_eligible": True}):
         result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": {},
-            "experience_mode": "development_candidate", "development_context": {**valid_context, **change}}
+            "experience_mode": track + "_candidate", "development_context": {**valid_context, **change}}
         with pytest.raises(ValueError, match="identity or activation"):
             asyncio.run(PraxileAgent._collect_result(agent, ResultEnvironment(), AgentContext()))
         assert not (tmp_path / "praxile-result.json").exists()

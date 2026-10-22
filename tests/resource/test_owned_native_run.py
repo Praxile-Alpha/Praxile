@@ -28,7 +28,7 @@ def test_shared_budget_preflight_rejects_bypass_and_resume(tmp_path, invalid):
 
 @pytest.mark.parametrize("missing_receipt", [False, True])
 @pytest.mark.parametrize("memory_enabled", [False, True])
-@pytest.mark.parametrize("with_candidate", [False, True])
+@pytest.mark.parametrize("with_candidate", [False, True, "heldout"])
 def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt, memory_enabled, with_candidate):
     from types import SimpleNamespace
     import praxile.eval.owned_native_run as module
@@ -51,6 +51,7 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture",
             candidate_type="context_policy", context_item={"content": "Inspect before finishing."},
             confidence=0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "fixture"},
+            source_task_ids=("development-source",),
             applies_to={"repositories": ["public/docs"], "task_signals": ["checklist"],
                         "does_not_apply_when": ["unrelated task"]})
         path = tmp_path / "candidate.json"
@@ -58,6 +59,11 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         candidate_kwargs = {"development_candidate_file": path,
             "development_candidate_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "development_only": True, "repository": "public/docs"}
+        if with_candidate == "heldout":
+            candidate_kwargs["development_only"] = False
+            candidate_kwargs["frozen_protocol"] = {"schema_version": "praxile.frozen_native_protocol.v1",
+                "development_task_ids": ["development-source"], "heldout_task_ids": ["fixture"],
+                "candidate_file_sha256": candidate_kwargs["development_candidate_sha256"], "repository": "public/docs"}
     lease_root = tmp_path / ("harbor-lease-" + "a" * 32)
     class Lease:
         def __init__(self, *args, **kwargs):
@@ -73,7 +79,9 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
             if with_candidate:
                 assert seen[-1]["development_candidate_file"] == str(candidate_kwargs["development_candidate_file"])
                 assert seen[-1]["development_candidate_sha256"] == candidate_kwargs["development_candidate_sha256"]
-                assert seen[-1]["development_only"] is True
+                assert seen[-1]["development_only"] is (with_candidate != "heldout")
+                assert seen[-1]["heldout_frozen"] is (with_candidate == "heldout")
+                assert "frozen_protocol" not in seen[-1]
                 assert seen[-1]["repository"] == "public/docs"
             else:
                 assert seen[-1]["development_candidate_file"] is None
@@ -91,7 +99,7 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     monkeypatch.setattr("praxile.eval.worker_preflight.check_worker_wheel", lambda *args: None)
     image = "python@sha256:" + "a" * 64
     task = BenchmarkTask(task_id="fixture", benchmark="fixture", dataset_revision="1",
-        split="development", instruction="public", environment=EnvironmentSpec("harbor", "fixture", image),
+        split="heldout" if with_candidate == "heldout" else "development", instruction="public", environment=EnvironmentSpec("harbor", "fixture", image),
         evaluator=EvaluatorReference("private", "1", "private", "sha256:" + "f" * 64))
     call = run_owned_native(task, state_root=tmp_path, image=image, wheel=tmp_path / "fixture.whl",
         wheel_sha256="a" * 64, model="fixture", base_url="https://provider.invalid/v1",
@@ -110,6 +118,9 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     if with_candidate:
         loaded_candidate = ContextCandidate.from_dict(json.loads(path.read_text()))
         assert report["development_context_identity"]["candidate_digest"] == loaded_candidate.digest
+        assert report["development_context_identity"]["track"] == ("heldout_frozen" if with_candidate == "heldout" else "development")
+        if with_candidate == "heldout":
+            assert report["development_context_identity"]["protocol_digest"].startswith("sha256:")
         assert "Inspect before finishing" not in json.dumps(report)
     else:
         assert "development_context_identity" not in report

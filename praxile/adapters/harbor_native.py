@@ -36,7 +36,8 @@ class PraxileAgent(BaseAgent):
                  task_local_memory_enabled: bool = False,
                  development_candidate_file: str | None = None,
                  development_candidate_sha256: str | None = None,
-                 development_only: bool = False, repository: str | None = None, **kwargs):
+                 development_only: bool = False, repository: str | None = None,
+                 heldout_frozen: bool = False, **kwargs):
         from ..eval.credential_broker import SharedChatBudget
         if shared_chat_budget is not None:
             if not isinstance(shared_chat_budget, SharedChatBudget):
@@ -69,14 +70,15 @@ class PraxileAgent(BaseAgent):
                 raise ValueError("development candidate file and digest must be configured together")
             value = load_candidate(Path(development_candidate_file), development_candidate_sha256)
             # Validate structure/scope before setup; actual activation uses the task body in the worker.
-            validation = plan_candidate(value, "Preflight only", repository, development_only=development_only)
+            validation = plan_candidate(value, "Preflight only", repository, development_only=development_only,
+                                        heldout_frozen=heldout_frozen)
             self._development_candidate_json = json.dumps(value, sort_keys=True, separators=(",", ":"))
             self.development_context_identity = {
-                "track": "development", "repository": repository,
+                "track": validation["track"], "repository": repository,
                 "source_file_sha256": development_candidate_sha256,
                 "transferred_file_sha256": hashlib.sha256(self._development_candidate_json.encode()).hexdigest(),
                 "candidate_digest": validation["candidate_digest"], "promotion_eligible": False}
-        elif development_only is not False or repository is not None:
+        elif development_only is not False or repository is not None or heldout_frozen is not False:
             raise ValueError("development flags require a candidate file and digest")
         if not isinstance(renderer_executable, str) or (renderer_executable and
                 (not PurePosixPath(renderer_executable).is_absolute() or ".." in PurePosixPath(renderer_executable).parts)):
@@ -316,7 +318,8 @@ class PraxileAgent(BaseAgent):
             argv.extend(["--deliverable-contract-file", self.remote_root + "/public-deliverables.json",
                          "--deliverable-contract-sha256", self.public_contract_sha256])
         if self.development_context_identity is not None:
-            argv.extend(["--development-only", "--repository", self.development_context_identity["repository"],
+            mode = "--heldout-frozen" if self.development_context_identity["track"] == "heldout_frozen" else "--development-only"
+            argv.extend([mode, "--repository", self.development_context_identity["repository"],
                 "--development-candidate", self.remote_root + "/development-candidate.json",
                 "--development-candidate-sha256", self.development_context_identity["transferred_file_sha256"]])
         command = shlex.join(argv)
@@ -424,7 +427,7 @@ class PraxileAgent(BaseAgent):
             result = json.loads(temporary.read_text(encoding="utf-8"))
             if (not isinstance(result, dict) or result.get("schema_version") != "praxile.native_benchmark_run.v1"
                     or not isinstance(result.get("trajectory"), dict)
-                    or result.get("experience_mode") != ("development_candidate"
+                    or result.get("experience_mode") != (self.development_context_identity["track"] + "_candidate"
                         if self.development_context_identity is not None else "fresh_disabled")):
                 raise ValueError("invalid native worker result")
             if result.get("model_request_options", {}) != self.model_request_options:
@@ -434,7 +437,7 @@ class PraxileAgent(BaseAgent):
                 activation = development.get("activation") if isinstance(development, dict) else None
                 if (not isinstance(development, dict) or not isinstance(activation, dict)
                         or development.get("schema_version") != "praxile.native_development_context.v1"
-                        or development.get("track") != "development"
+                        or development.get("track") != self.development_context_identity["track"]
                         or development.get("candidate_digest") != self.development_context_identity["candidate_digest"]
                         or activation.get("repository") != self.development_context_identity["repository"]
                         or type(activation.get("activated")) is not bool

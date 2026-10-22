@@ -1206,6 +1206,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   Harness Lab 已修复 repetition 展平问题：先任务内均值再任务级配对，独立样本数为完整任务数，缺失配对整任务标不完整；使用保守 Hoeffding 区间并声明独立任务假设。旧统计报告不能通过质量晋升门禁。9 项测试通过。中性 benchmark 连续评分、任务级成本区间和相关任务簇设计尚未完成，完整项未勾选，详见 `TASK_CLUSTER_STATISTICS.zh-CN.md`。
   连续评分增补：`python -m praxile.eval.compare_imports` 可按显式 repetition 计划比较官方 JobBench/WorkBuddy 导入，按任务归一化且保留分母、checksum、输入摘要及缺失评分，不混合 benchmark，不自动晋升。6 项测试通过。尚不能核验完整实验执行配置，也未完成真实多任务验收，详见 `IMPORTED_BENCHMARK_COMPARISON.zh-CN.md`。
 - [ ] held-out 下使用冻结经验；另设明确标识的 online-stream 实验，记录顺序，禁止把两种协议合并报分。
+  原生执行通道增补：显式 frozen protocol 约束开发/评测集合与候选来源，CLI
+  校验文件摘要，controller 在创建 lease 前检查，worker 与事件保留 heldout_frozen
+  标记，禁止 development-only 混用。名单不传 worker，无经验写回。此为单任务
+  通道，尚未接五组 held-out 调度、online-stream 或真实模型迁移验收，总项不勾选。
+  详见 FROZEN_NATIVE_EVALUATION.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。
   五组公开摘要入口增补：five_arm_public 先离线 audit 再按白名单输出 Markdown
