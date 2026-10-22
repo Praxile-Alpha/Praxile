@@ -1063,6 +1063,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   同一预算。43 项 forked broker/回环 HTTP 测试通过、1 跳过。只限制准入和
   请求输出，不覆盖输入 token/费用/跨进程/已发请求取消；五组自动接入及全
   角色总预算仍未完成，不能将该对象视为完整预算验收。
+  Native 接入增补：Harbor PraxileAgent 的临时 broker 已接受控制器传入的共享
+  预算，无 credential broker 的直连配置拒绝启用；跨 adapter 尝试保留配额，
+  清理回执包含共享状态。Harbor 0.18/0.22 fixture worker 回归覆盖二次尝试
+  拒绝和异常撤销，尚非真实 Docker 或五组自动调度验收。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

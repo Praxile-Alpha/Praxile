@@ -32,9 +32,17 @@ class PraxileAgent(BaseAgent):
                  dependency_wheels: list[dict] | None = None,
                  required_capabilities: list[str] | None = None,
                  model_request_options: dict | None = None,
+                 shared_chat_budget=None,
                  development_candidate_file: str | None = None,
                  development_candidate_sha256: str | None = None,
                  development_only: bool = False, repository: str | None = None, **kwargs):
+        from ..eval.credential_broker import SharedChatBudget
+        if shared_chat_budget is not None:
+            if not isinstance(shared_chat_budget, SharedChatBudget):
+                raise ValueError("shared_chat_budget must be a SharedChatBudget")
+            if not credential_file:
+                raise ValueError("shared chat budget requires a credential broker")
+        self._shared_chat_budget = shared_chat_budget
         from ..model_options import validate_request_options
         self.model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
         from ..eval.worker_requirements import validate_requirements
@@ -231,7 +239,8 @@ class PraxileAgent(BaseAgent):
             max_calls=min(self.max_steps + 10, 1000), max_output=6000,
             output_budget=min((self.max_steps + 10) * 6000, 10_000_000),
             ttl_seconds=self.timeout_seconds + 60,
-            request_timeout=self.model_timeout_seconds + 10, request_options=self.model_request_options)
+            request_timeout=self.model_timeout_seconds + 10, request_options=self.model_request_options,
+            shared_budget=self._shared_chat_budget, budget_role="executor")
         remote = self.remote_root + "/" + new_id("capability")
         try:
             _, port = broker.start()

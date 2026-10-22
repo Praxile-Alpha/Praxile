@@ -130,3 +130,10 @@ status 包含各角色 reserved_calls/reserved_output。它只限制同一进程
 并宣称总 token 已被限制。五组调度尚未自动配置共享预算，真实输入 token
 计数、所有角色接入及任务总墙钟控制仍未完成，budget_enforcement_verified
 继续为 false。
+
+Harbor `PraxileAgent` 现在接受控制器传入的 shared_chat_budget，同一对象可复用
+于多次 adapter 尝试，创建临时 broker 时传入共享预算且标记 executor 角色。
+必须同时使用 credential_file；无 broker 的直连路径拒绝该配置。清理后的
+praxile-broker-usage.json 包含共享状态，单次 broker 撤销不重置共享余额。
+测试在 Harbor 0.18/0.22 使用 fixture worker 验证两次尝试及异常清理，不是
+真实容器五组验收。owned-native CLI 和五组调度尚未自动创建或持久化此对象。

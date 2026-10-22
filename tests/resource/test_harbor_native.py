@@ -17,6 +17,50 @@ from praxile.adapters.harbor_native import PraxileAgent, WorkBuddyPraxileAgent
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+def test_shared_budget_survives_sequential_adapter_attempts(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from praxile.eval.credential_broker import SharedChatBudget, ChatCredentialBroker, BrokerDenied
+    import praxile.eval.credential_broker as module
+    budget = SharedChatBudget(max_calls=1, output_budget=6000, ttl_seconds=30)
+    brokers = []
+    def start(value):
+        brokers.append(value)
+        return "localhost", 1
+    monkeypatch.setattr(ChatCredentialBroker, "start", start)
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", lambda self, body: {"choices": []})
+    monkeypatch.setattr(module, "read_private_key", lambda path: "fixture")
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    kwargs = dict(wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(), base_url="https://provider.invalid/v1",
+        model_name="fixed", shared_chat_budget=budget)
+    with pytest.raises(ValueError, match="requires a credential broker"):
+        PraxileAgent(logs_dir=tmp_path, **kwargs)
+    environment = SimpleNamespace(upload_file=AsyncMock(), exec=AsyncMock(return_value=SimpleNamespace(return_code=0)))
+    async def execute():
+        for index in range(2):
+            logs = tmp_path / str(index)
+            logs.mkdir()
+            agent = PraxileAgent(logs_dir=logs, credential_file="fixture-key", **kwargs)
+            async def worker(*args, **options):
+                assert options["capability_file"]
+                broker = brokers[-1]
+                broker.chat("Bearer " + broker.capability, {"model": "fixed",
+                    "messages": [{"role": "user", "content": "fixture"}], "max_tokens": 6000})
+            monkeypatch.setattr(agent, "_run_with_endpoint", worker)
+            if index == 0:
+                await agent.run("fixture", environment, AgentContext())
+            else:
+                with pytest.raises(BrokerDenied, match="shared budget exhausted"):
+                    await agent.run("fixture", environment, AgentContext())
+            receipt = json.loads((logs / "praxile-broker-usage.json").read_text())
+            assert receipt["revoked"] is True
+            assert receipt["shared_budget"]["remaining_calls"] == 0
+        assert sum(value.status()["usage"]["admitted_calls"] for value in brokers) == 1
+    asyncio.run(execute())
+
+
 def test_broker_cleanup_survives_repeated_cancellation(tmp_path, monkeypatch):
     import threading
     from types import SimpleNamespace
