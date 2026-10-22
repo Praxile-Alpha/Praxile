@@ -162,8 +162,27 @@ manifest 冻结来源账本及任务/候选，report 每次 dispatch 前持久�
 只有全部一致且实际记录注入时 candidate_exposure_verified 才为 true；缺失证据
 保持 false，互相矛盾直接拒绝。机制报告标记 scope=bound_runtime_prompt_construction，
 remote_consumption_verified=false；它不是远端消费证明或因果效果证明。
-尚未基于这些报告调用组合模型，也没有 helped/hurt 或因果提升结论；后续需先
-完成行为证据校验，再运行组合版本，不能继承父候选的效果。
+尚未基于这些报告调用组合模型，也没有任务级 helped/hurt 或因果提升结论；后续需
+基于下面的反馈回放接入组合，并独立运行组合版本，不能继承父候选的效果。
+
+### Probe 反馈回放
+
+```sh
+python -m praxile.eval.online_stream_cli probe-feedback \
+  --stream .praxile/eval/online/example --probe-directory .praxile/eval/online-probes/example \
+  --manifest-sha256 <MANIFEST_SHA256> --report-sha256 <REPORT_SHA256>
+```
+
+离线复核冻结前缀、完整三组顺序、模型/镜像/worker/请求选项/执行预算等记录、
+每份报告和轨迹摘要及候选暴露。stream 已前进则拒绝使用旧反馈继续该轮实验。
+从绑定轨迹重建操作事件，只按精确操作身份对齐，不按步号配对，不把同参调用
+视为相同环境状态。支持候选 expected_effect.measurement 中预冻结的
+repeated_exact_operations 测量；没有测量或覆盖不足时 abstain。
+
+输出 parent_reports 可供后续组合器使用，保留行为差值与事件引用，但不含正文、
+原始命令、hidden judge 或 rubric。任务 verdict 始终 confounded，原因包括没有
+任务结果评测及单次执行对不证明状态等价；注入缺失时 prediction_verified=false。
+该回放只检查可信本地文件的一致性，不是外部签名。组合模型及组合重跑仍待接入。
 
 ## 独立内容评审
 

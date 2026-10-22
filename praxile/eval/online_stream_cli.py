@@ -29,10 +29,14 @@ def main(argv=None):
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
     create.add_argument("--chat-budget", type=Path, help="Freeze shared executor/reflection/judge admission budget")
-    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe", "probe-feedback"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
-        if name == "probe":
+        if name == "probe-feedback":
+            command.add_argument("--probe-directory", type=Path, required=True)
+            command.add_argument("--manifest-sha256", required=True)
+            command.add_argument("--report-sha256", required=True)
+        elif name == "probe":
             command.add_argument("--task-index", type=int, action="append", required=True)
             command.add_argument("--candidate", type=Path, action="append", required=True)
             command.add_argument("--candidate-sha256", action="append", required=True)
@@ -87,6 +91,10 @@ def main(argv=None):
             stream = OnlineStream(args.stream)
             if args.command == "status":
                 result = stream.status()
+            elif args.command == "probe-feedback":
+                from .online_probe_feedback import audit_online_probe
+                result = audit_online_probe(args.stream, directory=args.probe_directory,
+                    manifest_sha256=args.manifest_sha256, report_sha256=args.report_sha256)
             elif args.command == "probe":
                 from .online_probe import prepare_online_probe, run_online_probe
                 if len(args.candidate) != 2 or len(args.candidate_sha256) != 2:

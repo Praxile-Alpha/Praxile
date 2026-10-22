@@ -59,7 +59,12 @@ def fake_runner(calls, *, native=False, expose=False):
         (root / "agent/praxile-result.json").write_bytes(raw)
         report = root / "execution.json"
         data = {"task_fingerprint": task.fingerprint, "status": "executor_returned",
-            "cleanup_verified": True, "source_result_sha256": hashlib.sha256(raw).hexdigest()}
+            "cleanup_verified": True, "source_result_sha256": hashlib.sha256(raw).hexdigest(),
+            "image": task.environment.revision, "wheel_sha256": options["wheel_sha256"], "model": options["model"],
+            "endpoint_sha256": hashlib.sha256(options["base_url"].encode()).hexdigest(),
+            "max_steps": options.get("max_steps", 50), "timeout_seconds": options.get("timeout_seconds", 900),
+            "model_request_options": options.get("model_request_options", {}),
+            "task_local_memory_enabled": options.get("task_local_memory_enabled", False)}
         if options.get("development_only"):
             data["development_context_identity"] = owned_candidate_identity(task,
                 options["development_candidate_file"], options["development_candidate_sha256"],
@@ -329,6 +334,8 @@ def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monk
     monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
     asyncio.run(stream.run_next())
     parents = [candidate(), {**candidate(), "candidate_id": "other"}]
+    for parent in parents:
+        parent["expected_effect"]["measurement"] = {"kind": "repeated_exact_operations", "operation": "run_command", "direction": "decrease"}
     from praxile.eval import online_probe
     calls = []
     monkeypatch.setattr(online_probe, "run_owned_native", fake_runner(calls, native=True, expose=expose))
@@ -356,6 +363,39 @@ def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monk
     assert calls[1][1]["development_only"] is True
     assert calls[2][1]["development_only"] is True
     assert "PRIVATE_SENTINEL" not in json.dumps(report)
+    from praxile.eval.online_probe_feedback import audit_online_probe
+    kwargs = {"directory": root, "manifest_sha256": hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest(),
+              "report_sha256": hashlib.sha256(result.read_bytes()).hexdigest()}
+    feedback = audit_online_probe(stream.root, **kwargs)
+    assert main(["probe-feedback", "--stream", str(stream.root), "--probe-directory", str(root),
+        "--manifest-sha256", kwargs["manifest_sha256"], "--report-sha256", kwargs["report_sha256"]]) == 0
+    assert json.loads(capsys.readouterr().out) == feedback
+    assert "PRIVATE_SENTINEL" not in json.dumps(feedback)
+    assert len(feedback["parent_reports"]) == 2
+    for parent in feedback["parent_reports"]:
+        episode = parent["improvement_episodes"][0]
+        assert episode["verdict"] == "confounded"
+        assert episode["behavior_probe"]["status"] == "measured"
+        assert episode["behavior_probe"]["delta"] == 0
+        assert episode["behavior_probe"]["candidate_exposure_verified"] is expose
+    original = result.read_bytes()
+    report["attempts"][1]["candidate_exposure_verified"] = not expose
+    result.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="digest mismatch"):
+        audit_online_probe(stream.root, **kwargs)
+    with pytest.raises(ValueError, match="mechanism summary"):
+        audit_online_probe(stream.root, **{**kwargs, "report_sha256": hashlib.sha256(result.read_bytes()).hexdigest()})
+    result.write_bytes(original)
+    execution_path = root / report["attempts"][0]["report"]
+    execution_original = execution_path.read_bytes()
+    execution_path.write_text(json.dumps({**json.loads(execution_original), "model": "other-model"}))
+    report = json.loads(original)
+    report["attempts"][0]["report_sha256"] = hashlib.sha256(execution_path.read_bytes()).hexdigest()
+    result.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="conditions"):
+        audit_online_probe(stream.root, **{**kwargs, "report_sha256": hashlib.sha256(result.read_bytes()).hexdigest()})
+    execution_path.write_bytes(execution_original)
+    result.write_bytes(original)
     assert (stream.root / "stream.json").read_bytes() == before
     with pytest.raises(ValueError):
         asyncio.run(run_online_probe(stream.root, [0], parents, directory=root))
