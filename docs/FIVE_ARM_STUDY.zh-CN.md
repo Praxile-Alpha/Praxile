@@ -17,9 +17,9 @@ owned-native；本入口当前仅接受匹配 task_id 的 development 任务。
 目录独占创建，cell.json 在 dispatch 前保存意图，每次返回绑定 execution.json
 摘要。失败/取消保留 outcome_unknown 并停止，不继续尝试或自动重放已有目录。
 返回 executed_not_scored 仅表示所有尝试已返回且报告确认 cleanup，不表示
-任务成功。selected_attempt 为 null；不调用 judge、不读 held-out rubric、不
-自动选优或晋升。terminal selection、judge 共享额度接入和真实五组验收仍待
-实现；controlled_execution_verified 保持 false。
+任务成功。默认 selected_attempt 为 null；不调用 judge、不读 held-out rubric、不
+自动选优或晋升。可选的冻结顺序选择见下文；judge 共享额度接入和真实五组
+验收仍待实现，controlled_execution_verified 保持 false。
 
 ## 完整 Development 研究调度
 
@@ -29,7 +29,7 @@ owned-native；本入口当前仅接受匹配 task_id 的 development 任务。
 source root。execution 是所有组共用的 owned-native 配置：wheel、wheel_sha256、
 model、base_url、credential_file、output_budget、development_candidate_file、
 development_candidate_sha256、repository；可选 max_steps、dependency_wheels、
-required_capabilities。不接受逐组覆盖机制开关。
+required_capabilities、terminal_selection。不接受逐组覆盖机制开关。
 
 在创建研究目录前校验任务映射及全部候选身份。按冻结 repetition/task/arm 顺序
 执行，cell 独立配额；组内重复尝试共享 quota。研究目录独占创建，plan.json 保存
@@ -39,8 +39,27 @@ required_capabilities。不接受逐组覆盖机制开关。
 
 dispatched_not_scored 表示调度已结束，不代表任务完成或研究有效；部分 cell
 可能 budget_exhausted。本阶段测试使用真实 cell/quota 调度与模拟 executor，
-并非真实 Docker/model 五组验收。依然缺 terminal selection、judge 配额接入、
+并非真实 Docker/model 五组验收。依然缺质量驱动选择、judge 配额接入、
 冻结身份来源认证及完整成本/效果分析，不授予 promotion。
+
+## 冻结的交付顺序选择
+
+可通过 `selection_policy("first_delivered")` 或 `selection_policy("last_delivered")`
+构造规则。在生成计划前，将规则 canonical_json 的 SHA-256（含 sha256: 前缀）
+写入 spec.identities.terminal_selection；随后把同一规则作为 terminal_selection
+传给 execute_cell，或放入 execute_study 的 execution 字典。摘要不匹配在创建
+执行目录前拒绝，不能完成实验后换规则选结果。未提供规则仍保持不选择模式。
+
+选择器读取每条已返回尝试的执行报告，验证记录摘要、顺序及路径归属，拒绝
+符号/硬链接和路径逃逸。只将报告中 executor_returned、cleanup_verified=true、
+required_outputs_collected=true 的尝试列为 eligible，按预先固定的首/尾规则选择。
+缺字段不当作交付完成；没有 eligible 则 selected_attempt=null，不兜底选失败版本。
+终态 budget_exhausted 也只在已返回尝试内选择，异常和 outcome_unknown 不选择。
+
+这是**回执层面的交付选择**，不重新认证每个输出文件，不判断任务正确性，
+不消费 judge/隐藏分数，不产生 best-of-N 质量提升声明。所有尝试和未选结果
+继续保留；selection_performed 只表示规则已执行，quality_verified 和
+promotion_eligible 始终 false。当前安全文件读取沿用 POSIX artifact reader。
 
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成

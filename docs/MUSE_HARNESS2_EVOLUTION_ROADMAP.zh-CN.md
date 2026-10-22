@@ -1097,6 +1097,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   保存 plan/study 检查点及逐 cell 摘要，异常停止且禁止自动重放。测试覆盖两轮
   五组和失败保留，不是实际 Docker/model 验收；terminal selection、总 token、
   judge 预算及真实五组效果仍未完成。
+  Terminal selection 增补：可预注册 first_delivered/last_delivered 规则摘要，
+  cell/study 调用前核对冻结身份，执行后复验报告路径/摘要/交付与清理回执，
+  按执行顺序选择，无合格结果则 abstain。不读质量或隐藏分数，不等价独立
+  产物验收；质量驱动选择、judge 共享预算及真实效果仍未完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

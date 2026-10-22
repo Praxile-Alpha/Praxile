@@ -142,12 +142,20 @@ def test_invalid_dispatch_does_not_create_cell(tmp_path, defect):
     assert not kwargs["directory"].exists()
 
 
-def test_whole_study_runs_frozen_order_and_isolates_cell_budgets(tmp_path, monkeypatch):
+@pytest.mark.parametrize("strategy", [None, "first_delivered", "last_delivered"])
+def test_whole_study_runs_frozen_order_and_isolates_cell_budgets(tmp_path, monkeypatch, strategy):
     plan, _, task, kwargs = setup(tmp_path, "frozen_executor")
     spec = plan["spec"]
     spec["repetitions"] = 2
     plan = compile_plan(spec)
     options = {key: value for key, value in kwargs.items() if key != "directory"}
+    if strategy:
+        from praxile.eval.five_arm_selection import selection_policy
+        from praxile.eval.v2.schema import canonical_json
+        policy = selection_policy(strategy)
+        spec["identities"]["terminal_selection"] = "sha256:" + hashlib.sha256(canonical_json(policy).encode()).hexdigest()
+        plan = compile_plan(spec)
+        options["terminal_selection"] = policy
     observed = []
     async def run(task, **settings):
         budget = settings["shared_chat_budget"]
@@ -156,7 +164,8 @@ def test_whole_study_runs_frozen_order_and_isolates_cell_budgets(tmp_path, monke
         root = settings["state_root"]
         root.mkdir()
         report = root / "execution.json"
-        report.write_text(json.dumps({"status": "executor_returned", "cleanup_verified": True}))
+        report.write_text(json.dumps({"status": "executor_returned", "cleanup_verified": True,
+                                      "required_outputs_collected": True}))
         return report
     monkeypatch.setattr(module, "run_owned_native", run)
     root = tmp_path / "study"
@@ -173,7 +182,11 @@ def test_whole_study_runs_frozen_order_and_isolates_cell_budgets(tmp_path, monke
     assert [(local, experience) for _, local, experience in observed] == expected
     for entry in report["cells"]:
         assert entry["sha256"] == hashlib.sha256((root / entry["report"]).read_bytes()).hexdigest()
-    assert report["selection_performed"] is False
+    assert report["selection_performed"] is (strategy is not None)
+    if strategy:
+        for entry, cell in zip(report["cells"], cells):
+            expected_index = cell["max_attempts"] - 1 if strategy == "last_delivered" else 0
+            assert entry["selection"]["selected_attempt"] == expected_index
     assert "PRIVATE" not in path.read_text()
     with pytest.raises(FileExistsError):
         asyncio.run(module.execute_study(plan, {task.task_id: task}, directory=root, execution=options))
@@ -219,7 +232,7 @@ def test_study_cancellation_persists_dispatch_intent(tmp_path, monkeypatch):
     assert report["cells"][0]["status"] == "outcome_unknown"
 
 
-@pytest.mark.parametrize("defect", ["missing_task", "extra_task", "override", "candidate", "extra_root"])
+@pytest.mark.parametrize("defect", ["missing_task", "extra_task", "override", "candidate", "extra_root", "selection"])
 def test_study_preflight_rejects_invalid_bindings_before_any_dispatch(tmp_path, defect):
     plan, _, task, kwargs = setup(tmp_path, "frozen_executor")
     options = {key: value for key, value in kwargs.items() if key != "directory"}
@@ -233,6 +246,9 @@ def test_study_preflight_rejects_invalid_bindings_before_any_dispatch(tmp_path, 
         options["task_local_memory_enabled"] = True
     elif defect == "candidate":
         options["development_candidate_sha256"] = "a" * 64
+    elif defect == "selection":
+        from praxile.eval.five_arm_selection import selection_policy
+        options["terminal_selection"] = selection_policy("last_delivered")
     else:
         roots["hidden"] = tmp_path
     root = tmp_path / "study"

@@ -17,7 +17,8 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
                        model, base_url, credential_file, output_budget,
                        max_steps=50, input_source_root=None,
                        development_candidate_file=None, development_candidate_sha256=None,
-                       repository=None, dependency_wheels=None, required_capabilities=None):
+                       repository=None, dependency_wheels=None, required_capabilities=None,
+                       terminal_selection=None):
     """One exclusive cell, with no automatic replay after uncertain execution.
 
     output_budget is an explicit additional ceiling, not the plan's total_tokens.
@@ -27,6 +28,10 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
     cell = next((row for row in rows if row["cell_id"] == cell_id), None)
     if cell is None:
         raise ValueError("unknown study cell")
+    from .five_arm_selection import validate_selection, select_delivered
+    terminal_selection = deepcopy(terminal_selection)
+    if terminal_selection is not None:
+        validate_selection(terminal_selection, plan)
     if task.task_id != cell["task_id"] or task.split != "development":
         raise ValueError("cell requires the matching development task")
     budget = cell["shared_budget"]
@@ -55,6 +60,7 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
                      "image": task.environment.revision,
                      "endpoint_sha256": hashlib.sha256(base_url.encode()).hexdigest()},
         "candidate_identity": identity, "attempts": [], "selected_attempt": None,
+        "terminal_selection_policy": terminal_selection,
         "controlled_execution_verified": False, "total_token_bound_verified": False,
         "provenance_verified": False, "promotion_eligible": False}
     write_json(report_path, report)
@@ -98,6 +104,9 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
                 write_json(report_path, report)
         else:
             report["status"] = "executed_not_scored"
+        if terminal_selection is not None:
+            report["selection"] = select_delivered(report["attempts"], root, terminal_selection)
+            report["selected_attempt"] = report["selection"]["selected_attempt"]
     except BaseException as error:
         report["status"] = "interrupted" if not isinstance(error, Exception) else "failed"
         report["error_type"] = type(error).__name__
@@ -120,10 +129,13 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
     next(iter_schedule(plan))
     required = {"wheel", "wheel_sha256", "model", "base_url", "credential_file", "output_budget",
                 "development_candidate_file", "development_candidate_sha256", "repository"}
-    optional = {"max_steps", "dependency_wheels", "required_capabilities"}
+    optional = {"max_steps", "dependency_wheels", "required_capabilities", "terminal_selection"}
     if not isinstance(execution, dict) or not required <= execution.keys() or set(execution) - required - optional:
         raise ValueError("study execution requires explicit native options without per-arm overrides")
     options = deepcopy(execution)
+    if options.get("terminal_selection") is not None:
+        from .five_arm_selection import validate_selection
+        validate_selection(options["terminal_selection"], plan)
     tasks = deepcopy(tasks)
     expected = set(plan["spec"]["task_ids"])
     if not isinstance(tasks, dict) or set(tasks) != expected:
@@ -155,6 +167,7 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
         "status": "preparing", "planned_cells": len(tasks) * plan["spec"]["repetitions"] * len(plan["arms"]),
         "task_fingerprints": {key: task.fingerprint for key, task in tasks.items()},
         "candidate_identities": identities, "cells": [], "promotion_eligible": False,
+        "terminal_selection_policy": options.get("terminal_selection"),
         "controlled_execution_verified": False, "provenance_verified": False,
         "selection_performed": False, "official_evaluation": "not_run"}
     write_json(report_path, report)
@@ -175,12 +188,15 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
                     raise ValueError("cell result does not match frozen dispatch")
                 entry.update(status=result["status"], report=path.relative_to(root).as_posix(),
                              sha256=hashlib.sha256(raw).hexdigest())
+                if options.get("terminal_selection") is not None:
+                    entry["selection"] = result["selection"]
             except BaseException as error:
                 entry.update(status="outcome_unknown", error_type=type(error).__name__)
                 raise
             finally:
                 write_json(report_path, report)
         report["status"] = "dispatched_not_scored"
+        report["selection_performed"] = options.get("terminal_selection") is not None
     except BaseException as error:
         report["status"] = "interrupted" if not isinstance(error, Exception) else "failed"
         report["error_type"] = type(error).__name__
