@@ -10,6 +10,22 @@ from .v2.executor_profile import common_parent_capability
 from ..task_input import TaskInput
 
 
+def owned_candidate_identity(task, path, digest, repository, *, development_only=False):
+    """Preflight a candidate without exposing its content or granting activation."""
+    if path is None and digest is None:
+        if development_only is not False or repository is not None:
+            raise ValueError("development flags require a candidate file and digest")
+        return None
+    if path is None or not isinstance(digest, str):
+        raise ValueError("development candidate requires file and digest")
+    if task.split != "development":
+        raise ValueError("owned candidate execution requires development task split")
+    value = load_candidate(Path(path), digest)
+    validation = plan_candidate(value, "Preflight only", repository, development_only=development_only)
+    return {"track": "development", "repository": repository, "source_file_sha256": digest,
+            "candidate_digest": validation["candidate_digest"], "promotion_eligible": False}
+
+
 def load_candidate(path: Path, digest: str):
     if path.resolve(strict=True) != path.absolute() or not path.is_file():
         raise ValueError("candidate must be a regular file without symlink components")

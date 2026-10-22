@@ -24,7 +24,10 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            persist_workspace: bool = False,
                            dependency_wheels: list[dict] | None = None,
                            required_capabilities: list[str] | None = None,
-                           shared_chat_budget=None, task_local_memory_enabled: bool = False):
+                           shared_chat_budget=None, task_local_memory_enabled: bool = False,
+                           development_candidate_file: Path | None = None,
+                           development_candidate_sha256: str | None = None,
+                           development_only: bool = False, repository: str | None = None):
     if type(task_local_memory_enabled) is not bool:
         raise ValueError("task_local_memory_enabled must be boolean")
     from .credential_broker import SharedChatBudget
@@ -42,6 +45,9 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         raise ValueError("persist_workspace must be boolean")
     if not isinstance(task, BenchmarkTask) or task.environment.kind != "harbor":
         raise ValueError("owned native execution requires a Harbor BenchmarkTask")
+    from .native_context import owned_candidate_identity
+    candidate_identity = owned_candidate_identity(task, development_candidate_file,
+        development_candidate_sha256, repository, development_only=development_only)
     if task.environment.revision != image:
         raise ValueError("image must match the frozen task environment revision")
     for output in task.outputs:
@@ -58,6 +64,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             "max_steps": max_steps, "timeout_seconds": timeout_seconds,
             "credential_broker": credential_file is not None}
         plan["task_local_memory_enabled"] = task_local_memory_enabled
+        if candidate_identity is not None:
+            plan["development_context_identity"] = candidate_identity
         if persist_workspace:
             plan["persist_workspace"] = True
         if dependencies or capabilities:
@@ -87,6 +95,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
     report["task_local_memory_enabled"] = task_local_memory_enabled
+    if candidate_identity is not None:
+        report["development_context_identity"] = candidate_identity
     report["worker_requirements"] = requirements
     if shared_start is not None:
         report["shared_chat_budget_start"] = shared_start
@@ -104,7 +114,10 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
             credential_file=str(credential_file) if credential_file else None,
             dependency_wheels=dependencies, required_capabilities=capabilities,
-            shared_chat_budget=shared_chat_budget, task_local_memory_enabled=task_local_memory_enabled)
+            shared_chat_budget=shared_chat_budget, task_local_memory_enabled=task_local_memory_enabled,
+            development_candidate_file=str(development_candidate_file) if development_candidate_file is not None else None,
+            development_candidate_sha256=development_candidate_sha256,
+            development_only=development_only, repository=repository)
         report["worker_environment_sha256"] = agent.worker_environment_sha256
         await lease.prepare()
         if lease.workspace_path is not None:

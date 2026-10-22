@@ -1085,6 +1085,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   adapter/owned-native API/CLI 已贯通显式开关，并进入冻结 run 计划；同时核对
   worker 与 runtime 回执，冲突拒绝，缺失旧回执不能认证关闭。请求开启则必须
   有双层一致回执。五组自动映射仍待接入，完整任务内改进环路及五组项不勾选。
+  经验组执行通道增补：owned-native API/CLI 支持单条冻结 candidate，复用
+  adapter/worker activation。要求显式 development 标记、development task split、
+  文件摘要和 repository 身份；身份进入冻结 run，正文不输出到 plan。经验与
+  任务内记忆可独立组合，仍不代表五组协调器、真实效果或完整预算控制已完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

@@ -196,6 +196,29 @@ adapter 同时核对 worker 顶层回执和 trajectory.task_local_policy，冲�
 只能标记 task_local_policy_verified=false，不能证明 frozen executor 隔离成立。
 五组协调器尚未自动映射组设置；传参/回执测试不代表真实五组效果已验收。
 
+## Owned-native 的冻结经验入口
+
+owned-native CLI 可追加以下参数，把单条冻结 context candidate 传给既有
+adapter/worker 激活通道：
+
+```sh
+--development-candidate /absolute/path/candidate.json \
+--development-candidate-sha256 SHA256 \
+--development-only --repository public/docs
+```
+
+Python API 对应 development_candidate_file、development_candidate_sha256、
+development_only 和 repository。候选文件摘要、结构、scope/anti-scope 在
+创建租约前校验；task.split 必须精确为 development。CLI 的 plan-only 同样
+验证候选，但只输出身份摘要，不输出经验正文。候选身份纳入命名 run 的冻结
+计划与执行报告，修改候选或 repository 不能复用原完成记录。
+
+adapter 在上传前再次校验文件摘要，并冻结传输字节；worker 根据真实任务正文
+进行 activation，不因传入候选就强制注入。不开启 task-local-memory 时可用于
+“仅经验”的执行通道，同时开启可用于“完整 Praxile”的组合通道，但完整五组
+调度、共同预算和效果验收仍未完成。此入口不允许持久化经验晋升，也不提供
+held-out candidate 运行路径；不是证明开发/隐藏任务材料隔离的独立沙箱。
+
 这是相对旧版 native worker 的行为变化。旧版 fresh_disabled 仅表示长期经验
 检索关闭，不保证任务内笔记/反思关闭；旧结果不能未经审查直接当作新冻结
 执行器对照。应冻结新 worker wheel/代码摘要并重新运行所需对照，不能追改

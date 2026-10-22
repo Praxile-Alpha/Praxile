@@ -26,6 +26,66 @@ def setup_args(tmp_path):
         "--model", "fixture", "--base-url", "https://provider.invalid/v1"]
 
 
+def candidate_args(tmp_path):
+    from praxile.eval.v2.candidate import ContextCandidate
+    candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture",
+        candidate_type="context_policy", context_item={"content": "PRIVATE_CANDIDATE_CONTENT"},
+        confidence=0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "fixture"},
+        applies_to={"repositories": ["public/docs"], "task_signals": ["checklist"],
+                    "does_not_apply_when": ["unrelated task"]})
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(candidate.to_dict()))
+    return ["--development-candidate", str(path), "--development-candidate-sha256",
+            hashlib.sha256(path.read_bytes()).hexdigest(), "--development-only", "--repository", "public/docs"]
+
+
+def test_candidate_plan_and_execute_do_not_print_content(tmp_path, monkeypatch, capsys):
+    from praxile.eval import owned_native_run
+    args = setup_args(tmp_path) + candidate_args(tmp_path)
+    assert main(args) == 0
+    output = capsys.readouterr().out
+    assert "PRIVATE_" not in output
+    plan = json.loads(output.splitlines()[0])
+    assert plan["development_context_identity"]["repository"] == "public/docs"
+    assert plan["development_context_identity"]["promotion_eligible"] is False
+    async def run(task, **kwargs):
+        assert kwargs["development_candidate_file"] == tmp_path / "candidate.json"
+        assert kwargs["development_candidate_sha256"] == plan["development_context_identity"]["source_file_sha256"]
+        assert kwargs["development_only"] is True
+        assert kwargs["repository"] == "public/docs"
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps({"cleanup_verified": True, "required_outputs_collected": True}))
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main([*args, "--execute"]) == 0
+
+
+@pytest.mark.parametrize("defect", ["heldout", "no_opt_in", "changed", "no_digest", "orphan_flags"])
+def test_candidate_preflight_rejects_before_resources(tmp_path, monkeypatch, defect):
+    from praxile.eval import owned_native_run
+    args = setup_args(tmp_path) + candidate_args(tmp_path)
+    if defect == "heldout":
+        path = tmp_path / "task.json"
+        task = json.loads(path.read_text())
+        task["split"] = "test"
+        path.write_text(json.dumps(task))
+    elif defect == "no_opt_in":
+        args.remove("--development-only")
+    elif defect == "changed":
+        (tmp_path / "candidate.json").write_text("{}")
+    elif defect == "no_digest":
+        index = args.index("--development-candidate-sha256")
+        del args[index:index + 2]
+    else:
+        index = args.index("--development-candidate")
+        del args[index:index + 4]
+    def forbidden(*args, **kwargs):
+        raise AssertionError("must reject before execution")
+    monkeypatch.setattr(owned_native_run, "run_owned_native", forbidden)
+    assert main([*args, "--execute"]) == 2
+    assert not (tmp_path / "runs").exists()
+
+
 def test_plan_does_not_run_or_print_private_fields(tmp_path, monkeypatch, capsys):
     from praxile.eval import owned_native_run
     def forbidden(*args, **kwargs):

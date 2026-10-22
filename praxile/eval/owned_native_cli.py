@@ -47,6 +47,10 @@ def main(argv=None):
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--task-local-memory", action="store_true",
                         help="Explicitly enable task-local notes and reflection; changes frozen run conditions")
+    parser.add_argument("--development-candidate", type=Path)
+    parser.add_argument("--development-candidate-sha256")
+    parser.add_argument("--development-only", action="store_true")
+    parser.add_argument("--repository", help="Explicit candidate activation repository identity")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
     parser.add_argument("--run-id", help="Exclusive durable identity; reuse requires --resume")
@@ -70,6 +74,9 @@ def main(argv=None):
                     or quota["remaining_calls"] < 1 or quota["remaining_output"] < 1):
                 raise ValueError("shared budget is unavailable")
         task = load_task(args.task)
+        from .native_context import owned_candidate_identity
+        candidate_identity = owned_candidate_identity(task, args.development_candidate,
+            args.development_candidate_sha256, args.repository, development_only=args.development_only)
         if task.environment.kind != "harbor" or not re.fullmatch(
                 r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision):
             raise ValueError("task requires digest-pinned Harbor image")
@@ -98,6 +105,8 @@ def main(argv=None):
                 "task_local_memory_enabled": args.task_local_memory,
                 "official_evaluation": "not_run"}
         plan["worker_requirements"] = identity(dependencies, capabilities)
+        if candidate_identity is not None:
+            plan["development_context_identity"] = candidate_identity
         if shared_budget is not None:
             plan["shared_chat_budget"] = quota
         print(json.dumps(plan, ensure_ascii=False))
@@ -111,7 +120,10 @@ def main(argv=None):
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
             run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace,
             dependency_wheels=dependencies, required_capabilities=capabilities,
-            shared_chat_budget=shared_budget, task_local_memory_enabled=args.task_local_memory))
+            shared_chat_budget=shared_budget, task_local_memory_enabled=args.task_local_memory,
+            development_candidate_file=args.development_candidate,
+            development_candidate_sha256=args.development_candidate_sha256,
+            development_only=args.development_only, repository=args.repository))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")

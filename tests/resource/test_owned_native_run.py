@@ -28,7 +28,8 @@ def test_shared_budget_preflight_rejects_bypass_and_resume(tmp_path, invalid):
 
 @pytest.mark.parametrize("missing_receipt", [False, True])
 @pytest.mark.parametrize("memory_enabled", [False, True])
-def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt, memory_enabled):
+@pytest.mark.parametrize("with_candidate", [False, True])
+def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt, memory_enabled, with_candidate):
     from types import SimpleNamespace
     import praxile.eval.owned_native_run as module
     from praxile.adapters import harbor_native
@@ -36,6 +37,19 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     from praxile.utils import write_json
     budget = SharedChatBudget(max_calls=2, output_budget=100, ttl_seconds=10)
     seen = []
+    candidate_kwargs = {}
+    if with_candidate:
+        from praxile.eval.v2.candidate import ContextCandidate
+        candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture",
+            candidate_type="context_policy", context_item={"content": "Inspect before finishing."},
+            confidence=0, evidence_refs=("event:fixture",), expected_effect={"hypothesis": "fixture"},
+            applies_to={"repositories": ["public/docs"], "task_signals": ["checklist"],
+                        "does_not_apply_when": ["unrelated task"]})
+        path = tmp_path / "candidate.json"
+        path.write_text(json.dumps(candidate.to_dict()))
+        candidate_kwargs = {"development_candidate_file": path,
+            "development_candidate_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "development_only": True, "repository": "public/docs"}
     lease_root = tmp_path / ("harbor-lease-" + "a" * 32)
     class Lease:
         def __init__(self, *args, **kwargs):
@@ -48,6 +62,13 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         async def run_adapter(self, agent, instruction, context):
             assert seen[-1]["shared_chat_budget"] is budget
             assert seen[-1]["task_local_memory_enabled"] is memory_enabled
+            if with_candidate:
+                assert seen[-1]["development_candidate_file"] == str(candidate_kwargs["development_candidate_file"])
+                assert seen[-1]["development_candidate_sha256"] == candidate_kwargs["development_candidate_sha256"]
+                assert seen[-1]["development_only"] is True
+                assert seen[-1]["repository"] == "public/docs"
+            else:
+                assert seen[-1]["development_candidate_file"] is None
             budget.reserve("executor", 10)
             write_json(self.root / "agent/praxile-result.json", {"fixture": True})
             if not missing_receipt:
@@ -67,7 +88,7 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     call = run_owned_native(task, state_root=tmp_path, image=image, wheel=tmp_path / "fixture.whl",
         wheel_sha256="a" * 64, model="fixture", base_url="https://provider.invalid/v1",
         credential_file=tmp_path / "key", shared_chat_budget=budget, run_id="shared-fixture",
-        task_local_memory_enabled=memory_enabled)
+        task_local_memory_enabled=memory_enabled, **candidate_kwargs)
     if missing_receipt:
         with pytest.raises(ValueError, match="broker usage receipt"):
             asyncio.run(call)
@@ -75,6 +96,12 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         asyncio.run(call)
     report = json.loads((lease_root / "execution.json").read_text())
     assert report["task_local_memory_enabled"] is memory_enabled
+    if with_candidate:
+        loaded_candidate = ContextCandidate.from_dict(json.loads(path.read_text()))
+        assert report["development_context_identity"]["candidate_digest"] == loaded_candidate.digest
+        assert "Inspect before finishing" not in json.dumps(report)
+    else:
+        assert "development_context_identity" not in report
     assert report["shared_chat_budget_start"]["remaining_calls"] == 2
     assert report["shared_chat_budget_end"]["remaining_calls"] == 1
     assert report["cleanup_verified"] is True
