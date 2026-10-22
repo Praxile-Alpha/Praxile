@@ -37,6 +37,32 @@ def test_plan_does_not_run_or_print_private_fields(tmp_path, monkeypatch, capsys
     assert not (tmp_path / "runs").exists()
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_task_local_policy_plan_and_execution(tmp_path, monkeypatch, capsys, enabled):
+    from praxile.eval import owned_native_run
+    args = setup_args(tmp_path) + (["--task-local-memory"] if enabled else [])
+    assert main(args) == 0
+    plan = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert plan["task_local_memory_enabled"] is enabled
+    async def run(task, **kwargs):
+        assert kwargs["task_local_memory_enabled"] is enabled
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps({"cleanup_verified": True, "required_outputs_collected": True}))
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main([*args, "--execute"]) == 0
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "false", {}])
+def test_task_local_policy_api_rejects_non_boolean_before_resources(tmp_path, value):
+    import asyncio
+    from praxile.eval.owned_native_run import run_owned_native
+    with pytest.raises(ValueError, match="must be boolean"):
+        asyncio.run(run_owned_native(None, state_root=tmp_path, image="unused", wheel=tmp_path / "none",
+            wheel_sha256="a" * 64, model="fixture", base_url="unused", task_local_memory_enabled=value))
+    assert not list(tmp_path.iterdir())
+
+
 def test_worker_requirements_plan_and_execution(tmp_path, monkeypatch, capsys):
     from praxile.eval import owned_native_run
     dependency = tmp_path / "dep-1-py3-none-any.whl"

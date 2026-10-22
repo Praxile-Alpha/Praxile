@@ -27,7 +27,8 @@ def test_shared_budget_preflight_rejects_bypass_and_resume(tmp_path, invalid):
 
 
 @pytest.mark.parametrize("missing_receipt", [False, True])
-def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt):
+@pytest.mark.parametrize("memory_enabled", [False, True])
+def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt, memory_enabled):
     from types import SimpleNamespace
     import praxile.eval.owned_native_run as module
     from praxile.adapters import harbor_native
@@ -46,6 +47,7 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
             pass
         async def run_adapter(self, agent, instruction, context):
             assert seen[-1]["shared_chat_budget"] is budget
+            assert seen[-1]["task_local_memory_enabled"] is memory_enabled
             budget.reserve("executor", 10)
             write_json(self.root / "agent/praxile-result.json", {"fixture": True})
             if not missing_receipt:
@@ -64,13 +66,15 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         evaluator=EvaluatorReference("private", "1", "private", "sha256:" + "f" * 64))
     call = run_owned_native(task, state_root=tmp_path, image=image, wheel=tmp_path / "fixture.whl",
         wheel_sha256="a" * 64, model="fixture", base_url="https://provider.invalid/v1",
-        credential_file=tmp_path / "key", shared_chat_budget=budget, run_id="shared-fixture")
+        credential_file=tmp_path / "key", shared_chat_budget=budget, run_id="shared-fixture",
+        task_local_memory_enabled=memory_enabled)
     if missing_receipt:
         with pytest.raises(ValueError, match="broker usage receipt"):
             asyncio.run(call)
     else:
         asyncio.run(call)
     report = json.loads((lease_root / "execution.json").read_text())
+    assert report["task_local_memory_enabled"] is memory_enabled
     assert report["shared_chat_budget_start"]["remaining_calls"] == 2
     assert report["shared_chat_budget_end"]["remaining_calls"] == 1
     assert report["cleanup_verified"] is True

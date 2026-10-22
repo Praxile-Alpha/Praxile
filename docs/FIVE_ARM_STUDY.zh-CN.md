@@ -187,8 +187,14 @@ subtask_reflect 被拒绝，不注入 task_notes，也不调用反思模型；su
 普通项目默认仍开启。新的 native benchmark worker 默认关闭，可通过 worker
 CLI 的 --task-local-memory 或 Python run_native 的 task_local_memory_enabled=True
 显式开启；反思角色使用同一 benchmark provider/model，以便经过同一 broker。
-结果保存 task_local_memory_enabled。当前 native adapter 的远程命令尚未暴露
-该开关，五组协调器也尚未自动映射组设置。
+结果保存 task_local_memory_enabled。native adapter 和 owned-native Python API
+现在显式接受同名布尔参数；owned-native CLI 使用 --task-local-memory 开启，
+默认关闭。该值进入远程 worker 命令、执行报告及命名 run 的冻结计划；旧计划
+缺少此条件时不能直接作为新计划 resume，应创建新 run，不能回填历史证据。
+adapter 同时核对 worker 顶层回执和 trajectory.task_local_policy，冲突或非法
+类型拒绝。请求开启而缺少任一回执也拒绝；默认关闭时兼容旧 worker，但缺字段
+只能标记 task_local_policy_verified=false，不能证明 frozen executor 隔离成立。
+五组协调器尚未自动映射组设置；传参/回执测试不代表真实五组效果已验收。
 
 这是相对旧版 native worker 的行为变化。旧版 fresh_disabled 仅表示长期经验
 检索关闭，不保证任务内笔记/反思关闭；旧结果不能未经审查直接当作新冻结

@@ -114,7 +114,8 @@ def test_broker_cleanup_survives_repeated_cancellation(tmp_path, monkeypatch):
     asyncio.run(exercise())
 
 
-def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch):
+@pytest.mark.parametrize("memory_enabled", [False, True])
+def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch, memory_enabled):
     import shlex
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -123,7 +124,8 @@ def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch)
     options = {"reasoning_effort": "low"}
     agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
         wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
-        base_url="http://localhost/v1", model_name="fixture", model_request_options=options)
+        base_url="http://localhost/v1", model_name="fixture", model_request_options=options,
+        task_local_memory_enabled=memory_enabled)
     options["reasoning_effort"] = "max"
     commands = []
     class Environment:
@@ -140,8 +142,10 @@ def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch)
     monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
     asyncio.run(agent.run("synthetic task", Environment(), AgentContext()))
     argv = commands[0]
+    assert ("--task-local-memory" in argv) is memory_enabled
     assert json.loads(argv[argv.index("--model-request-options-json") + 1]) == {"reasoning_effort": "low"}
     record = json.loads((tmp_path / "praxile-execution.json").read_text())
+    assert record["task_local_memory_enabled"] is memory_enabled
     assert record["model_request_options"] == {"reasoning_effort": "low"}
     with pytest.raises(ValueError, match="request options differ"):
         asyncio.run(PraxileAgent._collect_result(agent, Environment(), AgentContext()))
@@ -477,6 +481,36 @@ def test_native_pair_configs_validate_with_installed_harbor(tmp_path):
     assert set(configs) == {"baseline", "candidate"}
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("defect", [None, "missing", "opposite", "null", "integer", "malformed"])
+def test_task_local_policy_receipt(tmp_path, enabled, defect):
+    wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
+    wheel.write_bytes(b"fixture")
+    agent = PraxileAgent(logs_dir=tmp_path, wheel_path=str(wheel), workspace="/workspace",
+        wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        base_url="http://localhost/v1", model_name="fixture", task_local_memory_enabled=enabled)
+    report = {"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
+              "task_local_memory_enabled": enabled,
+              "trajectory": {"task_local_policy": {"memory_enabled": enabled}}}
+    if defect == "missing":
+        report.pop("task_local_memory_enabled")
+        report["trajectory"].clear()
+    elif defect == "malformed":
+        report["trajectory"]["task_local_policy"] = None
+    elif defect:
+        report["trajectory"]["task_local_policy"]["memory_enabled"] = {
+            "opposite": not enabled, "null": None, "integer": int(enabled)}[defect]
+    (tmp_path / "praxile-result.json").write_text(json.dumps(report))
+    context = AgentContext()
+    if defect and not (defect == "missing" and not enabled):
+        with pytest.raises(ValueError, match="task-local memory policy"):
+            agent.populate_context_post_run(context)
+    else:
+        agent.populate_context_post_run(context)
+        assert context.metadata["praxile"]["task_local_policy_verified"] is (defect is None)
+        assert context.metadata["praxile"]["task_local_memory_requested"] is enabled
+
+
 def test_harbor_agent_usage_and_integrity(tmp_path):
     wheel = tmp_path / "praxile-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"fixture")
@@ -499,6 +533,7 @@ def test_harbor_agent_usage_and_integrity(tmp_path):
     (tmp_path / "praxile-result.json").write_text(json.dumps(report))
     context = AgentContext()
     agent.populate_context_post_run(context)
+    assert context.metadata["praxile"]["task_local_policy_verified"] is False
     assert context.n_input_tokens is None
     assert context.cost_usd is None
     report["trajectory"]["model_routing"]["calls"].pop()

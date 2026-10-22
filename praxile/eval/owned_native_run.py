@@ -24,7 +24,9 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            persist_workspace: bool = False,
                            dependency_wheels: list[dict] | None = None,
                            required_capabilities: list[str] | None = None,
-                           shared_chat_budget=None):
+                           shared_chat_budget=None, task_local_memory_enabled: bool = False):
+    if type(task_local_memory_enabled) is not bool:
+        raise ValueError("task_local_memory_enabled must be boolean")
     from .credential_broker import SharedChatBudget
     if shared_chat_budget is not None:
         if not isinstance(shared_chat_budget, SharedChatBudget) or credential_file is None:
@@ -55,6 +57,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             "model": model, "endpoint_sha256": hashlib.sha256(base_url.encode()).hexdigest(),
             "max_steps": max_steps, "timeout_seconds": timeout_seconds,
             "credential_broker": credential_file is not None}
+        plan["task_local_memory_enabled"] = task_local_memory_enabled
         if persist_workspace:
             plan["persist_workspace"] = True
         if dependencies or capabilities:
@@ -83,6 +86,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "public_inputs": lease.public_inputs, "status": "preparing",
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
+    report["task_local_memory_enabled"] = task_local_memory_enabled
     report["worker_requirements"] = requirements
     if shared_start is not None:
         report["shared_chat_budget_start"] = shared_start
@@ -100,7 +104,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
             credential_file=str(credential_file) if credential_file else None,
             dependency_wheels=dependencies, required_capabilities=capabilities,
-            shared_chat_budget=shared_chat_budget)
+            shared_chat_budget=shared_chat_budget, task_local_memory_enabled=task_local_memory_enabled)
         report["worker_environment_sha256"] = agent.worker_environment_sha256
         await lease.prepare()
         if lease.workspace_path is not None:

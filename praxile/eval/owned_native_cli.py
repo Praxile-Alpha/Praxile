@@ -45,6 +45,8 @@ def main(argv=None):
     parser.add_argument("--require-capability", action="append", default=[],
                         help="Versioned worker capability checked before model execution")
     parser.add_argument("--max-steps", type=int, default=50)
+    parser.add_argument("--task-local-memory", action="store_true",
+                        help="Explicitly enable task-local notes and reflection; changes frozen run conditions")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--execute", action="store_true", help="Start Docker and potentially billable model calls")
     parser.add_argument("--run-id", help="Exclusive durable identity; reuse requires --resume")
@@ -93,6 +95,7 @@ def main(argv=None):
                 "timeout_seconds": args.timeout, "execute": args.execute,
                 "run_id": args.run_id, "resume": args.resume,
                 "persist_workspace": args.persist_workspace,
+                "task_local_memory_enabled": args.task_local_memory,
                 "official_evaluation": "not_run"}
         plan["worker_requirements"] = identity(dependencies, capabilities)
         if shared_budget is not None:
@@ -108,7 +111,7 @@ def main(argv=None):
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
             run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace,
             dependency_wheels=dependencies, required_capabilities=capabilities,
-            shared_chat_budget=shared_budget))
+            shared_chat_budget=shared_budget, task_local_memory_enabled=args.task_local_memory))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")

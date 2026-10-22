@@ -33,6 +33,7 @@ class PraxileAgent(BaseAgent):
                  required_capabilities: list[str] | None = None,
                  model_request_options: dict | None = None,
                  shared_chat_budget=None,
+                 task_local_memory_enabled: bool = False,
                  development_candidate_file: str | None = None,
                  development_candidate_sha256: str | None = None,
                  development_only: bool = False, repository: str | None = None, **kwargs):
@@ -43,6 +44,9 @@ class PraxileAgent(BaseAgent):
             if not credential_file:
                 raise ValueError("shared chat budget requires a credential broker")
         self._shared_chat_budget = shared_chat_budget
+        if type(task_local_memory_enabled) is not bool:
+            raise ValueError("task_local_memory_enabled must be boolean")
+        self.task_local_memory_enabled = task_local_memory_enabled
         from ..model_options import validate_request_options
         self.model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
         from ..eval.worker_requirements import validate_requirements
@@ -300,6 +304,8 @@ class PraxileAgent(BaseAgent):
             argv.extend(["--capability-file", capability_file])
         if self.model_request_options:
             argv.extend(["--model-request-options-json", json.dumps(self.model_request_options, sort_keys=True)])
+        if self.task_local_memory_enabled:
+            argv.append("--task-local-memory")
         if self.task_body_file:
             argv.extend(["--task-body-file", self.task_body_file, "--task-body-sha256", self.task_body_sha256])
         if self.output_directory is not None:
@@ -324,6 +330,7 @@ class PraxileAgent(BaseAgent):
                   "renderer_executable": self.renderer_executable,
                   "public_contract_sha256": self.public_contract_sha256,
                   "model_timeout_seconds": self.model_timeout_seconds}
+        record["task_local_memory_enabled"] = self.task_local_memory_enabled
         if self.model_request_options:
             record["model_request_options"] = self.model_request_options
         if self.development_context_identity is not None:
@@ -455,6 +462,19 @@ class PraxileAgent(BaseAgent):
         if result.get("schema_version") != "praxile.native_benchmark_run.v1":
             raise ValueError("unsupported native worker result")
         trajectory = result["trajectory"]
+        if not isinstance(trajectory, dict):
+            raise ValueError("invalid native trajectory")
+        policy = trajectory.get("task_local_policy", {})
+        if not isinstance(policy, dict):
+            raise ValueError("invalid native task-local memory policy")
+        reported_policy = result.get("task_local_memory_enabled")
+        runtime_policy = policy.get("memory_enabled")
+        policy_verified = (type(reported_policy) is bool and type(runtime_policy) is bool
+                           and reported_policy is runtime_policy is self.task_local_memory_enabled)
+        if (("task_local_memory_enabled" in result and reported_policy is not self.task_local_memory_enabled)
+                or ("memory_enabled" in policy and runtime_policy is not self.task_local_memory_enabled)
+                or (self.task_local_memory_enabled and not policy_verified)):
+            raise ValueError("native task-local memory policy mismatch or missing evidence")
         routing = trajectory.get("model_routing")
         calls = routing.get("calls") if isinstance(routing, dict) else None
         records_valid = isinstance(calls, list)
@@ -479,6 +499,9 @@ class PraxileAgent(BaseAgent):
             "result": trajectory.get("result"), "official_evaluation": "external",
             "experience_mode": result["experience_mode"],
             "usage_evidence": evidence,
+            "task_local_memory_requested": self.task_local_memory_enabled,
+            "task_local_memory_reported": reported_policy,
+            "task_local_policy_verified": policy_verified,
         }}
         if self.development_context_identity is not None:
             context.metadata["praxile"]["development_context_identity"] = self.development_context_identity
