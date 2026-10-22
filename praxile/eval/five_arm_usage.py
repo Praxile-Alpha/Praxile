@@ -25,8 +25,9 @@ def executor_receipts(directory, cell, *, conditions=None, task=None):
             raise ValueError("cost execution receipt changed")
         report = _json(raw)
         if conditions is not None:
-            from .five_arm_conditions import check_attempt_conditions
+            from .five_arm_conditions import check_attempt_conditions, check_attempt_mechanisms
             check_attempt_conditions(report, conditions, task)
+            check_attempt_mechanisms(report, cell)
         digest = report.get("broker_usage_sha256")
         if digest is None:
             result.append(("executor", None))

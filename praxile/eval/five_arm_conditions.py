@@ -44,3 +44,23 @@ def check_attempt_conditions(report, conditions, task):
             or report.get("task_id") != task.task_id or report.get("task_fingerprint") != task.fingerprint
             or report.get("image") != task.environment.revision):
         raise ValueError("attempt differs from study executor conditions")
+
+
+def check_cell_mechanisms(cell, candidate_identity):
+    scheduled = cell["cell"]
+    if any(type(scheduled.get(key)) is not bool for key in ("experience_enabled", "task_local_enabled")):
+        raise ValueError("mechanism switches must be explicit booleans")
+    expected = candidate_identity if scheduled["experience_enabled"] else None
+    if "candidate_identity" not in cell or canonical_json(cell["candidate_identity"]) != canonical_json(expected):
+        raise ValueError("cell candidate differs from scheduled mechanism")
+
+
+def check_attempt_mechanisms(report, cell):
+    scheduled = cell["cell"]
+    if report.get("task_local_memory_enabled") is not scheduled["task_local_enabled"]:
+        raise ValueError("attempt task-local mechanism differs from scheduled arm")
+    if scheduled["experience_enabled"]:
+        if canonical_json(report.get("development_context_identity")) != canonical_json(cell["candidate_identity"]):
+            raise ValueError("attempt candidate differs from scheduled mechanism")
+    elif "development_context_identity" in report:
+        raise ValueError("disabled experience arm contains candidate identity")

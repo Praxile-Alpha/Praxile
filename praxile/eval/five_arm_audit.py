@@ -11,7 +11,7 @@ from .content_review_compare import _checked
 from .content_review_batch import plan_content_review_batch
 from .v2.schema import canonical_json
 from .five_arm_usage import executor_receipts, summarize_receipts
-from .five_arm_conditions import validate_conditions, check_cell_conditions
+from .five_arm_conditions import validate_conditions, check_cell_conditions, check_cell_mechanisms
 from .five_arm_cost_analysis import compare_usage
 
 
@@ -32,6 +32,10 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
         raise ValueError("study task identity mismatch")
     identity = study.get("judge_identity")
     conditions = validate_conditions(study.get("executor_conditions"))
+    candidates = study.get("candidate_identities")
+    if (not isinstance(candidates, dict) or set(candidates) != set(tasks)
+            or any(not isinstance(value, dict) or not value for value in candidates.values())):
+        raise ValueError("study candidate identities missing")
     if (not isinstance(identity, dict) or "sha256:" + _sha(canonical_json(identity).encode())
             != plan["spec"]["identities"]["judge"]):
         raise ValueError("study lacks matching frozen judge identity")
@@ -61,6 +65,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
                 raise ValueError("cost cell belongs to another plan")
             task = tasks[expected["task_id"]]
             check_cell_conditions(cell, conditions, task)
+            check_cell_mechanisms(cell, candidates[expected["task_id"]])
             usage_receipts.extend(executor_receipts(root / "cells" / str(index), cell,
                                                    conditions=conditions, task=task))
         else:
@@ -116,6 +121,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
     analysis.update(metric="llm_declared_requirement_preservation", official_evaluation=False,
         local_file_consistency_checked=True, semantic_accuracy_verified=False, source_study_sha256=study_sha256,
         executor_conditions=conditions, recorded_executor_conditions_checked=True,
+        recorded_mechanism_configuration_checked=True,
         cell_reviews=rows, checked_review_cells=len(records),
         all_scheduled_review_evidence_checked=len(records) == len(schedule))
     analysis["broker_usage"] = summarize_receipts([receipt for receipts in cell_receipts.values() for receipt in receipts])

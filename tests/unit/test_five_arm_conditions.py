@@ -4,7 +4,9 @@ import pytest
 
 from praxile.eval.five_arm_conditions import (
     executor_conditions, validate_conditions, check_cell_conditions, check_attempt_conditions,
+    check_cell_mechanisms, check_attempt_mechanisms,
 )
+from praxile.eval.five_arm_plan import ARMS
 from test_five_arm_execution import setup
 
 
@@ -47,3 +49,38 @@ def test_old_or_invalid_study_identity_is_not_inferred(tmp_path, defect):
         value["max_steps"] = True
     with pytest.raises(ValueError):
         validate_conditions(value)
+
+
+@pytest.mark.parametrize("arm", ARMS)
+@pytest.mark.parametrize("defect", [None, "memory", "missing_memory", "numeric_memory", "candidate", "cell_candidate"])
+def test_each_arm_has_only_its_scheduled_mechanisms(tmp_path, arm, defect):
+    _, scheduled, _, _ = setup(tmp_path, arm)
+    identity = {"candidate_digest": "sha256:" + "a" * 64}
+    cell = {"cell": scheduled, "candidate_identity": identity if scheduled["experience_enabled"] else None}
+    report = {"task_local_memory_enabled": scheduled["task_local_enabled"]}
+    if scheduled["experience_enabled"]:
+        report["development_context_identity"] = identity
+    if defect == "memory":
+        report["task_local_memory_enabled"] = not scheduled["task_local_enabled"]
+    elif defect == "missing_memory":
+        report.pop("task_local_memory_enabled")
+    elif defect == "numeric_memory":
+        report["task_local_memory_enabled"] = int(scheduled["task_local_enabled"])
+    elif defect == "candidate":
+        report["development_context_identity"] = {"candidate_digest": "sha256:" + "b" * 64}
+    elif defect == "cell_candidate":
+        cell["candidate_identity"] = {"candidate_digest": "sha256:" + "b" * 64}
+    if defect is None:
+        check_cell_mechanisms(cell, identity)
+        check_attempt_mechanisms(report, cell)
+    else:
+        with pytest.raises(ValueError):
+            check_cell_mechanisms(cell, identity)
+            check_attempt_mechanisms(report, cell)
+
+
+def test_cell_cannot_replace_boolean_switches_with_numbers(tmp_path):
+    _, scheduled, _, _ = setup(tmp_path, "frozen_executor")
+    scheduled["experience_enabled"] = 0
+    with pytest.raises(ValueError):
+        check_cell_mechanisms({"cell": scheduled, "candidate_identity": None}, {"candidate_digest": "fixture"})

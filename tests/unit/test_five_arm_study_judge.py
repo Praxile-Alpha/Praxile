@@ -75,6 +75,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
             "reported_calls": {"input": 1, "output": 1}, "total_tokens": {"input": 10, "output": 5}}}).encode()
         (root / "agent/praxile-broker-usage.json").write_bytes(broker_receipt)
         report = {"schema_version": "praxile.owned_native_execution.v1", "task_id": task.task_id,
+            "task_local_memory_enabled": options["task_local_memory_enabled"],
             "model": options["model"], "wheel_sha256": options["wheel_sha256"],
             "endpoint_sha256": sha(options["base_url"].encode()), "max_steps": options["max_steps"],
             "model_request_options": options["model_request_options"],
@@ -84,6 +85,11 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
             "source_result_sha256": sha(trajectory), "broker_usage_sha256": sha(broker_receipt),
             "outputs": [{"path": "result.txt", "required": True,
                 "status": "collected", "sha256": sha(source), "bytes": len(source)}]}
+        if options.get("development_candidate_file") is not None:
+            from praxile.eval.native_context import owned_candidate_identity
+            report["development_context_identity"] = owned_candidate_identity(task,
+                options["development_candidate_file"], options["development_candidate_sha256"],
+                options["repository"], development_only=True)
         path = root / "execution.json"
         path.write_text(json.dumps(report))
         return path
@@ -120,6 +126,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert analysis["metric"] == "llm_declared_requirement_preservation"
     assert analysis["promotion_eligible"] is False
     assert analysis["recorded_executor_conditions_checked"] is True
+    assert analysis["recorded_mechanism_configuration_checked"] is True
     assert analysis["broker_usage"]["total_tokens"] == {"input": 80, "output": 40}
     assert analysis["broker_usage"]["roles"]["executor"]["admitted_calls"] == 6
     assert analysis["broker_usage"]["roles"]["judge"]["admitted_calls"] == 5
@@ -137,6 +144,15 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert main(["--study", str(path.parent), "--study-sha256", sha(original_study),
         "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"])]) == (0 if verdict == "preserved" else 1)
     calls_before = list(calls)
+    # A declared candidate change cannot silently relabel the experience arms.
+    changed_identity = json.loads(original_study)
+    changed_identity["candidate_identities"]["task"]["source_file_sha256"] = "b" * 64
+    path.write_text(json.dumps(changed_identity))
+    try:
+        with pytest.raises(ValueError, match="cell candidate differs"):
+            audit_study(plan, {"task": task}, **{**audit_args, "study_sha256": sha(path.read_bytes())})
+    finally:
+        path.write_bytes(original_study)
     # Even a rehashed, unselected attempt must retain the common executor settings.
     attempt_path = path.parent / "cells/1/attempt-1/lease/execution.json"
     cell_path = path.parent / "cells/1/cell.json"

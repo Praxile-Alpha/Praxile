@@ -92,6 +92,14 @@ recorded_executor_conditions_checked 仅说明已绑定记录的局部一致性�
 仍为 unknown，不认证模型权重、请求实际处理方式、worker 依赖或完整来源身份。
 调用方仍须保存可信 study 摘要；同时改写整套证据及摘要不在此检查的防御范围。
 
+机制配置核验：audit 按冻结 schedule 验证 candidate_identity 及每次已返回执行的
+task_local_memory_enabled/development_context_identity。冻结组、重复组、仅任务内
+组不得携带候选；经验组与完整组必须使用 study 中该任务的同一候选身份。
+记忆开关须为严格布尔值，缺字段、整数冒充布尔值或与组定义不符都拒绝。
+recorded_mechanism_configuration_checked 不等于机制产生收益：候选通过通道后仍
+可能被 activation gate 弃权，模型也可能没有调用任务内工具。该检查不验证实际
+激活次数、任务内改进质量或后端执行，旧缺证据记录不能当作已验证消融对照。
+
 统计量明确为 llm_declared_requirement_preservation：已声明要求中被 judge 判为
 preserved 的比例，不是 resolved rate 或官方成功率。共用既有 task-cluster
 分析，记录已检查 cell 数和证据覆盖，重复运行不充当独立任务。引用和输入
