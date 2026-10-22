@@ -22,11 +22,12 @@ def settings(tmp_path, max_calls=3):
             {"id": "b", "requirement": "Keep instruction", "source_quote": "Keep"}]})
 
 
-@pytest.mark.parametrize("exhausted", [False, True])
-def test_real_review_pipeline_shares_executor_quota_and_retains_evidence(tmp_path, monkeypatch, exhausted):
+@pytest.mark.parametrize("exhausted,cancelled", [(False, False), (True, False), (False, True)])
+def test_real_review_pipeline_shares_executor_quota_and_retains_evidence(tmp_path, monkeypatch, exhausted, cancelled):
     kwargs = settings(tmp_path, max_calls=2 if exhausted else 3)
     forwarded = []
     brokers = []
+    kwargs["cancel_requested"] = lambda: cancelled and bool(forwarded)
     def forward(self, raw):
         brokers.append(self)
         body = json.loads(raw)
@@ -40,13 +41,13 @@ def test_real_review_pipeline_shares_executor_quota_and_retains_evidence(tmp_pat
     monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
     path = run_broker_content_review(**kwargs)
     report = json.loads(path.read_text())
-    assert report["status"] == ("abstained" if exhausted else "reviewed")
-    count = 1 if exhausted else 2
+    assert report["status"] == ("abstained" if exhausted or cancelled else "reviewed")
+    count = 1 if exhausted or cancelled else 2
     assert len(forwarded) == count
     quota = kwargs["shared_budget"].status()
     assert quota["roles"]["executor"]["reserved_calls"] == 1
     assert quota["roles"]["judge"] == {"reserved_calls": count, "reserved_output": count * 100}
-    assert quota["remaining_calls"] == 0
+    assert quota["remaining_calls"] == (1 if cancelled else 0)
     manifest = json.loads((path.parent / "manifest.json").read_text())
     assert len(manifest["contract_sha256"]) == 2
     assert manifest["shared_budget_start"]["roles"] == {"executor": {"reserved_calls": 1, "reserved_output": 100}}

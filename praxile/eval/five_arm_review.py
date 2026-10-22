@@ -67,7 +67,7 @@ def prepare_selected_cell_review(plan, cell_id, task, *, cell_directory, cell_sh
 def review_selected_cell(plan, cell_id, task, *, cell_directory, cell_sha256, evaluator_root,
                          source_path, output_path, directory, credential_file, endpoint, model,
                          total_output_tokens, public=False, batch_size=4, timeout_per_call=90,
-                         request_options=None, source_format="text", output_format="text"):
+                         request_options=None, source_format="text", output_format="text", cancel_requested=None):
     from .broker_content_review import run_broker_content_review
     from .persistent_chat_budget import PersistentChatBudget
     if public is not True:
@@ -81,4 +81,4 @@ def review_selected_cell(plan, cell_id, task, *, cell_directory, cell_sha256, ev
     return run_broker_content_review(directory=directory, inputs=inputs, credential_file=credential_file,
         endpoint=endpoint, model=model, shared_budget=quota, total_output_tokens=total_output_tokens,
         public=True, batch_size=batch_size, timeout_per_call=timeout_per_call, request_options=request_options,
-        execution_binding=binding, selection_binding=selection)
+        execution_binding=binding, selection_binding=selection, cancel_requested=cancel_requested)

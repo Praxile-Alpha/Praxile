@@ -14,11 +14,13 @@ from ..utils import write_json
 
 
 class _BrokerTransport:
-    def __init__(self, broker):
+    def __init__(self, broker, cancel_requested=None):
         self.broker = broker
+        self.cancel_requested = cancel_requested
 
     def post_json(self, url, *, headers, payload, timeout, cancel_requested=None):
-        if cancel_requested is not None and cancel_requested():
+        if ((cancel_requested is not None and cancel_requested())
+                or (self.cancel_requested is not None and self.cancel_requested())):
             raise ModelUnavailable("judge request cancelled before admission")
         return self.broker.chat("Bearer " + self.broker.capability, payload)
 
@@ -30,10 +32,10 @@ class _BrokerProvider(OpenAICompatibleProvider):
 
 
 class _JudgeRouter:
-    def __init__(self, broker):
+    def __init__(self, broker, cancel_requested=None):
         self.broker = broker
         self.provider = _BrokerProvider("broker_judge", {"base_url": "http://127.0.0.1/v1",
-            "models": [{"name": broker.model, "supports_tools": True}]}, transport=_BrokerTransport(broker))
+            "models": [{"name": broker.model, "supports_tools": True}]}, transport=_BrokerTransport(broker, cancel_requested))
 
     def chat(self, messages, *, purpose, private, high_risk, **options):
         if purpose != "content_review_judge" or private is not False or high_risk is not False:
@@ -47,7 +49,8 @@ class _JudgeRouter:
 
 def run_broker_content_review(*, directory, inputs, credential_file, endpoint, model, shared_budget,
                              total_output_tokens, public=False, batch_size=4, timeout_per_call=90,
-                             request_options=None, execution_binding=None, selection_binding=None):
+                             request_options=None, execution_binding=None, selection_binding=None,
+                             cancel_requested=None):
     """No fallback, transport retry, key in config, automatic replay or promotion.
 
     Caller supplies extracted public text and development requirements, not a
@@ -55,6 +58,8 @@ def run_broker_content_review(*, directory, inputs, credential_file, endpoint, m
     """
     if public is not True or not isinstance(shared_budget, SharedChatBudget):
         raise ValueError("explicit public inputs and shared judge budget required")
+    if cancel_requested is not None and not callable(cancel_requested):
+        raise ValueError("cancellation callback must be callable")
     if not isinstance(inputs, dict) or set(inputs) != {"source_text", "output_text", "requirements"}:
         raise ValueError("invalid review input fields")
     inputs = deepcopy(inputs)
@@ -97,7 +102,7 @@ def run_broker_content_review(*, directory, inputs, credential_file, endpoint, m
         def progress(value):
             write_json(root / "trajectory.json", logger.data)
             write_json(root / "report.json", value)
-        report = review_content_batched(_JudgeRouter(broker), logger, **inputs, **options, progress_checkpoint=progress)
+        report = review_content_batched(_JudgeRouter(broker, cancel_requested), logger, **inputs, **options, progress_checkpoint=progress)
     except BaseException as error:
         batches = logger.data.get("content_review_batches", [])
         report = {**(batches[-1] if batches else report), "status": "interrupted_or_failed",

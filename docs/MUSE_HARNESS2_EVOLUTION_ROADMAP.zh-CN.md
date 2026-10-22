@@ -1116,6 +1116,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   使用原 cell quota，不续期；judge 状态/要求存储必须在 cell 外，只支持开发
   evaluator。fixture 上游端到端及篡改拒绝已测试，研究自动评分和真实质量
   收益仍未完成，不据此勾选 R3 总项。
+  研究内评审编排增补：execute_study 可预注册独立 judge 身份（不含凭据），
+  每 cell 固定选择后调用绑定评审，使用原配额，无交付则跳过；回执绑定
+  judge manifest/输入/轨迹/额度文件摘要。取消阻止后续分组且等待线程收尾，
+  评审异常不覆盖已知执行证据。完整五组 fixture 验证通过，真实模型/环境
+  效果、校准及全成本认证仍未完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

@@ -103,6 +103,31 @@ policy/选中执行报告、产物/trajectory/要求/抽取摘要。它检查本
 该显式入口已通过真实本地文件、SQLite、评审链路的 fixture 上游测试；完整
 研究尚未在每个 cell 结束后自动调度 judge，过期额度会弃权而非自动延长。
 
+## 研究内逐 Cell 开发评审
+
+execute_study 现支持可选 judge 配置，在每个 cell 完成固定 selection 后评审
+选中版本，随后才进入下一 cell。未选出版本记录 not_selected，不挑失败产物
+或调用 judge。评审标签不传回 executor，不改变选择，不触发额外尝试或晋升。
+
+配置必填 credential_file、endpoint（HTTPS chat/completions）、model、public=True、
+total_output_tokens、evaluator_root、artifacts。artifacts 精确映射全部开发任务到
+source_path/output_path，可指定 source_format/output_format。可选 batch_size、
+timeout_per_call、request_options；所有任务沿用同一 judge 模型和预算设置。
+先用 five_arm_judge.judge_identity(judge, tasks) 生成不含凭据/私有目录的身份，
+将 canonical_json 身份 SHA-256（sha256: 前缀）写入计划 identities.judge，再冻结
+计划。调度前核对该摘要和开发要求文件摘要，且要求预注册 terminal_selection。
+该配置绑定不证明供应商别名背后的模型权重或执行二进制身份。
+
+judge 使用 cell 剩余额度和截止时间，不为评审自动预留或续期；executor 消耗
+完预算可能导致评审 abstain。研究级回执保留每份评审报告以及 manifest、输入、
+trajectory、broker-usage 文件摘要。judge 异常保留已知执行回执并停止研究；
+取消会等待同步评审线程收尾，并阻止后续分组请求，已发请求仍可能持续到
+超时。评审目录位于 study/reviews，要求存储必须在整个 study 外。
+
+该链路已通过真实调度/SQLite/抽取绑定/评审逻辑加 fixture 上游的完整五组
+测试，无真实 Docker/云模型验收。输出仍是 development 标签，不是官方成绩，
+不证明完整总 token/费用控制、judge 校准或收益；R3 总项保持未勾选。
+
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成
 manifest 当成五组实验已完成。

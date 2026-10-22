@@ -117,7 +117,7 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
     return report_path
 
 
-async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None):
+async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
     """Execute every development cell in frozen order; stop on uncertain failure.
 
     A separate quota is created per cell. Roles within a cell must share that
@@ -160,6 +160,13 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
             or options["credential_file"] is None):
         raise ValueError("unsupported native study budget or missing credential broker")
     root = Path(directory).absolute()
+    judge = deepcopy(judge)
+    judge_config_identity = None
+    if judge is not None:
+        from .five_arm_judge import validate_study_judge
+        if options.get("terminal_selection") is None:
+            raise ValueError("study judge requires precommitted terminal selection")
+        judge_config_identity = validate_study_judge(judge, tasks, plan, root)
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     write_json(root / "plan.json", plan)
     report_path = root / "study.json"
@@ -170,6 +177,8 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
         "terminal_selection_policy": options.get("terminal_selection"),
         "controlled_execution_verified": False, "provenance_verified": False,
         "selection_performed": False, "official_evaluation": "not_run"}
+    if judge_config_identity is not None:
+        report["judge_identity"] = judge_config_identity
     write_json(report_path, report)
     try:
         for index, cell in enumerate(iter_schedule(plan)):
@@ -190,8 +199,46 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
                              sha256=hashlib.sha256(raw).hexdigest())
                 if options.get("terminal_selection") is not None:
                     entry["selection"] = result["selection"]
+                if judge is not None:
+                    if result.get("selected_attempt") is None:
+                        entry["review"] = {"status": "not_selected", "promotion_eligible": False}
+                    else:
+                        from .five_arm_review import review_selected_cell
+                        from .async_ownership import await_owned
+                        import threading
+                        stop = threading.Event()
+                        entry["review"] = {"status": "dispatching"}
+                        write_json(report_path, report)
+                        task_id = cell["task_id"]
+                        review_args = {key: value for key, value in judge.items() if key not in {"artifacts"}}
+                        review_task = asyncio.create_task(asyncio.to_thread(review_selected_cell,
+                            plan, cell["cell_id"], tasks[task_id], cell_directory=cell_root,
+                            cell_sha256=entry["sha256"], directory=root / "reviews" / str(index),
+                            cancel_requested=stop.is_set, **review_args, **judge["artifacts"][task_id]))
+                        try:
+                            review_path = await asyncio.shield(review_task)
+                        except asyncio.CancelledError:
+                            stop.set()
+                            await await_owned(review_task, propagate_cancellation=False)
+                            raise
+                        review_raw = review_path.read_bytes()
+                        entry["review"] = {"status": json.loads(review_raw)["status"],
+                            "report": review_path.relative_to(root).as_posix(),
+                            "sha256": hashlib.sha256(review_raw).hexdigest(), "promotion_eligible": False}
+                        from .owned_content_review import _reader, _json
+                        read_review = _reader(review_path.parent)
+                        evidence = {name: read_review(name) for name in
+                                    ("manifest.json", "trajectory.json", "broker-usage.json", "inputs.json")}
+                        manifest = _json(evidence["manifest.json"])
+                        if manifest.get("selection_binding", {}).get("cell_sha256") != entry["sha256"]:
+                            raise ValueError("review does not bind selected cell")
+                        entry["review"]["evidence_sha256"] = {name: hashlib.sha256(raw).hexdigest()
+                                                             for name, raw in evidence.items()}
             except BaseException as error:
-                entry.update(status="outcome_unknown", error_type=type(error).__name__)
+                if "review" in entry:
+                    entry["review"].update(status="outcome_unknown", error_type=type(error).__name__)
+                else:
+                    entry.update(status="outcome_unknown", error_type=type(error).__name__)
                 raise
             finally:
                 write_json(report_path, report)
