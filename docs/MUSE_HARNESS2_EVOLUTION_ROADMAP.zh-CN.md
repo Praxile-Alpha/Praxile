@@ -1127,6 +1127,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   只读 CLI 不触发模型。fixture 完整链与多类篡改拒绝通过，不代表官方质量、
   防伪来源、judge 校准或真实收益。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
+  五组局部账本增补：离线 audit 核对全部 executor 尝试（含未选版本）及 judge
+  broker 回执，按角色汇总调用覆盖、token 已知小计和可证明的报告总量；缺失
+  回执/失败用量保持 unknown，不重复计算共享 quota 的累计预约。校验调用
+  守恒与 token 覆盖，未选版本回执篡改同样拒绝。仅为供应商报告的局部账本，
+  不含上游 proposer/composer、账单认证或完整 token 硬限制，总项仍不勾选。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
   缺调用用量的 trace 当完整零成本证据。旧适配器已填零字段和未记录请求仍

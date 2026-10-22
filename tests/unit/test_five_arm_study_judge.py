@@ -69,11 +69,17 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
         (root / "outputs/result.txt").write_bytes(source)
         trajectory = json.dumps({"schema_version": "praxile.native_benchmark_run.v1"}).encode()
         (root / "agent/praxile-result.json").write_bytes(trajectory)
+        broker_receipt = json.dumps({"usage": {"schema_version": "praxile.broker_usage.v1",
+            "admitted_calls": 1, "responses": 1, "failed_calls": 0, "inflight_calls": 0,
+            "latency_seconds": 0.2, "known_tokens": {"input": 10, "output": 5},
+            "reported_calls": {"input": 1, "output": 1}, "total_tokens": {"input": 10, "output": 5}}}).encode()
+        (root / "agent/praxile-broker-usage.json").write_bytes(broker_receipt)
         report = {"schema_version": "praxile.owned_native_execution.v1", "task_id": task.task_id,
             "task_fingerprint": task.fingerprint, "image": task.environment.revision,
             "status": "executor_returned", "cleanup_verified": True, "required_outputs_collected": True,
             "public_inputs": [{"path": "inputs/source.txt", "content_digest": task.inputs[0].content_digest}],
-            "source_result_sha256": sha(trajectory), "outputs": [{"path": "result.txt", "required": True,
+            "source_result_sha256": sha(trajectory), "broker_usage_sha256": sha(broker_receipt),
+            "outputs": [{"path": "result.txt", "required": True,
                 "status": "collected", "sha256": sha(source), "bytes": len(source)}]}
         path = root / "execution.json"
         path.write_text(json.dumps(report))
@@ -85,7 +91,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
         return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
             "name": body["tool_choice"]["function"]["name"] if verdict else "invalid_submission", "arguments": json.dumps({"items": [
                 {"id": "r", "verdict": verdict, "output_refs": [data["output_units"][0]["id"]],
-                 "reason": "Retained"}]})}}]}}]}
+                 "reason": "Retained"}]})}}]}}], "usage": {"prompt_tokens": 4, "completion_tokens": 2}}
     monkeypatch.setattr(module, "run_owned_native", run)
     monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
     path = asyncio.run(module.execute_study(plan, {"task": task}, directory=tmp_path / "study",
@@ -110,6 +116,9 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert analysis["reported_cells"] == 5
     assert analysis["metric"] == "llm_declared_requirement_preservation"
     assert analysis["promotion_eligible"] is False
+    assert analysis["broker_usage"]["total_tokens"] == {"input": 80, "output": 40}
+    assert analysis["broker_usage"]["roles"]["executor"]["admitted_calls"] == 6
+    assert analysis["broker_usage"]["roles"]["judge"]["admitted_calls"] == 5
     if verdict:
         assert all(row["verdict_counts"][verdict] == 1 for row in analysis["cell_reviews"])
     else:
@@ -122,6 +131,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     calls_before = list(calls)
     for relative in ("reviews/0/manifest.json", "reviews/0/trajectory.json", "reviews/0/report.json",
                      "reviews/0/inputs.json", "reviews/0/broker-usage.json", "cells/0/cell.json",
+                     "cells/1/attempt-1/lease/agent/praxile-broker-usage.json",
                      "cells/0/attempt-0/lease/outputs/result.txt"):
         target = path.parent / relative
         original = target.read_bytes()

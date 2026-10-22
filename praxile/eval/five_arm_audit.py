@@ -10,6 +10,7 @@ from .five_arm_review import prepare_selected_cell_review
 from .content_review_compare import _checked
 from .content_review_batch import plan_content_review_batch
 from .v2.schema import canonical_json
+from .five_arm_usage import executor_receipts, summarize_receipts
 
 
 def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
@@ -34,7 +35,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
     entries = study.get("cells")
     if not isinstance(entries, list) or len(entries) > len(schedule):
         raise ValueError("invalid study cells")
-    records, rows = [], []
+    records, rows, usage_receipts = [], [], []
     for index, entry in enumerate(entries):
         expected = schedule[index]
         if not isinstance(entry, dict) or entry.get("cell_id") != expected["cell_id"]:
@@ -44,7 +45,21 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
         review = entry.get("review", {})
         if not isinstance(review, dict):
             raise ValueError("invalid review receipt")
+        if "report" in entry:
+            if entry["report"] != f"cells/{index}/cell.json":
+                raise ValueError("cost cell path mismatch")
+            raw_cell = read(entry["report"])
+            if _sha(raw_cell) != entry.get("sha256"):
+                raise ValueError("cost cell receipt changed")
+            cell = _json(raw_cell)
+            if cell.get("cell") != expected or cell.get("plan_digest") != plan_digest(plan):
+                raise ValueError("cost cell belongs to another plan")
+            usage_receipts.extend(executor_receipts(root / "cells" / str(index), cell))
+        else:
+            usage_receipts.append(("executor", None))
         if review.get("status") not in {"reviewed", "abstained"}:
+            if review.get("status") != "not_selected":
+                usage_receipts.append(("judge", None))
             continue
         if entry.get("report") != f"cells/{index}/cell.json" or review.get("report") != f"reviews/{index}/report.json":
             raise ValueError("study evidence path mismatch")
@@ -66,6 +81,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
             if _sha(data) != digest:
                 raise ValueError("review evidence changed")
             files[name] = _json(data)
+        usage_receipts.append(("judge", files["broker-usage.json"]))
         manifest, report, trajectory = (files[name] for name in ("manifest.json", "report.json", "trajectory.json"))
         if (manifest.get("schema_version") != "praxile.broker_content_review.v1"
                 or files["inputs.json"] != inputs or manifest.get("execution_binding") != binding
@@ -93,6 +109,8 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
         local_file_consistency_checked=True, semantic_accuracy_verified=False, source_study_sha256=study_sha256,
         cell_reviews=rows, checked_review_cells=len(records),
         all_scheduled_review_evidence_checked=len(records) == len(schedule))
+    analysis["broker_usage"] = summarize_receipts(usage_receipts)
+    analysis["broker_usage"]["all_scheduled_cells_recorded"] = len(entries) == len(schedule)
     analysis["limitations"].append("Local files and selected artifacts were checked; labels are uncalibrated LLM judgments, not task success or provenance attestation.")
     return analysis
 

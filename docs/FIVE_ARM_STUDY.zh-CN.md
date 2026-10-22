@@ -25,6 +25,25 @@ preserved 的比例，不是 resolved rate 或官方成功率。共用既有 tas
 semantic_accuracy_verified、controlled_execution_verified、promotion_eligible
 仍为 false。完整五组 fixture 与篡改拒绝已验证，真实收益仍须独立验收。
 
+### 全部尝试与 Judge 的局部成本账本
+
+离线 audit 同时返回 broker_usage。它验证每次 executor attempt 的执行报告
+摘要，再读取其绑定的 broker_usage_sha256；重复组中未被选中的尝试也计入。
+judge 用量来自研究回执绑定的 broker-usage.json，不把共享 quota 快照中的
+累计 reserved_calls 重复当作本次调用成本。
+
+按 executor/judge 分别列出 expected_receipts、bound_receipts、known_admitted_calls、
+admitted_calls、known_tokens、reported_calls 和 total_tokens。校验 admitted =
+responses + failed + inflight，以及 token 报告覆盖与已知小计/完整总量的一致性。
+缺回执使调用总量未知；失败或缺 token 字段使 token 总量未知，但保留已知小计。
+显式报告的零值仍是零，不与缺失混淆。篡改未选尝试的回执也会使核验失败。
+
+scope 仅为已绑定执行尝试与 judge broker 的供应商报告；延迟是请求耗时小计，
+不是墙钟时间。all_scheduled_cells_recorded 单独说明研究覆盖，未调度 cell 不
+能从已有小计推断成本。cost_usd 保持 null，billing_verified 和
+total_token_bound_verified 保持 false；proposer/probe/composer 等上游设计阶段
+未并入，不能将此账本称为完整实验费用认证。
+
 ## Development Cell 执行入口
 
 `praxile.eval.five_arm_execution.execute_cell(plan, cell_id, task, ...)` 将已编译
