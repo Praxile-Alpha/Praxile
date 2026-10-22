@@ -12,7 +12,7 @@ from .schema import EvalSchemaError, canonical_json
 
 
 @contextmanager
-def configured_design_router(config, *, cycle_id, applies_to, private=False):
+def configured_design_router(config, *, cycle_id, applies_to, private=False, shared_chat_budget=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,80}", cycle_id):
         raise EvalSchemaError("unsafe development cycle ID")
     for key in ("repositories", "task_signals", "does_not_apply_when"):
@@ -22,6 +22,16 @@ def configured_design_router(config, *, cycle_id, applies_to, private=False):
             raise EvalSchemaError("CLI composition requires explicit bounded repositories, task signals and anti-scope")
     router = ModelRouter(config)
     try:
+        if shared_chat_budget is not None:
+            from ...model import OpenAICompatibleProvider, AnthropicProvider
+            from ..design_budget_transport import DesignBudgetTransport
+            for provider in router.providers.values():
+                if not isinstance(provider, (OpenAICompatibleProvider, AnthropicProvider)):
+                    raise ValueError("unsupported provider for budgeted candidate design")
+                close = getattr(provider.transport, "close", None)
+                if callable(close):
+                    close()
+                provider.transport = DesignBudgetTransport(shared_chat_budget, timeout_seconds=provider.timeout_seconds)
         router.route("proposal_composer", private=private)
         route = router.describe_route("proposal_composer", private=private)
         # Freeze configuration without storing credentials or raw endpoint settings.
@@ -29,6 +39,8 @@ def configured_design_router(config, *, cycle_id, applies_to, private=False):
                     "provider": route["provider"], "model": route["model"], "private": private,
                     "config_digest": hashlib.sha256(canonical_json(_redact(config.data)).encode()).hexdigest(),
                     "scope_digest": hashlib.sha256(canonical_json(applies_to).encode()).hexdigest()}
+        if shared_chat_budget is not None:
+            identity["request_admission"] = "shared_quota_nonretrying_transport_v1"
         yield router, identity
     finally:
         for provider in router.providers.values():

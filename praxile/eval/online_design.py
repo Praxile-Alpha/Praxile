@@ -47,7 +47,9 @@ def run_online_design(config, directory, *, design_id, applies_to, resume=False,
     if type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 16384:
         raise ValueError("invalid candidate output budget")
     bundle = collect_online_evidence(directory)
+    quota = OnlineStream(directory).shared_budget()
     return _run_design(config, bundle, design_id=design_id,
         development_task_ids=bundle["completed_task_ids"], heldout_task_ids=[], applies_to=applies_to,
         private=False, resume=resume, executor_profile=executor_profile, max_output_tokens=max_output_tokens,
-        request_timeout_seconds=request_timeout_seconds, response_mode="text", repair_attempts=0)
+        request_timeout_seconds=request_timeout_seconds, response_mode="text", repair_attempts=0,
+        **({"shared_chat_budget": quota} if quota else {}))

@@ -211,7 +211,7 @@ class OnlineStream:
                 "ledger_sha256": state["events"][-1]["sha256"] if state["events"] else state["spec_sha256"],
                 "judge_precommitted_before_execution": "judge_identity" in state["spec"],
                 "chat_budget": quota.status() if quota else None,
-                "budget_scope": "executor_reflection_judge_only" if quota else None,
+                "budget_scope": "executor_reflection_judge_online_design" if quota else None,
                 "promotion_eligible": False, "official_evaluation": False}
 
     def shared_budget(self):

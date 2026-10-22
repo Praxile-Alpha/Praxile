@@ -73,10 +73,11 @@ def _validate_timeout(value):
 
 def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task_ids,
                 applies_to, private, resume, executor_profile, max_output_tokens, request_timeout_seconds, response_mode,
-                repair_attempts):
+                repair_attempts, shared_chat_budget=None):
     if response_mode == "function_json_actions" and executor_profile is None:
         raise EvalSchemaError("JSON action submission requires an executor profile")
-    with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
+    budget_options = {"shared_chat_budget": shared_chat_budget} if shared_chat_budget is not None else {}
+    with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private, **budget_options) as (router, identity):
         online = {"track": "online_stream", "source_ledger_sha256": bundle["ledger_sha256"]} if bundle.get("track") == "online_stream" else {}
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
@@ -118,6 +119,8 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
             previous = read_json(trajectory_path, None)
             logger = TrajectoryLogger.from_data(previous) if previous is not None else TrajectoryLogger(
                 f"Design development candidates {design_id}", {"purpose": "proposal_composer"})
+            if shared_chat_budget is not None:
+                logger.data["shared_chat_budget_start"] = shared_chat_budget.status()
             if bundle["evidence"]:
                 # Persist intent before entering any generator/provider code. A kill
                 # may bypass finally, and absence of a response is not zero usage.
@@ -141,6 +144,8 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                     max_output_tokens=max_output_tokens if max_output_tokens is not None else 4000) if bundle["evidence"] else {
                         "decision": "NO_ENTRY", "candidates": [], "composition": None, "promotion_eligible": False}
             finally:
+                if shared_chat_budget is not None:
+                    logger.data["shared_chat_budget_end"] = shared_chat_budget.status()
                 write_json(trajectory_path, logger.data)
             # Persist the generation once, then materialize recoverable derived files.
             write_json(root / "generated.json", result)

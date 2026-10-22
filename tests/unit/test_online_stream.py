@@ -10,11 +10,11 @@ from praxile.eval.native_context import owned_candidate_identity
 from praxile.eval.v2.candidate import ContextCandidate
 
 
-def create(tmp_path):
+def create(tmp_path, *, chat_budget=None):
     tasks = [BenchmarkTask(task_id=name, benchmark="fixture", dataset_revision="1", split="online_stream",
         instruction="Make a checklist", environment=EnvironmentSpec("harbor", "fixture", "python@sha256:" + "a" * 64),
         evaluator=EvaluatorReference("judge", "1", "PRIVATE", "sha256:" + "b" * 64)) for name in ("first", "second")]
-    stream = module.OnlineStream.create(tmp_path / "stream", tasks, repository="docs", execution={
+    stream = module.OnlineStream.create(tmp_path / "stream", tasks, repository="docs", chat_budget=chat_budget, execution={
         "wheel": tmp_path / "worker.whl", "wheel_sha256": "a" * 64, "model": "fixture",
         "base_url": "https://provider.invalid/v1", "credential_file": tmp_path / "key"})
     return stream, tasks
@@ -228,12 +228,13 @@ def test_invalid_execution_settings_rejected_before_creation(tmp_path, field, va
 
 
 @pytest.mark.parametrize("propose", [False, True])
-def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monkeypatch, propose):
+@pytest.mark.parametrize("budgeted", [False, True])
+def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monkeypatch, propose, budgeted):
     from contextlib import contextmanager
     from types import SimpleNamespace
     from praxile.eval.online_design import collect_online_evidence, run_online_design
     from praxile.eval.v2 import candidate_design_run
-    stream, _ = create(tmp_path)
+    stream, _ = create(tmp_path, chat_budget={"max_calls": 1, "output_budget": 4000, "ttl_seconds": 600} if budgeted else None)
     monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
     asyncio.run(stream.run_next())
     bundle = collect_online_evidence(stream.root)
@@ -241,8 +242,11 @@ def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monke
     assert bundle["evidence"][0]["task_id"] == "first"
     assert bundle["sources"][0]["native_task_id"] == "native-first"
     calls = []
+    quotas = []
     class Router:
         def chat(self, messages, **kwargs):
+            if budgeted:
+                quotas[-1].reserve("proposal_composer", 4000)
             calls.append(messages)
             assert "PRIVATE_SENTINEL" not in json.dumps(messages)
             body = json.loads(messages[1]["content"])
@@ -253,6 +257,8 @@ def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monke
             return {"content": json.dumps(result), "usage": {"prompt_tokens": 10, "completion_tokens": 5}, "finish_reason": "stop"}
     @contextmanager
     def router(*args, **kwargs):
+        if budgeted:
+            quotas.append(kwargs["shared_chat_budget"])
         yield Router(), {"model": "fixture", "config_digest": "fixed"}
     monkeypatch.setattr(candidate_design_run, "configured_design_router", router)
     config = SimpleNamespace(paths=SimpleNamespace(state=tmp_path / "design-state"))
@@ -261,10 +267,18 @@ def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monke
     result = run_online_design(config, stream.root, **kwargs)
     assert result["track"] == "online_stream"
     assert result["source_ledger_sha256"] == before["ledger_sha256"]
-    assert stream.status() == before
+    if budgeted:
+        assert stream.status()["ledger_sha256"] == before["ledger_sha256"]
+        assert stream.status()["chat_budget"]["remaining_calls"] == 0
+    else:
+        assert stream.status() == before
     assert run_online_design(config, stream.root, **kwargs, resume=True) == result
     assert len(calls) == 1
     root = config.paths.state / "eval/v2/candidate_designs/online-design"
+    if budgeted:
+        trace = json.loads((root / "trajectory.json").read_text())
+        assert trace["shared_chat_budget_start"]["remaining_calls"] == 1
+        assert trace["shared_chat_budget_end"]["remaining_calls"] == 0
     assert json.loads((root / "report.json").read_text())["track"] == "online_stream"
     if propose:
         generated = json.loads((root / result["candidate_files"][0]).read_text())
