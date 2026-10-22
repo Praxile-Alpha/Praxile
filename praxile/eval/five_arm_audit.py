@@ -12,6 +12,7 @@ from .content_review_batch import plan_content_review_batch
 from .v2.schema import canonical_json
 from .five_arm_usage import executor_receipts, summarize_receipts
 from .five_arm_conditions import validate_conditions, check_cell_conditions
+from .five_arm_cost_analysis import compare_usage
 
 
 def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
@@ -37,13 +38,15 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
     entries = study.get("cells")
     if not isinstance(entries, list) or len(entries) > len(schedule):
         raise ValueError("invalid study cells")
-    records, rows, usage_receipts = [], [], []
+    records, rows, cell_receipts = [], [], {}
     for index, entry in enumerate(entries):
         expected = schedule[index]
         if not isinstance(entry, dict) or entry.get("cell_id") != expected["cell_id"]:
             raise ValueError("study cell order mismatch")
         row = {"cell_id": expected["cell_id"], "status": "unknown", "verdict_counts": None}
         rows.append(row)
+        usage_receipts = []
+        cell_receipts[expected["cell_id"]] = usage_receipts
         review = entry.get("review", {})
         if not isinstance(review, dict):
             raise ValueError("invalid review receipt")
@@ -115,8 +118,10 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
         executor_conditions=conditions, recorded_executor_conditions_checked=True,
         cell_reviews=rows, checked_review_cells=len(records),
         all_scheduled_review_evidence_checked=len(records) == len(schedule))
-    analysis["broker_usage"] = summarize_receipts(usage_receipts)
+    analysis["broker_usage"] = summarize_receipts([receipt for receipts in cell_receipts.values() for receipt in receipts])
     analysis["broker_usage"]["all_scheduled_cells_recorded"] = len(entries) == len(schedule)
+    analysis["broker_cost_comparison"] = compare_usage(plan, {
+        cell_id: summarize_receipts(receipts) for cell_id, receipts in cell_receipts.items()})
     analysis["limitations"].append("Local files and selected artifacts were checked; labels are uncalibrated LLM judgments, not task success or provenance attestation.")
     return analysis
 

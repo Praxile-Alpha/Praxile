@@ -123,6 +123,10 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert analysis["broker_usage"]["total_tokens"] == {"input": 80, "output": 40}
     assert analysis["broker_usage"]["roles"]["executor"]["admitted_calls"] == 6
     assert analysis["broker_usage"]["roles"]["judge"]["admitted_calls"] == 5
+    costs = analysis["broker_cost_comparison"]
+    assert costs["complete_task_count"] == 1
+    assert costs["comparisons"]["budget_matched_repeat"]["token_delta"] == {"input": 10, "output": 5}
+    assert costs["comparisons"]["full_praxile"]["token_delta"] == {"input": 0, "output": 0}
     if verdict:
         assert all(row["verdict_counts"][verdict] == 1 for row in analysis["cell_reviews"])
     else:
@@ -170,6 +174,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     incomplete = audit_study(plan, {"task": task}, **{**audit_args, "study_sha256": sha(path.read_bytes())})
     assert incomplete["complete_task_count"] == 0
     assert incomplete["reported_cells"] == 4
+    assert incomplete["broker_cost_comparison"]["complete_task_count"] == 0
     assert all(value["familywise_ci95"] is None for value in incomplete["comparisons"].values())
     assert calls == calls_before
 

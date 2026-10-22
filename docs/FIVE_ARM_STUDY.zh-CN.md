@@ -118,6 +118,23 @@ scope 仅为已绑定执行尝试与 judge broker 的供应商报告；延迟是
 total_token_bound_verified 保持 false；proposer/probe/composer 等上游设计阶段
 未并入，不能将此账本称为完整实验费用认证。
 
+### 任务级 Token 成本比较
+
+audit 的 broker_cost_comparison 将每个 cell 的全部已绑定 executor 尝试和独立
+judge 用量相加，输入/输出 token 分开比较。先计算同一任务、同一 arm 的各次
+repetition 均值，再对每个任务计算 arm - frozen_executor，最后对任务等权平均。
+大 token 任务不额外加权，重复运行不增加独立任务样本数。
+
+五组及两个 token 字段共用完整任务集合：任一组、任一次重复缺失或未知用量，
+整项任务不进入任何成本配对；报告 missing_cells/unknown_cells 供核查。显式
+零仍参与计算。fixture 验证重复组未选尝试与 judge 都计入，而非仅统计最终产物。
+这是描述性差值；缺失可能带来选择偏差，不能直接宣称效率显著提升。
+
+confidence_interval 保持 null：目前没有预先冻结且经验证的实际输入 token 上界，
+不能把 plan 的 total_tokens 声明当作已执行的限制套用有界统计公式。cost_usd
+仍未知，未计入上游经验设计；此比较也未按任务质量筛选，judge abstain 时
+完整报告的成本仍可参与成本统计，不表示该任务质量合格或可晋升。
+
 ## Development Cell 执行入口
 
 `praxile.eval.five_arm_execution.execute_cell(plan, cell_id, task, ...)` 将已编译

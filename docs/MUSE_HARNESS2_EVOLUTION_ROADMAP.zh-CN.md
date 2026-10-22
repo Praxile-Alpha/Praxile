@@ -1182,6 +1182,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   benchmark 汇总仍未完成，本项不勾选。
   费用完整性增补：trace/aggregate 区分已报告小计和完整总费用，缺价格保留 null；Lab 与普通 A/B 拒绝比较未完整定价的 arm，ignore_errors 不能当零成本。未进入执行 trace 的官方 judge/离线演化调用仍需统一账本接入，本项不勾选。
 - [ ] 以 task 为统计单位做 paired comparison；重复运行嵌套于 task，不能把同一任务的 repetitions 伪装成独立任务扩大显著性。
+  五组局部成本比较增补：audit 按 cell 汇总全部已绑定尝试及 judge token，先
+  repetition 任务内平均，再 task 等权配对；输入/输出及五组使用共同完整任务
+  集合，缺失不补零。输出描述性差值与缺失覆盖，不生成无合法上界支持的置信
+  区间、不宣称质量调整后的效率或全实验金额；完整成本统计项仍待验收。
   Harness Lab 已修复 repetition 展平问题：先任务内均值再任务级配对，独立样本数为完整任务数，缺失配对整任务标不完整；使用保守 Hoeffding 区间并声明独立任务假设。旧统计报告不能通过质量晋升门禁。9 项测试通过。中性 benchmark 连续评分、任务级成本区间和相关任务簇设计尚未完成，完整项未勾选，详见 `TASK_CLUSTER_STATISTICS.zh-CN.md`。
   连续评分增补：`python -m praxile.eval.compare_imports` 可按显式 repetition 计划比较官方 JobBench/WorkBuddy 导入，按任务归一化且保留分母、checksum、输入摘要及缺失评分，不混合 benchmark，不自动晋升。6 项测试通过。尚不能核验完整实验执行配置，也未完成真实多任务验收，详见 `IMPORTED_BENCHMARK_COMPARISON.zh-CN.md`。
 - [ ] held-out 下使用冻结经验；另设明确标识的 online-stream 实验，记录顺序，禁止把两种协议合并报分。
