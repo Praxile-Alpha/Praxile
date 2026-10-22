@@ -176,3 +176,22 @@ python -m praxile.eval.persistent_chat_budget show --database /path/to/quota.sql
 均在执行前拒绝；不会自动创建新配额。预检与实际请求间额度可能被其他进程
 消耗，真正准入仍由 SQLite 预留事务决定。一次尝试失败后新尝试可使用新
 run-id 并复用配额，但是否重试任务应由控制面审查，不能作为自动重放许可。
+
+## 任务内机制隔离
+
+runtime.task_local_memory_enabled 是运行时硬开关。关闭后 subtask_note 和
+subtask_reflect 被拒绝，不注入 task_notes，也不调用反思模型；subtask_begin/end
+仍可记录证据边界。轨迹 task_local_policy 保存设置，已有轨迹切换开关会要求
+新建任务；带笔记的旧轨迹也不能直接在关闭状态继续。
+
+普通项目默认仍开启。新的 native benchmark worker 默认关闭，可通过 worker
+CLI 的 --task-local-memory 或 Python run_native 的 task_local_memory_enabled=True
+显式开启；反思角色使用同一 benchmark provider/model，以便经过同一 broker。
+结果保存 task_local_memory_enabled。当前 native adapter 的远程命令尚未暴露
+该开关，五组协调器也尚未自动映射组设置。
+
+这是相对旧版 native worker 的行为变化。旧版 fresh_disabled 仅表示长期经验
+检索关闭，不保证任务内笔记/反思关闭；旧结果不能未经审查直接当作新冻结
+执行器对照。应冻结新 worker wheel/代码摘要并重新运行所需对照，不能追改
+历史实验条件。该开关不阻止模型在普通思维或动作历史中自行反思，不等于
+实现了完整任务内候选生成、探测与选择流程。

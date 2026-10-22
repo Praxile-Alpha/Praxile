@@ -41,10 +41,12 @@ def test_note_unknown_state_invalidates_permanently():
 
 @pytest.mark.parametrize("use_reflector", [False, True])
 @pytest.mark.parametrize("denied", [False, True])
-def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch, use_reflector, denied):
+@pytest.mark.parametrize("memory_enabled", [False, True])
+def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_path, monkeypatch, use_reflector, denied, memory_enabled):
     logger, note_action = source()
     runtime = AgentRuntime.__new__(AgentRuntime)
     runtime.config = Config(default_config(tmp_path), ProjectPaths(tmp_path))
+    runtime.config.data["runtime"]["task_local_memory_enabled"] = memory_enabled
     runtime.primary_executor_id = "primary"
     runtime.action_schemas = ActionSchemaRegistry()
     runtime.project = SimpleNamespace(snapshot=lambda **kwargs: {"git": {"is_repo": True}})
@@ -75,7 +77,8 @@ def test_action_loop_injects_note_once_without_retaining_body_in_history(tmp_pat
     status, _ = runtime._run_action_loop("task", logger, [], max_steps=3, private=False, high_risk=False,
                                         messages=history)
     assert status == "completed"
-    if denied:
+    assert logger.data["task_local_policy"]["memory_enabled"] is memory_enabled
+    if denied or not memory_enabled:
         assert not logger.data.get("task_notes")
         assert not logger.data.get("subtask_reflections")
         assert logger.data["cost"]["model_calls"] == 3

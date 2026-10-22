@@ -1078,6 +1078,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   配额 CLI 增补：可显式 create/show SQLite 配额，owned_native_cli 接受已有
   --shared-budget-db；计划模式只读，--execute 才运行。缺失、损坏、耗尽、过期、
   无凭据或混用 resume 均拒绝，不自动补建额度。五组调度/全 token 控制仍未完成。
+  组机制隔离增补：runtime 支持 task_local_memory_enabled 硬开关，关闭时拒绝
+  note/reflect 并停止任务笔记注入，轨迹记录开关且拒绝续跑中切换。普通项目
+  默认不变，新 native worker 默认关闭，显式开启后反思仍走同一 benchmark
+  provider。旧 fresh_disabled 仅指长期经验关闭，不能追认其任务内机制也关闭。
+  adapter 远程参数和五组映射仍待接入，完整任务内改进环路及五组项不勾选。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

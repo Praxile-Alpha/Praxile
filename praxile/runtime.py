@@ -868,6 +868,13 @@ class AgentRuntime:
         cancel_requested: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> tuple[str, str]:
+        task_local_enabled = self.config.get("runtime", "task_local_memory_enabled", default=True) is True
+        previous_policy = logger.data.get("task_local_policy")
+        if ((previous_policy is not None and previous_policy.get("memory_enabled") is not task_local_enabled)
+                or (previous_policy is None and not task_local_enabled and logger.data.get("task_notes"))):
+            return "needs_human", "Task-local memory policy changed; start a new run with fresh context."
+        logger.data["task_local_policy"] = {"schema_version": "praxile.task_local_policy.v1",
+                                            "memory_enabled": task_local_enabled}
         messages = messages or self._initial_messages(task, logger, retrieved)
         invalid_action_count = 0
         parse_retry_limit = int(self.config.get("runtime", "action_parse_retries", default=2))
@@ -911,7 +918,7 @@ class AgentRuntime:
                         return "needs_human", "Experience conditions changed or became unknown; start a new run with fresh context."
                 messages = self._compress_messages_if_needed(messages, logger, role="coding_agent")
                 request_messages = messages
-                if logger.data.get("task_notes"):
+                if task_local_enabled and logger.data.get("task_notes"):
                     snapshot = self.project.snapshot(refresh=True)
                     snapshot["interop"] = interop_policy(self.config)
                     notes = select_notes(logger.data, self._activation_observations(snapshot))
@@ -1089,7 +1096,10 @@ class AgentRuntime:
                     "status": "outcome_unconfirmed",
                 }
                 self._write_checkpoint(logger, messages=messages, context=checkpoint_context or {}, force=True)
-                if action_type == "subtask_reflect":
+                if action_type in {"subtask_note", "subtask_reflect"} and not task_local_enabled:
+                    observation = {"status": "blocked", "output": "Task-local memory is disabled for this run.",
+                                   "data": {"task_local_memory_enabled": False}}
+                elif action_type == "subtask_reflect":
                     decision = self.tools.safety.check_tool_call(action_type, action,
                         context={"task_id": logger.task_id, "step": len(logger.data["actions"]) + 1})
                     if not decision.allowed:
@@ -1239,6 +1249,9 @@ class AgentRuntime:
             return "needs_human", "Model request failed; review the recorded actions and any partial outputs before resuming."
 
     def _subtask_boundary(self, action: dict[str, Any], logger: TrajectoryLogger) -> dict[str, Any]:
+        if (action["type"] == "subtask_note"
+                and self.config.get("runtime", "task_local_memory_enabled", default=True) is not True):
+            return {"status": "blocked", "output": "Task-local memory is disabled for this run.", "data": {}}
         decision = self.tools.safety.check_tool_call(action["type"], action,
             context={"task_id": logger.task_id, "step": len(logger.data["actions"]) + 1})
         if not decision.allowed:
@@ -1516,6 +1529,8 @@ class AgentRuntime:
             f"Allowed command prefixes:\n{allowed}\n\n"
             "Choose the next action."
         )
+        if self.config.get("runtime", "task_local_memory_enabled", default=True) is not True:
+            system += "\nTask-local memory is disabled: do not request subtask_note or subtask_reflect."
         if retrieved:
             self.store.mark_assets_injected(logger.task_id, retrieved)
             logger.mark_context_injected({str(item.get("path")) for item in retrieved})

@@ -58,7 +58,10 @@ def load_task_input(root: Path, instruction: str, relative_path: str, expected_s
 
 
 def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, model_timeout_seconds: int = 30,
-                     renderer_executable: str = "", model_request_options: dict | None = None) -> Config:
+                     renderer_executable: str = "", model_request_options: dict | None = None,
+                     task_local_memory_enabled: bool = False) -> Config:
+    if type(task_local_memory_enabled) is not bool:
+        raise ValueError("task_local_memory_enabled must be boolean")
     from ..model_options import validate_request_options
     model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
     root = root.resolve(strict=True)
@@ -75,6 +78,7 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
         raise ValueError("model_timeout_seconds must be an integer in [1, 110]")
     data["runtime"]["model_timeout_seconds"] = model_timeout_seconds
     data["runtime"]["max_steps"] = max_steps
+    data["runtime"]["task_local_memory_enabled"] = task_local_memory_enabled
     data["model"]["transport"] = "urllib"
     data["model_providers"] = {"benchmark": {
         "type": "openai_compatible", "base_url": base_url,
@@ -84,6 +88,8 @@ def benchmark_config(root: Path, *, model: str, base_url: str, max_steps: int, m
     data["model_roles"]["coding_agent"] = {"provider": "benchmark", "model": model}
     if model_request_options:
         data["model_roles"]["coding_agent"]["request_options"] = model_request_options
+    if task_local_memory_enabled:
+        data["model_roles"]["experience_reflection"] = dict(data["model_roles"]["coding_agent"])
     validate_config(data)
     return Config(data, ProjectPaths(root))
 
@@ -92,7 +98,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                model_timeout_seconds: int = 30, output_directory: str | None = None,
                renderer_executable: str = "", deliverable_contract: dict | None = None,
                development_candidate: dict | None = None, repository: str | None = None,
-               development_only: bool = False, model_request_options: dict | None = None) -> dict[str, Any]:
+               development_only: bool = False, model_request_options: dict | None = None,
+               task_local_memory_enabled: bool = False) -> dict[str, Any]:
     from ..services.run_service import normalize_deliverable_contract
     deliverable_contract = normalize_deliverable_contract(deliverable_contract)
     context_plan = None
@@ -108,7 +115,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
             raise ValueError("output directory must be workspace-relative")
     config = benchmark_config(root, model=model, base_url=base_url, max_steps=max_steps,
                               model_timeout_seconds=model_timeout_seconds, renderer_executable=renderer_executable,
-                              model_request_options=model_request_options)
+                              model_request_options=model_request_options,
+                              task_local_memory_enabled=task_local_memory_enabled)
     runtime = AgentRuntime(config)
     try:
         options = {"experimental_context": context_plan["content"]} if context_plan and context_plan["content"] else {}
@@ -121,7 +129,8 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
             if close:
                 close()
     result = {"schema_version": "praxile.native_benchmark_run.v1", "trajectory": trajectory,
-              "official_evaluation": "not_run", "experience_mode": "fresh_disabled"}
+              "official_evaluation": "not_run", "experience_mode": "fresh_disabled",
+              "task_local_memory_enabled": task_local_memory_enabled}
     if model_request_options:
         result["model_request_options"] = config.data["model_roles"]["coding_agent"]["request_options"]
     if context_plan is not None:
@@ -154,6 +163,8 @@ def main() -> None:
     parser.add_argument("--development-candidate", type=Path)
     parser.add_argument("--development-candidate-sha256")
     parser.add_argument("--development-only", action="store_true")
+    parser.add_argument("--task-local-memory", action="store_true",
+                        help="Explicitly enable task-local notes and reflection in this isolated worker")
     parser.add_argument("--repository")
     args = parser.parse_args()
     from ..structured_response import parse_submission_object
@@ -184,7 +195,8 @@ def main() -> None:
                         model_timeout_seconds=args.model_timeout_seconds, output_directory=args.output_directory,
                         renderer_executable=args.renderer_executable, deliverable_contract=contract,
                         development_candidate=candidate, repository=args.repository, development_only=args.development_only,
-                        model_request_options=model_request_options)
+                        model_request_options=model_request_options,
+                        task_local_memory_enabled=args.task_local_memory)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

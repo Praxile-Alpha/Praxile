@@ -30,6 +30,7 @@ def default_config(project_root: Path) -> dict[str, Any]:
         "runtime": {
             "mode": "safe",
             "max_steps": 10,
+            "task_local_memory_enabled": True,
             "model_timeout_seconds": 30,
             "online_check_timeout_seconds": 8,
             "shell_timeout_seconds": 120,
@@ -643,6 +644,7 @@ def validate_config(data: dict[str, Any], *, source: Path | None = None) -> None
         expect(path, int)
     for path in [
         "checkpoint.enabled",
+        "runtime.task_local_memory_enabled",
         "executors.parallel_readonly_exploration_enabled",
         "context.compression_enabled",
         "context.experience_representation_enabled",
