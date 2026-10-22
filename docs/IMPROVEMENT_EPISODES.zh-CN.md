@@ -781,6 +781,9 @@ Eval Runner 聚合的 `latency_ms/tool_calls/retries/recoveries/interventions` �
 仍是有效记录，缺失或非法值不是零。费用的 cost_complete 还要求合法且一致的
 cost_total 与 reported_cost_subtotal（兼容旧 cost 小计），标记本身不能证明
 完整；已知金额仍计入小计。它们是本地报告一致性检查，不认证供应商账单。
+`praxile eval benchmark` 的文本输出相应区分 total 和 known_subtotal，没有
+完整性证据时 total=unknown，而不是把小计当总量。显式完整零值保留为零；
+旧报告缺证据时也按 unknown 显示。`--json` 不改写原报告。
 
 cycle 目录中的 `usage.json` 在每个子实验与 composer 调用前后更新。它记录
 `completed_experiment_ids`、`pending_operation` 和 `checkpoint_status`；正常结束

@@ -1066,6 +1066,9 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   不能只信任 cost_complete 标记；缺少延迟、工具次数、重试、恢复或人工介入
   数时对应总量为 null，已知小计和任务覆盖数单独报告。字符串、布尔值、负数、
   非有限值不再被强转或当成零。完整轨迹数值保持原义；旧缺失字段不能补造。
+  CLI 展示增补：`eval benchmark` 分开打印 token/费用 total 与 known_subtotal；
+  旧报告没有完整性证据时显示 unknown，显式完整零仍显示零。缺工具次数也显示
+  unknown，JSON 输出原样保留，避免终端把未计价任务误读为免费执行。
   轨迹用量完整性增补：`cost.usage_evidence` 区分已知 token 小计与完整总量，
   按 purpose 记录覆盖率；字段缺失、类型非法、别名冲突和旧轨迹缺失调用均不补零。
   旧 `prompt_tokens/completion_tokens` 字段仅保留已知小计兼容语义。该证据仅覆盖

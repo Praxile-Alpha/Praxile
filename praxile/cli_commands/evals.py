@@ -189,7 +189,14 @@ def cmd_eval_benchmark(args: argparse.Namespace, project_root: Path) -> int:
         print(f"Task set: {report['task_set']}")
         print(f"Completed: {metrics['completed_count']}/{metrics['task_count']}")
         print(f"Resolved: {metrics['resolved_count']} (rate={metrics['resolution_rate']})")
-        print(f"Tokens: {metrics['tokens']}  cost={metrics['cost']}  tool_calls={metrics['tool_calls']}")
+        token_total = metrics.get("tokens_total") if metrics.get("tokens_complete") is True else None
+        cost_total = metrics.get("cost_total") if metrics.get("cost_complete") is True else None
+        print(f"Tokens: total={token_total if token_total is not None else 'unknown'}"
+              f"  known_subtotal={metrics.get('tokens', 'unknown')}")
+        print(f"Cost: total={cost_total if cost_total is not None else 'unknown'}"
+              f"  known_subtotal={metrics.get('reported_cost_subtotal', metrics.get('cost', 'unknown'))}")
+        tool_calls = metrics.get("tool_calls")
+        print(f"Tool calls: {tool_calls if tool_calls is not None else 'unknown'}")
         print(f"Manifest: {report['manifest_path']}")
         print(f"Report: {config.paths.state / 'eval' / 'v2' / 'runs' / report['eval_run_id'] / 'report.json'}")
     complete = metrics["completed_count"] == metrics["task_count"]
