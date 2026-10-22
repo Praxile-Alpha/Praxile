@@ -176,6 +176,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     for relative in ("reviews/0/manifest.json", "reviews/0/trajectory.json", "reviews/0/report.json",
                      "reviews/0/inputs.json", "reviews/0/broker-usage.json", "cells/0/cell.json",
                      "cells/1/attempt-1/lease/agent/praxile-broker-usage.json",
+                     "cells/1/attempt-1/lease/agent/praxile-result.json",
                      "cells/0/attempt-0/lease/outputs/result.txt"):
         target = path.parent / relative
         original = target.read_bytes()

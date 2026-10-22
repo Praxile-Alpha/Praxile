@@ -100,6 +100,21 @@ recorded_mechanism_configuration_checked 不等于机制产生收益：候选通
 可能被 activation gate 弃权，模型也可能没有调用任务内工具。该检查不验证实际
 激活次数、任务内改进质量或后端执行，旧缺证据记录不能当作已验证消融对照。
 
+### 实际机制观察
+
+cell_reviews[].mechanism_observations 逐 attempt 读取 execution.json 绑定的
+source_result_sha256，再核对 worker trajectory。包括未选中的重复尝试；摘要
+变化拒绝，未返回尝试或缺 source 摘要保留 unknown。输出只含观察值、计数和
+摘要，不输出任务正文、候选内容或工具输入输出。
+
+分别记录 activation_observed、injection_observed 和 subtask_note/subtask_reflect
+的 attempted/success/blocked/other 次数；旧字段缺失保留 null，显式空动作数组
+才表示未观察到动作。已开启但动作数组中没有记忆动作时标记
+configured_task_local_without_observed_actions，不能据此认定机制永久无效。
+关闭记忆却记录成功、worker/runtime 开关或注入互相矛盾、未正向激活却注入、
+候选身份不符等情况拒绝核验。工具成功记录仍不是独立的效果验证；没有推断
+反思是否改善后续动作或任务质量，causal_benefit_verified 始终为 false。
+
 统计量明确为 llm_declared_requirement_preservation：已声明要求中被 judge 判为
 preserved 的比例，不是 resolved rate 或官方成功率。共用既有 task-cluster
 分析，记录已检查 cell 数和证据覆盖，重复运行不充当独立任务。引用和输入

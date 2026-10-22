@@ -13,6 +13,7 @@ from .v2.schema import canonical_json
 from .five_arm_usage import executor_receipts, summarize_receipts
 from .five_arm_conditions import validate_conditions, check_cell_conditions, check_cell_mechanisms
 from .five_arm_cost_analysis import compare_usage
+from .five_arm_observations import observe_cell
 
 
 def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
@@ -68,6 +69,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
             check_cell_mechanisms(cell, candidates[expected["task_id"]])
             usage_receipts.extend(executor_receipts(root / "cells" / str(index), cell,
                                                    conditions=conditions, task=task))
+            row["mechanism_observations"] = observe_cell(root / "cells" / str(index), cell)
         else:
             usage_receipts.append(("executor", None))
         if review.get("status") not in {"reviewed", "abstained"}:

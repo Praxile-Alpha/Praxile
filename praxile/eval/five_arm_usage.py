@@ -5,9 +5,8 @@ from pathlib import PurePosixPath
 from .owned_content_review import _reader, _json, _sha
 
 
-def executor_receipts(directory, cell, *, conditions=None, task=None):
+def iter_attempt_reports(directory, cell):
     read = _reader(directory)
-    result = []
     attempts = cell.get("attempts")
     if not isinstance(attempts, list):
         raise ValueError("cell attempts missing")
@@ -15,7 +14,7 @@ def executor_receipts(directory, cell, *, conditions=None, task=None):
         if not isinstance(attempt, dict) or type(attempt.get("index")) is not int or attempt["index"] != index:
             raise ValueError("unordered cost attempts")
         if attempt.get("status") != "returned":
-            result.append(("executor", None))
+            yield index, None, None
             continue
         relative = attempt.get("report")
         if not isinstance(relative, str) or not relative.startswith(f"attempt-{index}/"):
@@ -24,6 +23,16 @@ def executor_receipts(directory, cell, *, conditions=None, task=None):
         if _sha(raw) != attempt.get("sha256"):
             raise ValueError("cost execution receipt changed")
         report = _json(raw)
+        yield index, report, relative
+
+
+def executor_receipts(directory, cell, *, conditions=None, task=None):
+    read = _reader(directory)
+    result = []
+    for _, report, relative in iter_attempt_reports(directory, cell):
+        if report is None:
+            result.append(("executor", None))
+            continue
         if conditions is not None:
             from .five_arm_conditions import check_attempt_conditions, check_attempt_mechanisms
             check_attempt_conditions(report, conditions, task)
