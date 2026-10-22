@@ -1,5 +1,30 @@
 # 五组研究计划
 
+## 离线核验与开发标签分析
+
+```sh
+python -m praxile.eval.five_arm_audit \
+  --study /path/to/study --study-sha256 EXPECTED_STUDY_JSON_SHA256 \
+  --task /path/to/frozen-task.json --evaluator-root /path/to/development-requirements
+```
+
+多任务重复 --task。该命令只读，不调用模型、续期预算或修改实验；完整可比较
+标签返回 0，不完整返回 1，证据校验失败返回 2。study-sha256 是调用方预期的
+study.json 摘要，不是工具自行读取后声称可信的来源证明。
+
+API audit_study 接收相同的冻结 plan/tasks，核对任务身份、cell 顺序、评审摘要，
+重新验证 selection 与原始产物/trajectory/开发要求，再检查 judge manifest、
+输入正文、分组预算与报告/轨迹一致性。关键证据缺失、替换、链接或摘要变化
+拒绝核验。未调度、未选择和结果未知的评审保留缺失，不补零；abstain 或包含
+uncertain 标签不进入完整共同任务集合，缺任务时不输出比较置信区间。
+
+统计量明确为 llm_declared_requirement_preservation：已声明要求中被 judge 判为
+preserved 的比例，不是 resolved rate 或官方成功率。共用既有 task-cluster
+分析，记录已检查 cell 数和证据覆盖，重复运行不充当独立任务。引用和输入
+文件一致性不认证模型理解正确，也不防御同时改写整套文件与预期摘要的主机。
+semantic_accuracy_verified、controlled_execution_verified、promotion_eligible
+仍为 false。完整五组 fixture 与篡改拒绝已验证，真实收益仍须独立验收。
+
 ## Development Cell 执行入口
 
 `praxile.eval.five_arm_execution.execute_cell(plan, cell_id, task, ...)` 将已编译

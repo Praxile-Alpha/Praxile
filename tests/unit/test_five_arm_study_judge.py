@@ -55,7 +55,8 @@ def fixture(tmp_path):
     return task, plan, execution, judge, source
 
 
-def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monkeypatch):
+@pytest.mark.parametrize("verdict", ["preserved", "uncertain", None])
+def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monkeypatch, verdict):
     task, plan, execution, judge, source = fixture(tmp_path)
     calls = []
     async def run(task, **options):
@@ -82,8 +83,8 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
         body = json.loads(raw)
         data = json.loads(body["messages"][1]["content"])
         return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
-            "name": body["tool_choice"]["function"]["name"], "arguments": json.dumps({"items": [
-                {"id": "r", "verdict": "preserved", "output_refs": [data["output_units"][0]["id"]],
+            "name": body["tool_choice"]["function"]["name"] if verdict else "invalid_submission", "arguments": json.dumps({"items": [
+                {"id": "r", "verdict": verdict, "output_refs": [data["output_units"][0]["id"]],
                  "reason": "Retained"}]})}}]}}]}
     monkeypatch.setattr(module, "run_owned_native", run)
     monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
@@ -93,7 +94,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert calls == ["execute", "judge", "execute", "execute", "judge", "execute", "judge", "execute", "judge", "execute", "judge"]
     assert report["promotion_eligible"] is False
     for index, entry in enumerate(report["cells"]):
-        assert entry["review"]["status"] == "reviewed"
+        assert entry["review"]["status"] == ("reviewed" if verdict else "abstained")
         review = path.parent / entry["review"]["report"]
         assert sha(review.read_bytes()) == entry["review"]["sha256"]
         manifest = json.loads((review.parent / "manifest.json").read_text())
@@ -101,6 +102,42 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
         usage = json.loads((review.parent / "broker-usage.json").read_text())["shared_budget"]
         assert usage["roles"]["judge"]["reserved_calls"] == 1
         assert usage["roles"]["executor"]["reserved_calls"] == (2 if index == 1 else 1)
+    from praxile.eval.five_arm_audit import audit_study
+    original_study = path.read_bytes()
+    audit_args = dict(directory=path.parent, study_sha256=sha(original_study), evaluator_root=judge["evaluator_root"])
+    analysis = audit_study(plan, {"task": task}, **audit_args)
+    assert analysis["complete_task_count"] == (1 if verdict == "preserved" else 0)
+    assert analysis["reported_cells"] == 5
+    assert analysis["metric"] == "llm_declared_requirement_preservation"
+    assert analysis["promotion_eligible"] is False
+    if verdict:
+        assert all(row["verdict_counts"][verdict] == 1 for row in analysis["cell_reviews"])
+    else:
+        assert all(row["verdict_counts"] is None for row in analysis["cell_reviews"])
+    from praxile.eval.five_arm_audit import main
+    task_file = tmp_path / "task.json"
+    task_file.write_text(json.dumps(task.to_dict()))
+    assert main(["--study", str(path.parent), "--study-sha256", sha(original_study),
+        "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"])]) == (0 if verdict == "preserved" else 1)
+    calls_before = list(calls)
+    for relative in ("reviews/0/manifest.json", "reviews/0/trajectory.json", "reviews/0/report.json",
+                     "reviews/0/inputs.json", "reviews/0/broker-usage.json", "cells/0/cell.json",
+                     "cells/0/attempt-0/lease/outputs/result.txt"):
+        target = path.parent / relative
+        original = target.read_bytes()
+        target.write_text("{}")
+        try:
+            with pytest.raises(ValueError):
+                audit_study(plan, {"task": task}, **audit_args)
+        finally:
+            target.write_bytes(original)
+    report["cells"][0].pop("review")
+    path.write_text(json.dumps(report))
+    incomplete = audit_study(plan, {"task": task}, **{**audit_args, "study_sha256": sha(path.read_bytes())})
+    assert incomplete["complete_task_count"] == 0
+    assert incomplete["reported_cells"] == 4
+    assert all(value["familywise_ci95"] is None for value in incomplete["comparisons"].values())
+    assert calls == calls_before
 
 
 @pytest.mark.parametrize("defect", ["model", "requirements", "selection", "private"])

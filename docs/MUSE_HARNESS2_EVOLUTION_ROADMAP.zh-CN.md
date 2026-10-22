@@ -1121,6 +1121,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   judge manifest/输入/轨迹/额度文件摘要。取消阻止后续分组且等待线程收尾，
   评审异常不覆盖已知执行证据。完整五组 fixture 验证通过，真实模型/环境
   效果、校准及全成本认证仍未完成。
+  离线核验增补：five_arm_audit 从预期 study 摘要、冻结任务/计划验证 cell、
+  选中产物与开发评审文件绑定，核对报告/轨迹和分组条件，再按共同完整任务
+  集合分析 LLM 要求保留标签。弃权/uncertain/缺失不补零，缺任务撤下区间；
+  只读 CLI 不触发模型。fixture 完整链与多类篡改拒绝通过，不代表官方质量、
+  防伪来源、judge 校准或真实收益。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
