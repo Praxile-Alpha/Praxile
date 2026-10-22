@@ -23,10 +23,18 @@ def audit_online_probe(stream_directory, *, directory, manifest_sha256, report_s
     expected = stream.probe_snapshot(plan["task_indices"], plan["candidates"])
     if plan != expected:
         raise ValueError("probe no longer matches the frozen stream prefix")
+    return _audit_probe_records(stream, root, plan, report, manifest_sha256, report_sha256,
+                                arms=("baseline", "first", "second"))
+
+
+def _audit_probe_records(stream, root, plan, report, manifest_sha256, report_sha256, *, arms):
+    read = _reader(root)
+    if len(arms) != len(plan["candidates"]) + 1 or arms[0] != "baseline":
+        raise ValueError("probe audit arm schedule mismatch")
     if (report.get("schema_version") != "praxile.online_probe_report.v1"
             or report.get("status") != "executions_returned_not_scored" or report.get("track") != plan["track"]
             or report.get("source_ledger_sha256") != plan["source_ledger_sha256"]
-            or not isinstance(report.get("attempts"), list) or len(report["attempts"]) != 3 * len(plan["tasks"])):
+            or not isinstance(report.get("attempts"), list) or len(report["attempts"]) != len(arms) * len(plan["tasks"])):
         raise ValueError("incomplete or mismatched probe report")
     parents = [ContextCandidate.from_dict(value) for value in plan["candidates"]]
     feedback = [{"track": "development", "source_track": plan["track"], "candidate_digest": parent.digest,
@@ -36,8 +44,8 @@ def audit_online_probe(stream_directory, *, directory, manifest_sha256, report_s
     for offset, (index, value) in enumerate(zip(plan["task_indices"], plan["tasks"])):
         task = BenchmarkTask.from_dict({**value, "split": "development"})
         events = {}
-        for arm_index, arm in enumerate(("baseline", "first", "second")):
-            row = report["attempts"][offset * 3 + arm_index]
+        for arm_index, arm in enumerate(arms):
+            row = report["attempts"][offset * len(arms) + arm_index]
             if (row.get("task_index") != index or row.get("task_id") != task.task_id or row.get("arm") != arm
                     or row.get("status") != "executor_returned"):
                 raise ValueError("probe attempt order or identity mismatch")

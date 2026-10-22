@@ -209,6 +209,25 @@ baseline/组合两个 lease；不复用父候选输出，不把已见任务改�
 返回且执行记录可用，任务质量、迁移效果尚未评测；两者 decision 均为 KEEP_BASE，
 candidate_adopted=false、promotion_eligible=false。正式在线候选更新仍需用户审批。
 
+### 组合来源链审计
+
+```sh
+python -m praxile.eval.online_stream_cli audit-composition \
+  --stream .praxile/eval/online/example --probe-directory .praxile/eval/online-probes/example \
+  --composition-directory .praxile/eval/online-compositions/example \
+  --manifest-sha256 <COMPOSITION_MANIFEST_SHA256> --report-sha256 <COMPOSITION_REPORT_SHA256>
+```
+
+先重做父 probe 审计，再核对 feedback、组合候选和模型轨迹的摘要；重建组合
+payload 并核验 input_sha256，检查父子来源、允许的证据引用及能力范围。
+对生成组合的情况，必须存在新的 baseline/组合两条完整执行记录，并复核
+执行条件、候选暴露及行为测量。没有完整证据或处于 outcome_unknown 时拒绝，
+abstain 可以单独审计但不能伪装成组合重跑。既有缺少这些摘要的记录不能直接
+声称通过新审计。调用者须固定摘要；不提供外部签名或供应商响应真实性证明。
+
+输出仍为 KEEP_BASE、semantic_accuracy_verified=false；来源链完整不等于质量
+或迁移效果通过。本接口不调用模型、不写回在线状态，独立质量评测仍待接入。
+
 ## 独立内容评审
 
 已完成任务可单独评审，不影响后续经验选择：
@@ -315,6 +334,6 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 
 目前已接通显式 design、probe、反馈审计、compose 与组合独立重跑，更新正式在线
 候选仍需人工批准。独立内容评审、运行前冻结身份、在线描述性汇总与上述调用的
-共享准入预算已接入；尚缺组合重跑的独立质量评测/审计、效果选择与真实模型多任务验收。
+共享准入预算及组合来源链审计已接入；尚缺组合重跑的独立质量评测、效果选择与真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

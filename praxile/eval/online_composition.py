@@ -66,7 +66,8 @@ async def run_online_composition(config, stream_directory, *, probe_directory, m
                 path = await _execute_probe_plan(stream_directory, rerun_plan, directory=root / "rerun",
                                                 arms=("baseline", "composition"))
                 report.update(status="composition_rerun_not_scored", candidate_digest=candidate.digest,
-                              rerun_report="rerun/report.json", rerun_report_sha256=_sha(path.read_bytes()))
+                              rerun_report="rerun/report.json", rerun_report_sha256=_sha(path.read_bytes()),
+                              rerun_manifest_sha256=_sha((root / "rerun/manifest.json").read_bytes()))
         except BaseException as error:
             report["error_type"] = type(error).__name__
             raise
@@ -74,5 +75,7 @@ async def run_online_composition(config, stream_directory, *, probe_directory, m
             if quota:
                 logger.data["shared_chat_budget_end"] = quota.status()
             _persist(root / "trajectory.json", logger.data)
+            report["evidence_sha256"] = {name: _sha((root / name).read_bytes())
+                for name in ("composition.json", "feedback.json", "trajectory.json") if (root / name).is_file()}
             _persist(root / "report.json", report)
     return root / "report.json"

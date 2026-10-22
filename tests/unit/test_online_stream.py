@@ -437,7 +437,7 @@ def test_online_probe_rejects_invalid_scope_or_replay(tmp_path, monkeypatch, def
 
 
 @pytest.mark.parametrize("decision", ["compose", "abstain", "timeout"])
-def test_online_composition_audits_feedback_and_reruns_without_adopting(tmp_path, monkeypatch, decision):
+def test_online_composition_audits_feedback_and_reruns_without_adopting(tmp_path, monkeypatch, decision, capsys):
     from contextlib import contextmanager
     from types import SimpleNamespace
     from praxile.eval import online_composition, online_probe
@@ -476,12 +476,58 @@ def test_online_composition_audits_feedback_and_reruns_without_adopting(tmp_path
         asyncio.run(online_composition.run_online_composition(SimpleNamespace(), stream.root, **kwargs))
     report = json.loads((kwargs["directory"] / "report.json").read_text())
     assert report["decision"] == "KEEP_BASE" and report["candidate_adopted"] is False
+    from praxile.eval.online_composition_audit import audit_online_composition
+    audit_kwargs = {"probe_directory": probe, "directory": kwargs["directory"],
+        "manifest_sha256": hashlib.sha256((kwargs["directory"] / "manifest.json").read_bytes()).hexdigest(),
+        "report_sha256": hashlib.sha256((kwargs["directory"] / "report.json").read_bytes()).hexdigest()}
+    if decision == "timeout":
+        with pytest.raises(ValueError):
+            audit_online_composition(stream.root, **audit_kwargs)
+    else:
+        audited = audit_online_composition(stream.root, **audit_kwargs)
+        assert audited["local_file_consistency_checked"] is True
+        assert audited["semantic_accuracy_verified"] is False
+        assert (audited["rerun_feedback"] is not None) == (decision == "compose")
+        from praxile.eval.online_stream_cli import main
+        assert main(["audit-composition", "--stream", str(stream.root), "--probe-directory", str(probe),
+            "--composition-directory", str(kwargs["directory"]), "--manifest-sha256", audit_kwargs["manifest_sha256"],
+            "--report-sha256", audit_kwargs["report_sha256"]]) == 0
+        assert json.loads(capsys.readouterr().out) == audited
+        report_path = kwargs["directory"] / "report.json"
+        original = report_path.read_bytes()
+        report_path.write_text(json.dumps({**report, "decision": "PROMOTE"}))
+        with pytest.raises(ValueError):
+            audit_online_composition(stream.root, **{**audit_kwargs, "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest()})
+        report_path.write_bytes(original)
+        trace_path = kwargs["directory"] / "trajectory.json"
+        trace_original = trace_path.read_bytes()
+        trace = json.loads(trace_original)
+        trace["development_compositions"][0]["input_sha256"] = "changed"
+        trace_path.write_text(json.dumps(trace))
+        changed = json.loads(original)
+        changed["evidence_sha256"]["trajectory.json"] = hashlib.sha256(trace_path.read_bytes()).hexdigest()
+        report_path.write_text(json.dumps(changed))
+        with pytest.raises(ValueError, match="prompt"):
+            audit_online_composition(stream.root, **{**audit_kwargs, "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest()})
+        trace_path.write_bytes(trace_original)
+        report_path.write_bytes(original)
     if decision == "compose":
         assert report["status"] == "composition_rerun_not_scored"
         assert len(executions) == 5
         rerun = json.loads((kwargs["directory"] / "rerun/report.json").read_text())
         assert [row["arm"] for row in rerun["attempts"]] == ["baseline", "composition"]
         assert rerun["attempts"][1]["candidate_exposure_verified"] is True
+        rerun_path = kwargs["directory"] / "rerun/report.json"
+        rerun_original = rerun_path.read_bytes()
+        rerun["attempts"].pop()
+        rerun_path.write_text(json.dumps(rerun))
+        changed = json.loads(original)
+        changed["rerun_report_sha256"] = hashlib.sha256(rerun_path.read_bytes()).hexdigest()
+        report_path.write_text(json.dumps(changed))
+        with pytest.raises(ValueError, match="incomplete"):
+            audit_online_composition(stream.root, **{**audit_kwargs, "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest()})
+        rerun_path.write_bytes(rerun_original)
+        report_path.write_bytes(original)
     else:
         assert report["status"] == ("outcome_unknown" if decision == "timeout" else "composition_abstained")
         assert len(executions) == 3

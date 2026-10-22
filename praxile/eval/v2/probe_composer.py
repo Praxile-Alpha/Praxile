@@ -34,8 +34,7 @@ def _behavior_feedback(candidate, episode):
             "evidence_ref": ref, "causal_attribution": False, "task_success_proven": False}
 
 
-def compose_after_development_probes(candidates, reports, *, router, logger, candidate_id,
-                                    applies_to, private=False, cancel_requested=None):
+def _composition_payload(candidates, reports, *, applies_to):
     if len(candidates) != 2 or len(reports) != 2:
         raise EvalSchemaError("composition requires two independently executed development probes")
     requirements = [candidate.context_item.get("executor_requirements") for candidate in candidates]
@@ -79,6 +78,12 @@ def compose_after_development_probes(candidates, reports, *, router, logger, can
     if capability is not None:
         payload["executor_capability"] = capability
         payload["parent_action_examples"] = [item["action_examples"] for item in requirements]
+    return payload, capability, task_ids, allowed_refs
+
+
+def compose_after_development_probes(candidates, reports, *, router, logger, candidate_id,
+                                    applies_to, private=False, cancel_requested=None):
+    payload, capability, task_ids, allowed_refs = _composition_payload(candidates, reports, applies_to=applies_to)
     encoded = canonical_json(payload)
     if len(encoded) > 40000:
         raise EvalSchemaError("composition input exceeds bounded context")

@@ -1236,6 +1236,8 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   任务级 helped/hurt。compose 已消费经审计的受限反馈，允许 abstain；生成后新增
   baseline/组合两个 lease 独立重跑，不继承父结果，保持 KEEP_BASE、不自动采纳。
   模型请求意图与结果持久化，超时不自动重放；组合重跑质量评测和效果选择仍待接入。
+  audit-composition 已复核父 probe、反馈 payload 摘要、候选来源/能力与独立重跑
+  的完整执行条件/轨迹/暴露。只证明可信本地证据一致，仍 KEEP_BASE，不视为质量通过。
   probe-feedback 已离线核对冻结前缀、执行条件/文件摘要与候选暴露，按精确
   操作身份回放预冻结的重复操作测量，输出有事件引用的局部行为反馈。无测量
   或覆盖不足时 abstain，任务结果保持 confounded，不把次数减少当作任务成功。
