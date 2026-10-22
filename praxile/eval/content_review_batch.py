@@ -1,5 +1,6 @@
 """Deterministic requirement partitioning with an explicit total output allowance."""
 import json
+from copy import deepcopy
 
 from .content_review import _digest, _validate_inputs, review_content
 from ..usage_evidence import summarize_usage
@@ -52,8 +53,10 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
                            total_output_tokens, batch_size=4, timeout_per_call=90,
                            role="content_review_judge", private=True,
                            response_mode="function", response_checkpoint=None, citation_mode="quote",
-                           output_allocations=None):
+                           output_allocations=None, progress_checkpoint=None):
     """Stop on first abstention; never recycle allowance or retry groups here."""
+    if progress_checkpoint is not None and not callable(progress_checkpoint):
+        raise ValueError("progress checkpoint must be callable")
     plan = plan_content_review_batch(source_text=source_text, output_text=output_text,
         requirements=requirements, total_output_tokens=total_output_tokens, batch_size=batch_size,
         timeout_per_call=timeout_per_call, role=role, private=private, response_mode=response_mode,
@@ -64,6 +67,7 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
     record = {"schema_version": "praxile.content_review_batch.v1", "plan": plan,
         "plan_sha256": _digest(json.dumps(plan, sort_keys=True)), "status": "pending",
         "groups": [], "logical_requests": 0, "allocated_output_tokens_requested": 0,
+        "logical_request_count_scope": "prepared_groups_not_provider_receipts",
         "unreviewed_ids": list(expected), "official_evaluation": False,
         "promotion_eligible": False, "content_preservation_verified": False,
         "requirement_coverage_verified": False}
@@ -74,6 +78,8 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
         record["usage_evidence"] = summarize_usage(calls, record["logical_requests"])
         record["usage_evidence"]["scope"] = "batch_logical_requests_recorded_by_logger"
         record["usage_evidence"]["transport_retry_usage_verified"] = False
+        if progress_checkpoint is not None:
+            progress_checkpoint(deepcopy(record))
     combined = []
     for index, (group, budget) in enumerate(zip(groups, budgets)):
         checkpoint = None
@@ -83,19 +89,29 @@ def review_content_batched(router, logger, *, source_text, output_text, requirem
                                      "group_index": group_index})
         record["logical_requests"] += 1
         record["allocated_output_tokens_requested"] += budget
-        result = review_content(router, logger, source_text=source_text, output_text=output_text,
-            requirements=group, role=role, private=private, max_tokens=budget,
-            timeout=timeout_per_call, response_mode=response_mode, response_checkpoint=checkpoint,
-            citation_mode=citation_mode)
-        record["groups"].append(result)
+        record["pending_group_index"] = index
+        # Persist intent before the request. This is not proof of provider receipt.
         update_usage()
-        if result["status"] != "reviewed":
-            record.update(status="abstained", failed_group_index=index)
-            return record
-        combined.extend(result["items"])
-        reviewed = {item["id"] for item in combined}
-        record["unreviewed_ids"] = [key for key in expected if key not in reviewed]
+        try:
+            result = review_content(router, logger, source_text=source_text, output_text=output_text,
+                requirements=group, role=role, private=private, max_tokens=budget,
+                timeout=timeout_per_call, response_mode=response_mode, response_checkpoint=checkpoint,
+                citation_mode=citation_mode)
+            record["groups"].append(result)
+            record["pending_group_index"] = None
+            if result["status"] != "reviewed":
+                record.update(status="abstained", failed_group_index=index)
+                return record
+            combined.extend(result["items"])
+            reviewed = {item["id"] for item in combined}
+            record["unreviewed_ids"] = [key for key in expected if key not in reviewed]
+        except BaseException:
+            record.update(status="interrupted_or_failed", failed_group_index=index)
+            raise
+        finally:
+            update_usage()
     record.update(status="reviewed", items=combined, judgment_source="llm",
                   all_declared_requirements_preserved=all(
                       item["verdict"] == "preserved" for item in combined))
+    update_usage()
     return record

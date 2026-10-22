@@ -143,3 +143,28 @@ def test_batch_ledger_excludes_prior_calls_and_retains_failed_unknown():
     assert evidence["complete_tokens"] == {"prompt_tokens": None, "completion_tokens": None}
     assert evidence["cost_usd"] is None
     assert evidence["transport_retry_usage_verified"] is False
+
+
+def test_progress_checkpoint_failure_prevents_model_request():
+    router, logger, requirements = setup()
+    def fail(_):
+        raise OSError("disk unavailable")
+    with pytest.raises(OSError):
+        call(router, logger, requirements, progress_checkpoint=fail)
+    router.chat.assert_not_called()
+    record = logger.data["content_review_batches"][0]
+    assert record["pending_group_index"] == 0
+    assert record["usage_evidence"]["complete_tokens"]["prompt_tokens"] is None
+
+
+def test_progress_callback_cannot_modify_live_plan_or_results():
+    router, logger, requirements = setup()
+    saved = []
+    def checkpoint(record):
+        saved.append(record["status"])
+        record["plan"]["groups"].clear()
+        record["groups"].clear()
+    result = call(router, logger, requirements, progress_checkpoint=checkpoint)
+    assert saved[-1] == "reviewed"
+    assert len(result["plan"]["groups"]) == len(result["groups"]) == 3
+    assert result["pending_group_index"] is None

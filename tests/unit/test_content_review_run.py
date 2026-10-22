@@ -101,3 +101,35 @@ def test_interrupt_closes_transport_and_leaves_nonreplayable_run(tmp_path, monke
     with pytest.raises(FileExistsError):
         run_content_review(config, run_id="interrupted", inputs=inputs, total_output_tokens=100, private=False)
     router.chat.assert_called_once()
+
+
+def test_second_group_interrupt_keeps_first_group_usage_and_predispatch_snapshot(tmp_path, monkeypatch):
+    config, inputs, router, _, close = setup(tmp_path, monkeypatch)
+    inputs["requirements"].append({"id": "second", "requirement": "retain source", "source_quote": "source"})
+    path = config.paths.state / "eval/v2/content_reviews/partial"
+    original = router.chat.side_effect
+    seen = []
+    def chat(*args, **kwargs):
+        report = json.loads((path / "report.json").read_text())
+        seen.append(report)
+        assert report["pending_group_index"] == len(seen) - 1
+        assert report["automatic_replay_allowed"] is False
+        if len(seen) == 2:
+            raise KeyboardInterrupt()
+        return original(*args, **kwargs)
+    router.chat.side_effect = chat
+    with pytest.raises(KeyboardInterrupt):
+        run_content_review(config, run_id="partial", inputs=inputs, total_output_tokens=100,
+                           batch_size=1, private=False)
+    report = json.loads((path / "report.json").read_text())
+    assert report["status"] == "interrupted_or_failed"
+    assert report["pending_group_index"] == 1
+    assert report["unreviewed_ids"] == ["second"]
+    assert len(report["groups"]) == 1
+    evidence = report["usage_evidence"]
+    assert evidence["calls"] == 2 and evidence["recorded_calls"] == 1
+    assert evidence["known_tokens"] == {"prompt_tokens": 5, "completion_tokens": 10}
+    assert evidence["complete_tokens"] == {"prompt_tokens": None, "completion_tokens": None}
+    assert evidence["cost_usd"] is None
+    assert evidence["transport_retry_usage_verified"] is False
+    close.assert_called_once()

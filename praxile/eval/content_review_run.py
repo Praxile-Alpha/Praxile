@@ -100,12 +100,18 @@ def run_content_review(config, *, run_id, inputs, total_output_tokens, batch_siz
                 write_json(run / f"response-{payload['group_index']}.json", payload)
             write_json(run / "trajectory.json", logger.data)
 
+        def progress_checkpoint(batch):
+            write_json(run / "trajectory.json", logger.data)
+            write_json(run / "report.json", {**batch, "automatic_replay_allowed": False})
+
         report = review_content_batched(router, logger, **inputs, total_output_tokens=total_output_tokens,
             batch_size=batch_size, output_allocations=output_allocations, role=role, private=private,
             timeout_per_call=timeout_per_call, citation_mode="units", response_mode="function",
-            response_checkpoint=checkpoint)
+            response_checkpoint=checkpoint, progress_checkpoint=progress_checkpoint)
     except BaseException:
-        report = {"status": "interrupted_or_failed", "automatic_replay_allowed": False,
+        batches = logger.data.get("content_review_batches", [])
+        report = {**(batches[-1] if batches else {}),
+                  "status": "interrupted_or_failed", "automatic_replay_allowed": False,
                   "promotion_eligible": False}
         raise
     finally:
