@@ -28,10 +28,12 @@ def main(argv=None):
     create.add_argument("--repository", required=True)
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
-    for name in ("status", "next", "accept", "design", "review", "audit-review"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
-        if name == "next":
+        if name == "summary":
+            command.add_argument("--reviews", type=Path, required=True, help="JSON object containing pinned reviews")
+        elif name == "next":
             command.add_argument("--execute", action="store_true", help="Start one isolated task and potentially billable model calls")
         elif name == "accept":
             command.add_argument("--candidate", type=Path, required=True)
@@ -77,6 +79,12 @@ def main(argv=None):
             stream = OnlineStream(args.stream)
             if args.command == "status":
                 result = stream.status()
+            elif args.command == "summary":
+                from .online_summary import summarize_online_stream
+                manifest = _load(args.reviews)
+                if set(manifest) != {"reviews"}:
+                    raise ValueError("summary manifest requires only reviews")
+                result = summarize_online_stream(args.stream, manifest["reviews"])
             elif args.command == "next":
                 result = ({**asyncio.run(stream.run_next()), "action": "execution_completed_not_scored"}
                           if args.execute else {**stream.status(), "action": "preview_only"})

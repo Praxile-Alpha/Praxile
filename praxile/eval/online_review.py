@@ -1,5 +1,6 @@
 """Post-hoc independent content review, isolated from online learning state."""
 from copy import deepcopy
+import json
 from pathlib import Path
 
 from ..utils import write_json
@@ -131,6 +132,8 @@ def audit_online_review(stream_directory, index, *, judge, directory, receipt_sh
             or receipt.get("metric") != "llm_declared_requirement_preservation"):
         raise ValueError("online review plan, trajectory or counts mismatch")
     return {"schema_version": "praxile.online_review_audit.v1", "track": "online_stream",
+        "judge_protocol_sha256": _sha(json.dumps(
+            {key: value for key, value in identity.items() if key != "artifacts"}, sort_keys=True).encode()),
         "task_index": index, "task_id": receipt["task_id"], "receipt_sha256": receipt_sha256,
         "status": "complete_judge_labels" if counts is not None and counts["uncertain"] == 0 else "unknown",
         "verdict_counts": counts, "requirement_count": len(prepared["inputs"]["requirements"]),

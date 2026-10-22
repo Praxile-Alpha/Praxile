@@ -168,6 +168,28 @@ broker usage 文件校验摘要，但本接口不证明供应商计费准确。
 调用者固定的 receipt 摘要与本地文件一致性不等于外部签名或语义正确性，
 结果始终保留 semantic_accuracy_verified=false、promotion_eligible=false。
 
+### 在线流汇总
+
+```sh
+python -m praxile.eval.online_stream_cli summary \
+  --stream .praxile/eval/online/example --reviews reviews.json
+```
+
+reviews.json 格式为 `{"reviews": [...]}`，列表每项包含 task_index、directory（评审目录）、
+receipt_sha256 和 judge（该任务完整 judge 配置对象，密钥仍只用文件路径）。
+空列表合法，表示尚未提供评审。该命令逐项执行上面的独立审计，不调用模型；
+重复任务序号、未完成任务的评审、不同模型/预算的 judge 协议混用、执行中或
+汇总期间发生变化的 stream 均拒绝。未提供的评审不会被自动发现或偷偷挑选。
+
+输出按冻结顺序覆盖全部计划任务：complete_judge_labels、unknown、missing_review、
+not_executed。每个标签完整任务先计算 preserved/requirement_count，再做任务等权
+平均，避免 rubric 条目多的任务获得更大权重。observed_task_mean 仅描述完整子集，
+同时输出覆盖率及 unknown_or_unexecuted_tasks。planned_task_mean_bounds 将其余任务
+分别按 0 和 1 给出缺失结果上下界；它不是置信区间，也不假设在线任务相互独立。
+例如四个计划任务只有两个完整标签分数 0.5、1，观察均值为 0.75，覆盖率 50%，
+计划任务均值的缺失界为 [0.375, 0.875]，不能把它写成全任务成功率 75%。
+本接口不估计因果提升、完整成本或官方分数，不与 held-out 分数合并。
+
 ## 顺序账本和中断
 
 stream.json 保存冻结任务、执行配置及哈希关联的事件链：dispatch、completed、
@@ -193,7 +215,7 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 不能把在线结果混入冻结 held-out 分析。
 
 目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
-全链路。独立内容评审及运行前冻结的内容评审身份已接入，尚缺多任务统计、在线
+全链路。独立内容评审、运行前冻结身份及审计后的在线描述性汇总已接入，尚缺在线
 probe 后再组合、全流总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

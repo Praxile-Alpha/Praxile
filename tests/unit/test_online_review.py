@@ -32,9 +32,13 @@ def completed(tmp_path, monkeypatch, request):
     judge = {"credential_file": key, "endpoint": "https://judge.invalid/v1/chat/completions", "model": "judge",
         "public": True, "total_output_tokens": 100, "evaluator_root": evaluator,
         "artifacts": {task.task_id: {"source_path": "source.txt", "output_path": "result.txt"}}}
-    stream = stream_module.OnlineStream.create(tmp_path / "stream", [task], repository="docs",
+    tasks = [task]
+    if getattr(request, "param", False) == "multi":
+        tasks.append(BenchmarkTask.from_dict({**task.to_dict(), "task_id": "online-second"}))
+        judge["artifacts"]["online-second"] = dict(judge["artifacts"][task.task_id])
+    stream = stream_module.OnlineStream.create(tmp_path / "stream", tasks, repository="docs",
         judge=judge if getattr(request, "param", False) else None,
-        input_source_roots={task.task_id: tmp_path}, execution={"wheel": tmp_path / "worker.whl",
+        input_source_roots={item.task_id: tmp_path for item in tasks}, execution={"wheel": tmp_path / "worker.whl",
             "wheel_sha256": "a" * 64, "model": "executor", "base_url": "https://provider.invalid/v1", "credential_file": key})
     async def run(task, **options):
         root = options["state_root"] / "lease"
@@ -55,8 +59,38 @@ def completed(tmp_path, monkeypatch, request):
         path.write_text(json.dumps(report))
         return path
     monkeypatch.setattr(stream_module, "run_owned_native", run)
-    asyncio.run(stream.run_next())
+    for _ in tasks:
+        asyncio.run(stream.run_next())
     return stream, judge
+
+
+@pytest.mark.parametrize("completed", ["multi"], indirect=True)
+def test_multiple_real_receipts_summary_cli(completed, tmp_path, monkeypatch, capsys):
+    from praxile.eval.online_stream_cli import main
+    stream, judge = completed
+    def forward(self, raw):
+        body = json.loads(raw)
+        data = json.loads(body["messages"][1]["content"])
+        return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
+            "name": body["tool_choice"]["function"]["name"], "arguments": json.dumps({"items": [
+                {"id": "r", "verdict": "preserved", "output_refs": [data["output_units"][0]["id"]], "reason": "Fixture"}]})}}]}}],
+            "usage": {"prompt_tokens": 4, "completion_tokens": 2}}
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
+    entries = []
+    for index, task_id in enumerate(stream.status()["completed_task_ids"]):
+        settings = {**judge, "artifacts": {task_id: judge["artifacts"][task_id]}}
+        directory = tmp_path / f"review-{index}"
+        receipt = run_online_review(stream.root, index, judge=settings, directory=directory)
+        entries.append({"task_index": index, "directory": str(directory), "receipt_sha256": sha(receipt.read_bytes()),
+                        "judge": {**settings, "credential_file": "MISSING_SECRET", "evaluator_root": str(judge["evaluator_root"])}})
+    manifest = tmp_path / "reviews.json"
+    manifest.write_text(json.dumps({"reviews": entries}))
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", lambda *args: pytest.fail("summary invoked model"))
+    assert main(["summary", "--stream", str(stream.root), "--reviews", str(manifest)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["planned_tasks"] == result["tasks_with_complete_labels"] == 2
+    assert result["planned_task_mean_bounds"] == {"lower": 1, "upper": 1}
+    assert result["judge_precommitted_before_execution"] is True
 
 
 @pytest.mark.parametrize("verdict", ["preserved", "uncertain"])
@@ -96,6 +130,11 @@ def test_review_binds_outputs_without_changing_learning_state(completed, tmp_pat
     assert audit["status"] == ("unknown" if verdict == "uncertain" else "complete_judge_labels")
     assert audit["local_file_consistency_checked"] is True
     assert audit["semantic_accuracy_verified"] is False
+    from praxile.eval.online_summary import summarize_online_stream
+    summary = summarize_online_stream(stream.root, [{"task_index": 0, "directory": root,
+        "receipt_sha256": sha(path.read_bytes()), "judge": judge}])
+    assert summary["tasks_with_complete_labels"] == (0 if verdict == "uncertain" else 1)
+    assert summary["observed_task_mean"] == (None if verdict == "uncertain" else 1)
     original = path.read_bytes()
     for field, value in (("task_index", 1), ("promotion_eligible", True), ("verdict_counts", {})):
         changed = {**receipt, field: value}

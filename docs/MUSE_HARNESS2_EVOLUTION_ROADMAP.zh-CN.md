@@ -1224,8 +1224,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   运行前冻结 judge。现另支持 create 时可选冻结完整内容评审身份，后续评审必须匹配，
   旧流不可追认；不冻结凭据或向执行器发送 rubric。audit-review 可离线复核
   完成事件、源产物、评审文件、batch plan 和标签计数；只证明本地一致性，
-  uncertain/abstained 保留 unknown，不称为质量验证。尚缺在线 probe 后组合、
-  多任务统计与真实多任务验收，
+  uncertain/abstained 保留 unknown，不称为质量验证。
+  在线 summary 已按完整计划顺序审计汇总、任务等权计算标签保留比例，保留
+  缺失覆盖及缺失结果界，不假定在线任务独立、不提供因果提升或完整成本。
+  在线 probe 后组合及真实多任务验收仍缺失，
   不据此勾选完整协议；详见 ONLINE_STREAM.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。
