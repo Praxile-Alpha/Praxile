@@ -1219,7 +1219,9 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   online_stream 标记。CLI 已提供 create/status/next/accept，执行及批准需显式
   opt-in，检查 worker/候选摘要，失败不输出敏感配置。design 已接已完成前缀的
   结构化证据与 proposal_composer；生成报告绑定来源账本，允许 NO_ENTRY，
-  不自动批准或调用下一任务。尚缺在线 probe 后组合、独立评分/统计与真实多任务验收，
+  不自动批准或调用下一任务。独立 post-hoc 内容评审已绑定完成事件及产物，
+  评审状态存放于 stream 外，不进入设计证据；标签不是官方成功率，也不称为
+  运行前冻结 judge。尚缺在线 probe 后组合、冻结评分协议/统计与真实多任务验收，
   不据此勾选完整协议；详见 ONLINE_STREAM.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。

@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 import sys
+import sqlite3
 
 from .native_context import load_candidate
 from .online_stream import OnlineStream
@@ -26,7 +27,7 @@ def main(argv=None):
     create.add_argument("--execution-config", type=Path, required=True)
     create.add_argument("--repository", required=True)
     create.add_argument("--input-roots", type=Path)
-    for name in ("status", "next", "accept", "design"):
+    for name in ("status", "next", "accept", "design", "review"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
         if name == "next":
@@ -44,6 +45,11 @@ def main(argv=None):
             command.add_argument("--resume", action="store_true")
             command.add_argument("--max-output-tokens", type=int, default=4000)
             command.add_argument("--request-timeout", type=int, default=60)
+        elif name == "review":
+            command.add_argument("--task-index", type=int, required=True, help="Zero-based completed task index")
+            command.add_argument("--judge-config", type=Path, required=True)
+            command.add_argument("--output", type=Path, required=True)
+            command.add_argument("--execute", action="store_true", help="Send declared artifacts/requirements to the independent judge")
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -84,6 +90,21 @@ def main(argv=None):
                     result = {"track": "online_stream", "action": "design_preview_only",
                         "source_ledger_sha256": bundle["ledger_sha256"], "evidence_count": len(bundle["evidence"]),
                         "completed_tasks": len(bundle["completed_task_ids"]), "promotion_eligible": False}
+            elif args.command == "review":
+                from .online_review import prepare_online_review, run_online_review
+                judge = _load(args.judge_config)
+                if args.execute:
+                    path = run_online_review(args.stream, args.task_index, judge=judge, directory=args.output)
+                    receipt = _load(path)
+                    result = {"track": "online_stream", "status": receipt["status"],
+                        "action": "independent_review_returned", "official_evaluation": False,
+                        "promotion_eligible": False, "learning_feedback_allowed": False,
+                        "metric": receipt["metric"], "verdict_counts": receipt["verdict_counts"]}
+                else:
+                    prepared = prepare_online_review(args.stream, args.task_index, judge=judge, directory=args.output)
+                    result = {"track": "online_stream", "action": "review_preview_only", "task_index": args.task_index,
+                        "completion_event_sha256": prepared["receipt"]["completion_event_sha256"],
+                        "official_evaluation": False, "promotion_eligible": False}
             else:
                 value = load_candidate(args.candidate, args.candidate_sha256)
                 result = stream.preview_candidate(value)
@@ -95,7 +116,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print("Interrupted. Inspect stream status; uncertain tasks are never automatically replayed.", file=sys.stderr)
         return 130
-    except (ValueError, TypeError, KeyError, OSError, RuntimeError, ImportError) as error:
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError, ImportError, sqlite3.Error) as error:
         print("Online stream rejected or failed: " + type(error).__name__, file=sys.stderr)
         return 2
 

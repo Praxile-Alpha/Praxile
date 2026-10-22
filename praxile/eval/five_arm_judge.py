@@ -16,6 +16,8 @@ def judge_identity(judge, tasks):
         raise ValueError("invalid study judge configuration")
     if judge["public"] is not True or not isinstance(judge["model"], str) or not judge["model"].strip():
         raise ValueError("study judge requires public opt-in and model")
+    if not isinstance(judge["endpoint"], str):
+        raise ValueError("study judge endpoint must be a string")
     endpoint = urlsplit(judge["endpoint"])
     if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password
             or endpoint.query or endpoint.fragment or not endpoint.path.endswith("/chat/completions")):

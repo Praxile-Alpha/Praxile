@@ -110,6 +110,35 @@ online_stream 和 source_ledger_sha256。两个候选及组合仍是未经验证
 后续任务或批准事件改变来源账本摘要时需新的 design-id。Python 对应接口为
 `run_online_design(config, stream_directory, design_id=..., applies_to=...)`。
 
+## 独立内容评审
+
+已完成任务可单独评审，不影响后续经验选择：
+
+```sh
+python -m praxile.eval.online_stream_cli review \
+  --stream .praxile/eval/online/example --task-index 0 \
+  --judge-config judge.json --output .praxile/eval/online-reviews/example-task-0
+```
+
+默认仅离线预检；添加 --execute 才发送材料给 judge。task-index 从 0 开始，
+不能选择未完成任务。judge.json 格式与五组 judge 配置一致，artifacts 只包含
+这一次待评审任务：credential_file、endpoint（HTTPS /chat/completions）、model、
+total_output_tokens、public=true、evaluator_root、artifacts 均必填；可选
+batch_size、timeout_per_call、request_options。artifacts 内指定冻结的 source_path、
+output_path 以及可选 text/docx_body/pdf_text 抽取格式。私有 evaluator 必须为任务
+中冻结的 praxile-content-review v1 requirements，不能随意换成未知官方评分器。
+
+评审目录与 evaluator 文件须在 stream 目录之外。控制器复核执行报告、输入、
+输出与轨迹摘要，使用独立 broker 和调用/输出额度；receipt.json 绑定任务序号、
+完成事件摘要、执行证据、judge 配置身份及全部评审产物摘要。目录只允许创建
+一次，失败后不静默重试；传输失败可表示为 abstained，未知 token 不补零。
+
+CLI 输出 preserved/missing/contradicted/uncertain 标签计数。它们是未校准的 LLM
+内容保留判断，不是任务成功率；本阶段 judge 在任务结束后配置，明确记录
+judge_precommitted_before_execution=false，不能据此声称冻结对照或性能提升。
+这份评审不会写入 stream 账本、自动批准候选或进入 design 的工具证据。
+Python 接口为 `run_online_review(stream_directory, index, judge=..., directory=...)`。
+
 ## 顺序账本和中断
 
 stream.json 保存冻结任务、执行配置及哈希关联的事件链：dispatch、completed、
@@ -135,6 +164,7 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 不能把在线结果混入冻结 held-out 分析。
 
 目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
-全链路。尚缺在线 probe 后再组合、独立在线评分/统计、全流总预算和真实模型多任务验收。
+全链路。独立内容评审已接入，尚缺运行前冻结的在线评分协议、多任务统计、在线
+probe 后再组合、全流总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

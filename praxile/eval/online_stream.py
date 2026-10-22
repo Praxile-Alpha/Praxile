@@ -210,6 +210,23 @@ class OnlineStream:
             return {"ledger_sha256": state["events"][-1]["sha256"], "completed_task_ids": completed,
                     "sources": sources}
 
+    def review_target(self, index):
+        """Return a completed execution binding, never the next task or its evaluator."""
+        with file_lock(self.root / "stream"):
+            state, completed, pending, _ = self._read()
+            if type(index) is not int or not 0 <= index < len(completed) or pending is not None:
+                raise ValueError("review requires an idle, completed stream task")
+            event = next(event for event in state["events"] if event["kind"] == "completed"
+                         and event["data"]["index"] == index)
+            matches = [(path, digest) for path, digest in event["data"]["evidence"].items()
+                       if path.endswith("/execution.json")]
+            if len(matches) != 1:
+                raise ValueError("completed task has no unique execution receipt")
+            path, digest = matches[0]
+            return {"task": BenchmarkTask.from_dict(state["spec"]["tasks"][index]),
+                    "execution_dir": (self.root / path).parent, "execution_sha256": digest,
+                    "completion_event_sha256": event["sha256"], "task_index": index}
+
     def accept_candidate(self, value, *, approved=False, approved_by=""):
         if approved is not True or not isinstance(approved_by, str) or not approved_by.strip():
             raise ValueError("candidate update requires explicit human approval identity")
