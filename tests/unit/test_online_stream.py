@@ -302,3 +302,75 @@ def test_online_design_cli_preview_does_not_load_model_config(tmp_path, monkeypa
                  "--scope", str(scope)]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["action"] == "design_preview_only" and result["evidence_count"] == 1
+
+
+def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monkeypatch, capsys):
+    from praxile.eval.online_probe import run_online_probe, prepare_online_probe
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
+    asyncio.run(stream.run_next())
+    parents = [candidate(), {**candidate(), "candidate_id": "other"}]
+    from praxile.eval import online_probe
+    calls = []
+    monkeypatch.setattr(online_probe, "run_owned_native", fake_runner(calls, native=True))
+    root = tmp_path / "probe"
+    before = (stream.root / "stream.json").read_bytes()
+    plan = prepare_online_probe(stream.root, [0], parents, directory=root)
+    assert plan["track"] == "online_prefix_development_probe"
+    assert not root.exists() and not calls
+    from praxile.eval.online_stream_cli import main
+    args = ["probe", "--stream", str(stream.root), "--task-index", "0", "--output", str(root)]
+    for index, parent in enumerate(parents):
+        path = tmp_path / f"parent-{index}.json"
+        path.write_text(json.dumps(parent))
+        args.extend(["--candidate", str(path), "--candidate-sha256", hashlib.sha256(path.read_bytes()).hexdigest()])
+    assert main(args) == 0
+    assert json.loads(capsys.readouterr().out)["planned_executions"] == 3
+    assert not root.exists() and not calls
+    result = asyncio.run(run_online_probe(stream.root, [0], parents, directory=root))
+    report = json.loads(result.read_text())
+    assert report["status"] == "executions_returned_not_scored"
+    assert [row["arm"] for row in report["attempts"]] == ["baseline", "first", "second"]
+    assert len({str(options["state_root"]) for _, options in calls}) == 3
+    assert "development_candidate_file" not in calls[0][1]
+    assert calls[1][1]["development_only"] is True
+    assert calls[2][1]["development_only"] is True
+    assert "PRIVATE_SENTINEL" not in json.dumps(report)
+    assert (stream.root / "stream.json").read_bytes() == before
+    with pytest.raises(ValueError):
+        asyncio.run(run_online_probe(stream.root, [0], parents, directory=root))
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("defect", ["future", "duplicate_index", "future_source", "duplicate_parent", "inside", "interrupted"])
+def test_online_probe_rejects_invalid_scope_or_replay(tmp_path, monkeypatch, defect):
+    from praxile.eval import online_probe
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
+    asyncio.run(stream.run_next())
+    parents = [candidate(), {**candidate(), "candidate_id": "other"}]
+    indices, root = [0], tmp_path / "probe"
+    if defect == "future":
+        indices = [1]
+    elif defect == "duplicate_index":
+        indices = [0, 0]
+    elif defect == "future_source":
+        parents[1] = {**parents[1], "source_task_ids": ["second"]}
+    elif defect == "duplicate_parent":
+        parents[1] = parents[0]
+    elif defect == "inside":
+        root = stream.root / "probe"
+    calls = []
+    async def fail(*args, **kwargs):
+        calls.append(1)
+        raise RuntimeError("fixture interrupted")
+    monkeypatch.setattr(online_probe, "run_owned_native", fail)
+    with pytest.raises((ValueError, RuntimeError)):
+        asyncio.run(online_probe.run_online_probe(stream.root, indices, parents, directory=root))
+    if defect == "interrupted":
+        assert json.loads((root / "report.json").read_text())["status"] == "outcome_unknown"
+        with pytest.raises(ValueError):
+            asyncio.run(online_probe.run_online_probe(stream.root, indices, parents, directory=root))
+        assert calls == [1]
+    else:
+        assert not root.exists() and not calls

@@ -29,10 +29,16 @@ def main(argv=None):
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
     create.add_argument("--chat-budget", type=Path, help="Freeze shared executor/reflection/judge admission budget")
-    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
-        if name == "summary":
+        if name == "probe":
+            command.add_argument("--task-index", type=int, action="append", required=True)
+            command.add_argument("--candidate", type=Path, action="append", required=True)
+            command.add_argument("--candidate-sha256", action="append", required=True)
+            command.add_argument("--output", type=Path, required=True)
+            command.add_argument("--execute", action="store_true")
+        elif name == "summary":
             command.add_argument("--reviews", type=Path, required=True, help="JSON object containing pinned reviews")
         elif name == "next":
             command.add_argument("--execute", action="store_true", help="Start one isolated task and potentially billable model calls")
@@ -81,6 +87,21 @@ def main(argv=None):
             stream = OnlineStream(args.stream)
             if args.command == "status":
                 result = stream.status()
+            elif args.command == "probe":
+                from .online_probe import prepare_online_probe, run_online_probe
+                if len(args.candidate) != 2 or len(args.candidate_sha256) != 2:
+                    raise ValueError("probe requires two candidate files and their digests")
+                parents = [load_candidate(path, digest) for path, digest in zip(args.candidate, args.candidate_sha256)]
+                if args.execute:
+                    path = asyncio.run(run_online_probe(args.stream, args.task_index, parents, directory=args.output))
+                    report = _load(path)
+                    result = {"track": report["track"], "status": report["status"],
+                              "attempt_count": len(report["attempts"]), "promotion_eligible": False}
+                else:
+                    plan = prepare_online_probe(args.stream, args.task_index, parents, directory=args.output)
+                    result = {"track": plan["track"], "action": "probe_preview_only",
+                              "source_ledger_sha256": plan["source_ledger_sha256"],
+                              "planned_executions": len(plan["tasks"]) * 3, "promotion_eligible": False}
             elif args.command == "summary":
                 from .online_summary import summarize_online_stream
                 manifest = _load(args.reviews)

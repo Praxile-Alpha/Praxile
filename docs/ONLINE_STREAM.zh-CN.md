@@ -136,6 +136,32 @@ output_budget 是最大输出预留量，不是实际消耗；request_byte_budge
 可信本地控制器，不能防御拥有宿主文件权限的用户恢复旧数据库或绕过代理。
 没有配置该选项的既有 stream 保持原行为，judge 使用单次评审配额。
 
+## 已完成前缀的隔离 Probe
+
+```sh
+python -m praxile.eval.online_stream_cli probe \
+  --stream .praxile/eval/online/example --task-index 0 \
+  --candidate first.json --candidate-sha256 <FIRST_SHA256> \
+  --candidate second.json --candidate-sha256 <SECOND_SHA256> \
+  --output .praxile/eval/online-probes/example
+```
+
+默认只预检；增加 --execute 才执行。可重复 task-index，最多 5 个，必须都已完成。
+两个父候选必须不同、有假设，来源只能属于完整已完成前缀。每个选中任务分别以
+baseline、first、second 三个独立 lease 重跑，共享原 stream 的执行配置与可选配额。
+这是已见任务的 development replay，明确标识 online_prefix_development_probe，
+不是新的 held-out/online 成绩，也不推进正式任务序号或批准候选。
+
+manifest 冻结来源账本及任务/候选，report 每次 dispatch 前持久化未知状态；
+中断后不自动重放。报告绑定执行与轨迹摘要，投影结构化工具证据，不含原始
+命令、正文或隐藏 rubric；控制器不调用 evaluator。stream 中途前进时拒绝继续。
+所有动作仍由 owned native 环境执行，检查输入摘要及隔离生命周期。
+
+本阶段 `executions_returned_not_scored` 只证明执行器返回且清理完成，不证明任务成功。
+候选实际激活/注入还需独立核验，candidate_exposure_verified 保守为 false。
+尚未基于这些报告调用组合模型，也没有 helped/hurt 或因果提升结论；后续需先
+完成暴露与行为证据校验，再运行组合版本，不能继承父候选的效果。
+
 ## 独立内容评审
 
 已完成任务可单独评审，不影响后续经验选择：

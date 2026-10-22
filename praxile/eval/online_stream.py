@@ -274,6 +274,32 @@ class OnlineStream:
                     "execution_dir": (self.root / path).parent, "execution_sha256": digest,
                     "completion_event_sha256": event["sha256"], "task_index": index}
 
+    def probe_snapshot(self, indices, candidates):
+        """Freeze completed public tasks for isolated development replay only."""
+        with file_lock(self.root / "stream"):
+            state, completed, pending, _ = self._read()
+            if (pending is not None or not isinstance(indices, list) or not 1 <= len(indices) <= 5
+                    or any(type(index) is not int or not 0 <= index < len(completed) for index in indices)
+                    or len(set(indices)) != len(indices)):
+                raise ValueError("probe requires 1..5 unique completed task indices and idle stream")
+            if not isinstance(candidates, list) or len(candidates) != 2:
+                raise ValueError("probe requires exactly two candidates")
+            parents = [self._candidate(value, completed, state["spec"]["repository"]) for value in candidates]
+            if len({value.digest for value in parents}) != 2 or len({value.candidate_id for value in parents}) != 2:
+                raise ValueError("probe parents must be distinct")
+            if any(not isinstance(value.expected_effect.get("hypothesis"), str)
+                   or not value.expected_effect["hypothesis"].strip() for value in parents):
+                raise ValueError("probe parents require explicit hypotheses")
+            return {"schema_version": "praxile.online_probe_plan.v1", "track": "online_prefix_development_probe",
+                "source_ledger_sha256": state["events"][-1]["sha256"],
+                "completed_task_ids": completed, "task_indices": indices,
+                "tasks": [deepcopy(state["spec"]["tasks"][index]) for index in indices],
+                "execution": deepcopy(state["spec"]["execution"]),
+                "input_source_roots": {completed[index]: state["spec"]["input_source_roots"].get(completed[index])
+                                       for index in indices},
+                "repository": state["spec"]["repository"], "candidates": [value.to_dict() for value in parents],
+                "official_evaluation": False, "promotion_eligible": False, "automatic_replay_allowed": False}
+
     def accept_candidate(self, value, *, approved=False, approved_by=""):
         if approved is not True or not isinstance(approved_by, str) or not approved_by.strip():
             raise ValueError("candidate update requires explicit human approval identity")
