@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Iterable
+import math
 
 from ...trace import AgentEvent
 
@@ -68,8 +69,22 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
     progress = [item.get("progress", {}) for item in metrics]
     resolved = [item for item in task_results if item.get("evaluator", {}).get("resolved") is True]
     known = [item for item in task_results if item.get("evaluator", {}).get("resolved") is not None]
-    cost_complete = bool(metrics) and all(item.get("cost_complete") is True for item in metrics)
-    reported_cost = round(sum(float(item.get("cost", 0.0) or 0.0) for item in metrics), 8)
+    def money(value):
+        return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+    subtotals = [money(item.get("reported_cost_subtotal", item.get("cost"))) for item in metrics]
+    totals = [money(item.get("cost_total")) if item.get("cost_complete") is True else None
+              for item in metrics]
+    totals = [total if total is not None and total == subtotal else None
+              for total, subtotal in zip(totals, subtotals)]
+    cost_complete = bool(metrics) and all(value is not None for value in totals)
+    reported_cost = round(sum(value for value in subtotals if value is not None), 8)
+    def counts(key):
+        values = [item.get(key) for item in metrics]
+        known = [value for value in values if type(value) is int and value >= 0]
+        return {"known_subtotal": sum(known), "reported_task_count": len(known),
+                "complete_total": sum(known) if metrics and len(known) == len(metrics) else None}
+    count_metrics = {key: counts(key) for key in
+                     ("latency_ms", "tool_calls", "retries", "recoveries", "interventions")}
     token_fields = ("input", "output", "cache")
     def token_value(item, key):
         value = item.get("tokens", {}).get(key) if isinstance(item.get("tokens"), dict) else None
@@ -90,11 +105,13 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
             and all(token_value(item, key) is not None for key in token_fields) for item in metrics),
         "cost": reported_cost,
         "reported_cost_subtotal": reported_cost,
-        "cost_total": reported_cost if cost_complete else None,
+        "cost_total": round(sum(totals), 8) if cost_complete else None,
         "cost_complete": cost_complete,
-        "unpriced_task_count": sum(item.get("cost_complete") is not True for item in metrics),
-        "latency_ms": sum(int(item.get("latency_ms", 0)) for item in metrics),
-        "tool_calls": sum(int(item.get("tool_calls", 0)) for item in metrics),
+        "unpriced_task_count": sum(value is None for value in totals),
+        "cost_reported_task_count": sum(value is not None for value in subtotals),
+        "count_metric_coverage": count_metrics,
+        "latency_ms": count_metrics["latency_ms"]["complete_total"],
+        "tool_calls": count_metrics["tool_calls"]["complete_total"],
         "progress": {
             "patch_created_count": sum(bool(item.get("patch_created")) for item in progress),
             "environment_probe_count": sum(int(item.get("environment_probe_count", 0)) for item in progress),
@@ -103,7 +120,7 @@ def aggregate_metrics(task_results: list[dict[str, Any]]) -> dict[str, Any]:
                 item.get("first_repo_write_action_heuristic") is not None for item in progress
             ),
         },
-        "retries": sum(int(item.get("retries", 0)) for item in metrics),
-        "recoveries": sum(int(item.get("recoveries", 0)) for item in metrics),
-        "interventions": sum(int(item.get("interventions", 0)) for item in metrics),
+        "retries": count_metrics["retries"]["complete_total"],
+        "recoveries": count_metrics["recoveries"]["complete_total"],
+        "interventions": count_metrics["interventions"]["complete_total"],
     }

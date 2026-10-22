@@ -775,6 +775,13 @@ praxile eval ab first.json development-tasks.jsonl \
 
 ## 不完整用量
 
+Eval Runner 聚合的 `latency_ms/tool_calls/retries/recoveries/interventions` 只在
+每个任务都有非负整数时返回总量，否则为 null。新增 `count_metric_coverage`
+保留各字段的 known_subtotal、reported_task_count 和 complete_total；显式零
+仍是有效记录，缺失或非法值不是零。费用的 cost_complete 还要求合法且一致的
+cost_total 与 reported_cost_subtotal（兼容旧 cost 小计），标记本身不能证明
+完整；已知金额仍计入小计。它们是本地报告一致性检查，不认证供应商账单。
+
 cycle 目录中的 `usage.json` 在每个子实验与 composer 调用前后更新。它记录
 `completed_experiment_ids`、`pending_operation` 和 `checkpoint_status`；正常结束
 为 complete，异常退出为 outcome_unknown。complete 仅指周期结束，不代表费用

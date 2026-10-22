@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 
 from praxile.eval.v2 import trace_metrics
 from praxile.trace import AgentEvent, TokenUsage
@@ -91,3 +92,47 @@ def test_old_and_malformed_subtotals_do_not_claim_aggregate_completeness():
     result = aggregate_metrics([{"metrics": {"tokens": {"input": 1, "output": None, "cache": 0}}}])
     assert result["tokens_total"] is None
     assert result["tokens"]["input"] == 1
+
+
+@pytest.mark.parametrize("invalid", [None, True, "0", -1, float("nan"), float("inf")])
+def test_cost_completeness_requires_valid_matching_values(invalid):
+    result = aggregate_metrics([{"metrics": {"cost_complete": True, "cost_total": invalid,
+                                             "reported_cost_subtotal": 0.25}}])
+    assert result["cost_total"] is None
+    assert result["cost_complete"] is False
+    assert result["unpriced_task_count"] == 1
+    assert result["reported_cost_subtotal"] == 0.25
+
+
+def test_cost_total_cannot_disagree_with_reported_subtotal():
+    result = aggregate_metrics([{"metrics": {"cost_complete": True, "cost_total": 0.2,
+                                             "reported_cost_subtotal": 0.25}}])
+    assert result["cost_total"] is None
+    assert result["reported_cost_subtotal"] == 0.25
+
+
+@pytest.mark.parametrize("value", [None, True, "2", -1, 1.5, float("nan")])
+def test_missing_or_invalid_count_is_not_zero_or_coerced(value):
+    keys = ("latency_ms", "tool_calls", "retries", "recoveries", "interventions")
+    result = aggregate_metrics([{"metrics": dict.fromkeys(keys, 3)},
+                                {"metrics": dict.fromkeys(keys, value)}])
+    for key in keys:
+        assert result[key] is None
+        assert result["count_metric_coverage"][key] == {
+            "known_subtotal": 3, "reported_task_count": 1, "complete_total": None}
+
+
+def test_missing_task_metrics_and_empty_aggregate_are_unknown():
+    for tasks in ([], [{}, {"metrics": {"latency_ms": 0}}]):
+        result = aggregate_metrics(tasks)
+        assert result["latency_ms"] is None
+        assert result["tool_calls"] is None
+        assert result["cost_total"] is None
+
+
+def test_explicit_zero_counts_are_known():
+    keys = ("latency_ms", "tool_calls", "retries", "recoveries", "interventions")
+    result = aggregate_metrics([{"metrics": dict.fromkeys(keys, 0)}])
+    for key in keys:
+        assert result[key] == 0
+        assert result["count_metric_coverage"][key]["reported_task_count"] == 1
