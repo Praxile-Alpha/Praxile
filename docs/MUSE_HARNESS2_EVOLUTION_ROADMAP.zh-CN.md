@@ -1216,7 +1216,8 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   Online-stream 增补：独立 OnlineStream API 冻结顺序与执行配置，首次无候选，
   人工批准后仅后续任务使用经验，来源必须属于已完成前缀。dispatch 先持久化，
   中断/未知结果禁止自动重放；报告与轨迹摘要沿顺序复核，worker/events 保留
-  online_stream 标记。尚缺 CLI、自动生成接入、独立评分/统计与真实多任务验收，
+  online_stream 标记。CLI 已提供 create/status/next/accept，执行及批准需显式
+  opt-in，检查 worker/候选摘要，失败不输出敏感配置。尚缺自动生成接入、独立评分/统计与真实多任务验收，
   不据此勾选完整协议；详见 ONLINE_STREAM.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。

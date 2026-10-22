@@ -146,3 +146,77 @@ def test_online_protocol_cannot_be_relabelled_heldout_or_use_future_sources(tmp_
         validate_online_protocol(protocol, replace(tasks[1], split="heldout"), candidate(), "a" * 64, "docs")
     with pytest.raises(ValueError):
         validate_online_protocol(protocol, tasks[1], candidate("second"), "a" * 64, "docs")
+
+
+def test_cli_create_preview_execute_approve_and_reopen(tmp_path, monkeypatch, capsys):
+    import zipfile
+    from praxile.eval.online_stream_cli import main
+    _, tasks = create(tmp_path)
+    wheel = tmp_path / "worker.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("praxile/eval/native_worker.py", "# fixture")
+        archive.writestr("praxile/eval/process_supervisor.py", "# fixture")
+    options = {"wheel": str(wheel), "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "model": "fixture", "base_url": "https://provider.invalid/v1", "credential_file": str(tmp_path / "UNREAD_KEY")}
+    config = tmp_path / "execution.json"
+    config.write_text(json.dumps(options))
+    root = tmp_path / "cli-stream"
+    arguments = ["create", "--stream", str(root), "--execution-config", str(config), "--repository", "docs"]
+    for task in tasks:
+        path = tmp_path / (task.task_id + ".json")
+        path.write_text(json.dumps(task.to_dict()))
+        arguments += ["--task", str(path)]
+    calls = []
+    monkeypatch.setattr(module, "run_owned_native", fake_runner(calls))
+    assert main(arguments) == 0
+    assert not calls
+    assert "UNREAD_KEY" not in capsys.readouterr().out
+    before = (root / "stream.json").read_bytes()
+    assert main(["next", "--stream", str(root)]) == 0
+    assert main(["status", "--stream", str(root)]) == 0
+    assert (root / "stream.json").read_bytes() == before
+    assert not calls
+    assert main(["next", "--stream", str(root), "--execute"]) == 0
+    path = tmp_path / "proposal.json"
+    path.write_text(json.dumps(candidate()))
+    approval = ["accept", "--stream", str(root), "--candidate", str(path),
+                "--candidate-sha256", hashlib.sha256(path.read_bytes()).hexdigest()]
+    before = (root / "stream.json").read_bytes()
+    assert main(approval) == 0
+    assert (root / "stream.json").read_bytes() == before
+    assert main(approval + ["--approve"]) == 2
+    assert (root / "stream.json").read_bytes() == before
+    assert main(approval + ["--approve", "--approved-by", "reviewer"]) == 0
+    assert main(["next", "--stream", str(root), "--execute"]) == 0
+    assert [task for task, _ in calls] == ["first", "second"]
+    output = capsys.readouterr()
+    assert "Inspect before revising" not in output.out + output.err
+    assert "PRIVATE" not in output.out + output.err
+    assert "UNREAD_KEY" not in output.out + output.err
+    assert main(arguments) == 2
+
+
+def test_cli_changed_candidate_digest_does_not_modify_ledger(tmp_path, monkeypatch):
+    from praxile.eval.online_stream_cli import main
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([]))
+    asyncio.run(stream.run_next())
+    path = tmp_path / "proposal.json"
+    path.write_text(json.dumps(candidate()))
+    before = (stream.root / "stream.json").read_bytes()
+    assert main(["accept", "--stream", str(stream.root), "--candidate", str(path),
+        "--candidate-sha256", "0" * 64, "--approve", "--approved-by", "human"]) == 2
+    assert (stream.root / "stream.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("field,value", [("base_url", "https://user:secret@provider.invalid/v1"),
+    ("timeout_seconds", 99999), ("max_steps", True), ("task_local_memory_enabled", "yes"),
+    ("model_request_options", {"messages": []})])
+def test_invalid_execution_settings_rejected_before_creation(tmp_path, field, value):
+    stream, tasks = create(tmp_path)
+    options = json.loads((stream.root / "stream.json").read_text())["spec"]["execution"]
+    options[field] = value
+    root = tmp_path / "invalid"
+    with pytest.raises(ValueError):
+        module.OnlineStream.create(root, tasks, execution=options, repository="docs")
+    assert not root.exists()

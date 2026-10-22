@@ -4,6 +4,42 @@
 Python API。任务必须声明 `split="online_stream"`，按创建时列表顺序运行，
 不接受持久化工作区、resume、外部候选或实验协议覆盖参数。
 
+## CLI
+
+```sh
+python -m praxile.eval.online_stream_cli create \
+  --stream .praxile/eval/online/example \
+  --task task-001.json --task task-002.json \
+  --execution-config execution.json --repository public/docs
+
+python -m praxile.eval.online_stream_cli status --stream .praxile/eval/online/example
+python -m praxile.eval.online_stream_cli next --stream .praxile/eval/online/example
+python -m praxile.eval.online_stream_cli next --stream .praxile/eval/online/example --execute
+
+python -m praxile.eval.online_stream_cli accept \
+  --stream .praxile/eval/online/example \
+  --candidate candidate.json --candidate-sha256 "$CANDIDATE_SHA256"
+
+python -m praxile.eval.online_stream_cli accept \
+  --stream .praxile/eval/online/example \
+  --candidate candidate.json --candidate-sha256 "$CANDIDATE_SHA256" \
+  --approve --approved-by reviewer-id
+```
+
+create 只检查本地 worker/依赖并冻结计划，不读取凭据、不启动容器或模型；已有
+目录拒绝覆盖。重复的 --task 参数决定顺序。next 默认只读预览，--execute 每次
+只执行一个任务，退出码 0 表示控制器返回，不表示任务质量通过。accept 默认验证
+候选并预览摘要，只有 --approve 和非空 --approved-by 同时存在才写批准事件。
+候选文件摘要变化时拒绝批准。失败日志只显示错误类型，不打印正文、endpoint
+或凭据路径；原始现场保留在实验目录。
+
+execution.json 必须提供 wheel、wheel_sha256、model、base_url、credential_file；
+可选 max_steps、timeout_seconds、model_request_options、task_local_memory_enabled、
+dependency_wheels、required_capabilities。路径相对当前工作目录解析后冻结；API
+同样校验 HTTPS endpoint（禁止内嵌凭据/查询参数）、镜像/worker 摘要和预算类型。
+公共输入另用 --input-roots 指定 task ID 到输入目录的 JSON 映射。密钥本身仅放在
+权限受限的凭据文件，不写 execution.json，也不作为命令行参数传递。
+
 ## 使用流程
 
 ```python
@@ -64,6 +100,6 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 不能把在线结果混入冻结 held-out 分析。
 
 目前是人工批准候选的执行 API，不是自动 Propose/Probe/Compose 全链路。尚缺
-CLI、自动候选生成接入、独立在线评分/统计、全流总预算和真实模型多任务验收。
+自动候选生成接入、独立在线评分/统计、全流总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

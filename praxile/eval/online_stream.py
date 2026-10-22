@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import uuid
+import re
+from urllib.parse import urlsplit
 
 from ..utils import file_lock, write_json
 from .contracts import BenchmarkTask
@@ -68,9 +70,40 @@ class OnlineStream:
                     "model_request_options", "task_local_memory_enabled"}
         if not isinstance(execution, dict) or not required <= execution.keys() or set(execution) - required - optional:
             raise ValueError("stream execution options must be explicit and cannot override protocol")
+        execution = deepcopy(execution)
+        if not isinstance(execution["base_url"], str):
+            raise ValueError("stream endpoint must be a string")
+        endpoint = urlsplit(execution["base_url"])
+        if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password
+                or endpoint.query or endpoint.fragment or not isinstance(execution["model"], str)
+                or not execution["model"].strip()):
+            raise ValueError("stream requires a fixed HTTPS endpoint and model")
+        if (not isinstance(execution["wheel_sha256"], str)
+                or not re.fullmatch(r"[a-f0-9]{64}", execution["wheel_sha256"])
+                or any(not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision) for task in tasks)):
+            raise ValueError("stream worker and images require fixed digests")
+        for field, default, maximum in (("max_steps", 50, 1000), ("timeout_seconds", 900, 3540)):
+            value = execution.get(field, default)
+            if type(value) is not int or not 1 <= value <= maximum:
+                raise ValueError("invalid stream execution budget")
+        if type(execution.get("task_local_memory_enabled", False)) is not bool:
+            raise ValueError("task-local policy must be boolean")
+        from ..model_options import validate_request_options
+        validate_request_options(execution.get("model_request_options", {}))
+        for field in ("wheel", "credential_file"):
+            if not isinstance(execution[field], (str, Path)) or not str(execution[field]).strip():
+                raise ValueError("stream requires local worker and credential paths")
+            execution[field] = Path(execution[field]).absolute()
+        from .worker_requirements import validate_requirements
+        dependencies, capabilities = validate_requirements(execution.get("dependency_wheels"),
+            execution.get("required_capabilities"), worker_filename=execution["wheel"].name)
+        execution.update(dependency_wheels=dependencies, required_capabilities=capabilities)
         if not isinstance(repository, str) or not repository.strip():
             raise ValueError("stream repository is required")
         roots = input_source_roots or {}
+        if not isinstance(roots, dict) or any(not isinstance(value, (str, Path)) or not str(value).strip() for value in roots.values()):
+            raise ValueError("public input roots must be a path mapping")
+        roots = {key: Path(value).absolute() for key, value in roots.items()}
         if set(roots) - {task.task_id for task in tasks} or any(
                 bool(task.inputs) != (roots.get(task.task_id) is not None) for task in tasks):
             raise ValueError("stream input roots differ from public task inputs")
@@ -168,6 +201,16 @@ class OnlineStream:
             self._append(state, "approved_candidate", {"candidate": candidate.to_dict(),
                          "after_tasks": completed, "approved_by": approved_by})
         return self.status()
+
+    def preview_candidate(self, value):
+        with file_lock(self.root / "stream"):
+            state, completed, pending, _ = self._read()
+            if pending is not None or not completed or len(completed) == len(state["spec"]["tasks"]):
+                raise ValueError("candidate preview requires a completed prefix and a future task")
+            candidate = self._candidate(value, completed, state["spec"]["repository"])
+            return {"track": "online_stream", "candidate_digest": candidate.digest,
+                    "completed_tasks": len(completed), "source_tasks": len(candidate.source_task_ids),
+                    "applied": False, "promotion_eligible": False}
 
     async def run_next(self):
         with file_lock(self.root / "stream"):
