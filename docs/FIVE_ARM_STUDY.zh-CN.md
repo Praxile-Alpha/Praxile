@@ -88,3 +88,27 @@ source_sha256 和分数目前只是声明，本分析器不打开来源报告、
 runtime 配置，也不实现终局选择、预算强制或效果晋升。因此结果完整也只是
 complete_declared_results，controlled_execution_verified 与 promotion_eligible
 始终为 false。真实五组验收仍未完成。
+
+## 从已有 benchmark 导入报告分析
+
+```bash
+python -m praxile.eval.five_arm_imports \
+  --plan /path/to/study-plan/manifest.json \
+  --bindings import-bindings.json --output study-analysis.json
+```
+
+bindings 数组每项含 cell_id、path、sha256、task_checksum、maximum。path 指向
+现有 JobBench/WorkBuddy importer 输出的 JSON，而不是原始 judge 文本；sha256
+使用 `sha256:` 前缀，task_checksum 和 maximum 应取自冻结的任务材料。所有
+bindings 必须属于同一种 benchmark，且不能复用同一任务的同一份报告冒充不同
+cell。缺失 cell 保留为缺失，不自动补跑。空 bindings 不声称已核对来源。
+
+入口单次读取最多 16 MiB 的普通文件，对同一份字节校验摘要和解析。核对计划
+task_id、任务 checksum 和分母后，仅提取该 benchmark 的官方主评分字段；
+不接受 self_reward 代替官方字段，不把超时或缺评审当零分。结果保留摘要和
+任务 checksum，不复制原报告中的私有 rubric、文档正文或本机路径。
+
+`source_file_digests_verified=true` 仅说明绑定的本地文件摘要匹配。它不能证明
+文件由官方评分器生成，不能证明任务 checksum 与计划 dataset 摘要的关系，
+也不复验原始 verifier 证据、executor 配置或预算。完整的执行来源绑定和真实
+五组验收仍待实现，controlled_execution_verified/promotion_eligible 保持 false。

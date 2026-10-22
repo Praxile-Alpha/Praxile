@@ -1054,6 +1054,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   Bonferroni 修正 Hoeffding 区间，缺任一任务时不输出区间。15 项测试通过。
   来源报告摘要与分数仍为调用方声明，未认证执行/预算/择优过程，因此不是
   真实五组效果验收，不授予 promotion，完整五组项继续不勾选。
+  五组报告导入增补：支持直接读取 JobBench/WorkBuddy importer 输出，核对同份
+  文件字节摘要、任务 ID/checksum 和官方主评分分母，拒绝复用同一报告冒充多
+  个 cell，不复制 rubric 或路径。12 项本地测试通过；只证明本地文件一致性，
+  尚未复验上游评分器、模型/环境配置或预算，五组项继续不勾选。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
