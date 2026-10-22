@@ -1,5 +1,26 @@
 # 五组研究计划
 
+## Development Cell 执行入口
+
+`praxile.eval.five_arm_execution.execute_cell(plan, cell_id, task, ...)` 将已编译
+计划中的一个 cell 映射到 owned-native runner。五组的经验/任务内记忆开关
+由计划决定，不接受调用者覆盖；仅经验和完整组要求冻结 candidate，其余组
+不传递候选。每次尝试使用独立租约和全新状态，同一 cell 的尝试共享持久化
+broker quota。重复组额度耗尽即停止，不按尝试重置。参数和默认执行环境沿用
+owned-native；本入口当前仅接受匹配 task_id 的 development 任务。
+
+调用方必须另传 output_budget（不大于声明 total_tokens），这是**输出额度**，
+不能冒充总 token 预算。model_calls 来自冻结计划，wall_seconds 同时约束 quota
+有效期和剩余执行时间；超时后等待 runner cleanup，清理开销可能超过期限。
+不覆盖失联进程或供应商取消，不认证完整输入 token、费用或来源身份。
+
+目录独占创建，cell.json 在 dispatch 前保存意图，每次返回绑定 execution.json
+摘要。失败/取消保留 outcome_unknown 并停止，不继续尝试或自动重放已有目录。
+返回 executed_not_scored 仅表示所有尝试已返回且报告确认 cleanup，不表示
+任务成功。selected_attempt 为 null；不调用 judge、不读 held-out rubric、不
+自动选优或晋升。跨 cell 的全研究调度、terminal selection、judge 共享额度接入
+和真实五组验收仍待实现；controlled_execution_verified 保持 false。
+
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组执行、预算控制和来源验证尚未接入，不能把成功生成
 manifest 当成五组实验已完成。
