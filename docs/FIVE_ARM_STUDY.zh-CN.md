@@ -137,3 +137,10 @@ Harbor `PraxileAgent` 现在接受控制器传入的 shared_chat_budget，同一
 praxile-broker-usage.json 包含共享状态，单次 broker 撤销不重置共享余额。
 测试在 Harbor 0.18/0.22 使用 fixture worker 验证两次尝试及异常清理，不是
 真实容器五组验收。owned-native CLI 和五组调度尚未自动创建或持久化此对象。
+
+Python `run_owned_native(..., shared_chat_budget=budget, credential_file=...)` 也已接入：
+预算开始状态进入运行计划及 execution.json，清理后保存结束状态。成功返回需
+存在 broker 用量回执，摘要写入 execution.json；命名运行完成时把该回执纳入
+完成证据集合。状态快照可能包括同一共享对象的其他角色消耗，不能直接当成
+单个任务成本。此路径拒绝 shared_chat_budget 与 resume 同时使用，避免以内存
+中新建额度冒充已恢复额度。普通不使用共享预算的恢复流程保持不变。

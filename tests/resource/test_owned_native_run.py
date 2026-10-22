@@ -13,6 +13,76 @@ from praxile.eval.owned_native_run import run_owned_native
 pytestmark = [pytest.mark.resource, pytest.mark.integration]
 
 
+@pytest.mark.parametrize("invalid", ["missing_credential", "resume"])
+def test_shared_budget_preflight_rejects_bypass_and_resume(tmp_path, invalid):
+    from praxile.eval.credential_broker import SharedChatBudget
+    budget = SharedChatBudget(max_calls=2, output_budget=100, ttl_seconds=10)
+    with pytest.raises(ValueError, match="credential file|cannot be resumed"):
+        asyncio.run(run_owned_native(None, state_root=tmp_path, image="unused",
+            wheel=tmp_path / "unused.whl", wheel_sha256="a" * 64, model="fixture", base_url="unused",
+            shared_chat_budget=budget, credential_file=tmp_path / "key" if invalid == "resume" else None,
+            resume=invalid == "resume"))
+    assert list(tmp_path.iterdir()) == []
+    assert budget.status()["remaining_calls"] == 2
+
+
+@pytest.mark.parametrize("missing_receipt", [False, True])
+def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path, monkeypatch, missing_receipt):
+    from types import SimpleNamespace
+    import praxile.eval.owned_native_run as module
+    from praxile.adapters import harbor_native
+    from praxile.eval.credential_broker import SharedChatBudget
+    from praxile.utils import write_json
+    budget = SharedChatBudget(max_calls=2, output_budget=100, ttl_seconds=10)
+    seen = []
+    lease_root = tmp_path / ("harbor-lease-" + "a" * 32)
+    class Lease:
+        def __init__(self, *args, **kwargs):
+            self.root = lease_root
+            self.root.mkdir()
+            self.public_inputs = []
+            self.workspace_path = None
+        async def prepare(self):
+            pass
+        async def run_adapter(self, agent, instruction, context):
+            assert seen[-1]["shared_chat_budget"] is budget
+            budget.reserve("executor", 10)
+            write_json(self.root / "agent/praxile-result.json", {"fixture": True})
+            if not missing_receipt:
+                write_json(self.root / "agent/praxile-broker-usage.json", {"shared_budget": budget.status()})
+        async def cleanup(self):
+            pass
+    def agent(**kwargs):
+        seen.append(kwargs)
+        return SimpleNamespace(worker_environment_sha256="a" * 64)
+    monkeypatch.setattr(module, "HarborDockerLease", Lease)
+    monkeypatch.setattr(harbor_native, "PraxileAgent", agent)
+    monkeypatch.setattr("praxile.eval.worker_preflight.check_worker_wheel", lambda *args: None)
+    image = "python@sha256:" + "a" * 64
+    task = BenchmarkTask(task_id="fixture", benchmark="fixture", dataset_revision="1",
+        split="development", instruction="public", environment=EnvironmentSpec("harbor", "fixture", image),
+        evaluator=EvaluatorReference("private", "1", "private", "sha256:" + "f" * 64))
+    call = run_owned_native(task, state_root=tmp_path, image=image, wheel=tmp_path / "fixture.whl",
+        wheel_sha256="a" * 64, model="fixture", base_url="https://provider.invalid/v1",
+        credential_file=tmp_path / "key", shared_chat_budget=budget, run_id="shared-fixture")
+    if missing_receipt:
+        with pytest.raises(ValueError, match="broker usage receipt"):
+            asyncio.run(call)
+    else:
+        asyncio.run(call)
+    report = json.loads((lease_root / "execution.json").read_text())
+    assert report["shared_chat_budget_start"]["remaining_calls"] == 2
+    assert report["shared_chat_budget_end"]["remaining_calls"] == 1
+    assert report["cleanup_verified"] is True
+    assert report["status"] == ("failed" if missing_receipt else "executor_returned")
+    if not missing_receipt:
+        receipt = lease_root / "agent/praxile-broker-usage.json"
+        assert report["broker_usage_sha256"] == hashlib.sha256(receipt.read_bytes()).hexdigest()
+        claim = json.loads((tmp_path / "run-claims/shared-fixture.json").read_text())
+        assert claim["status"] == "completed"
+        assert claim["files"][receipt.relative_to(tmp_path).as_posix()] == report["broker_usage_sha256"]
+
+
 def test_preflight_failure_persists_report_and_releases_lease(tmp_path, monkeypatch):
     from praxile.adapters import harbor_native
     image = "python@sha256:" + "a" * 64

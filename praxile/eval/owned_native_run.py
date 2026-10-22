@@ -23,7 +23,15 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            run_id: str | None = None, resume: bool = False,
                            persist_workspace: bool = False,
                            dependency_wheels: list[dict] | None = None,
-                           required_capabilities: list[str] | None = None):
+                           required_capabilities: list[str] | None = None,
+                           shared_chat_budget=None):
+    from .credential_broker import SharedChatBudget
+    if shared_chat_budget is not None:
+        if not isinstance(shared_chat_budget, SharedChatBudget) or credential_file is None:
+            raise ValueError("shared chat budget requires a SharedChatBudget and credential file")
+        if resume:
+            raise ValueError("process-local shared chat budget cannot be resumed")
+    shared_start = shared_chat_budget.status() if shared_chat_budget is not None else None
     from .worker_requirements import validate_requirements, identity
     dependencies, capabilities = validate_requirements(dependency_wheels, required_capabilities,
                                                        worker_filename=wheel.name)
@@ -51,6 +59,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             plan["persist_workspace"] = True
         if dependencies or capabilities:
             plan["worker_requirements"] = requirements
+        if shared_start is not None:
+            plan["shared_chat_budget_start"] = shared_start
         claim = NativeRunClaim(state_root, run_id, plan)
         if resume:
             return claim.resume()
@@ -74,6 +84,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
     report["worker_requirements"] = requirements
+    if shared_start is not None:
+        report["shared_chat_budget_start"] = shared_start
     write_json(report_path, report)
     # Build an allowlisted execution view; never serialize evaluator/source refs.
     instruction = task.instruction + "\n\nPublic input paths and SHA-256:\n" + json.dumps(lease.public_inputs)
@@ -87,7 +99,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             workspace="/workspace", base_url=base_url, model_name=model,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
             credential_file=str(credential_file) if credential_file else None,
-            dependency_wheels=dependencies, required_capabilities=capabilities)
+            dependency_wheels=dependencies, required_capabilities=capabilities,
+            shared_chat_budget=shared_chat_budget)
         report["worker_environment_sha256"] = agent.worker_environment_sha256
         await lease.prepare()
         if lease.workspace_path is not None:
@@ -100,6 +113,11 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         if not result.is_file():
             raise ValueError("native adapter returned without trajectory evidence")
         report["source_result_sha256"] = hashlib.sha256(result.read_bytes()).hexdigest()
+        if shared_chat_budget is not None:
+            usage = logs / "praxile-broker-usage.json"
+            if not usage.is_file() or usage.is_symlink():
+                raise ValueError("shared budget execution requires a broker usage receipt")
+            report["broker_usage_sha256"] = hashlib.sha256(usage.read_bytes()).hexdigest()
         report["context"] = context.model_dump(mode="json")
         report["status"] = "executor_returned"
         artifacts = lease.root / "outputs"
@@ -131,12 +149,16 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                 report["cleanup_error_type"] = type(error).__name__
                 raise
             finally:
+                if shared_chat_budget is not None:
+                    report["shared_chat_budget_end"] = shared_chat_budget.status()
                 write_json(report_path, report)
         await await_owned(release())
     if claim is not None and report.get("required_outputs_collected") is True:
         prefix = lease.root.relative_to(claim.root).as_posix() + "/"
         files = {prefix + "execution.json": hashlib.sha256(report_path.read_bytes()).hexdigest(),
                  prefix + "agent/praxile-result.json": report["source_result_sha256"]}
+        if shared_chat_budget is not None:
+            files[prefix + "agent/praxile-broker-usage.json"] = report["broker_usage_sha256"]
         files.update({prefix + "inputs/" + item.path: item.content_digest.removeprefix("sha256:") for item in task.inputs})
         files.update({prefix + "outputs/" + item["path"]: item["sha256"] for item in report["outputs"] if item["status"] == "collected"})
         for name in ("praxile-worker-environment.json", "praxile-capabilities.json"):

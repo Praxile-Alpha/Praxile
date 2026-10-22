@@ -1067,6 +1067,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   预算，无 credential broker 的直连配置拒绝启用；跨 adapter 尝试保留配额，
   清理回执包含共享状态。Harbor 0.18/0.22 fixture worker 回归覆盖二次尝试
   拒绝和异常撤销，尚非真实 Docker 或五组自动调度验收。
+  Owned 控制器增补：run_owned_native Python API 转发共享预算，计划/报告保存
+  开始与清理后状态，要求 broker 回执并绑定摘要；命名运行完成证据包含回执。
+  进程内共享预算不支持恢复，显式拒绝与 resume 组合，防止重建额度被当成续跑。
+  Harbor 双版本 fixture 控制器回归各 5 项通过；持久化配额与真实五组仍待完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
