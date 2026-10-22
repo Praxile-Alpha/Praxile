@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 from .owned_content_review import _reader, _json, _sha
 
 
-def executor_receipts(directory, cell):
+def executor_receipts(directory, cell, *, conditions=None, task=None):
     read = _reader(directory)
     result = []
     attempts = cell.get("attempts")
@@ -24,6 +24,9 @@ def executor_receipts(directory, cell):
         if _sha(raw) != attempt.get("sha256"):
             raise ValueError("cost execution receipt changed")
         report = _json(raw)
+        if conditions is not None:
+            from .five_arm_conditions import check_attempt_conditions
+            check_attempt_conditions(report, conditions, task)
         digest = report.get("broker_usage_sha256")
         if digest is None:
             result.append(("executor", None))

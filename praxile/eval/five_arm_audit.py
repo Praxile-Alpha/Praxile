@@ -11,6 +11,7 @@ from .content_review_compare import _checked
 from .content_review_batch import plan_content_review_batch
 from .v2.schema import canonical_json
 from .five_arm_usage import executor_receipts, summarize_receipts
+from .five_arm_conditions import validate_conditions, check_cell_conditions
 
 
 def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
@@ -29,6 +30,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
             or study.get("task_fingerprints") != {key: value.fingerprint for key, value in tasks.items()}):
         raise ValueError("study task identity mismatch")
     identity = study.get("judge_identity")
+    conditions = validate_conditions(study.get("executor_conditions"))
     if (not isinstance(identity, dict) or "sha256:" + _sha(canonical_json(identity).encode())
             != plan["spec"]["identities"]["judge"]):
         raise ValueError("study lacks matching frozen judge identity")
@@ -54,7 +56,10 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
             cell = _json(raw_cell)
             if cell.get("cell") != expected or cell.get("plan_digest") != plan_digest(plan):
                 raise ValueError("cost cell belongs to another plan")
-            usage_receipts.extend(executor_receipts(root / "cells" / str(index), cell))
+            task = tasks[expected["task_id"]]
+            check_cell_conditions(cell, conditions, task)
+            usage_receipts.extend(executor_receipts(root / "cells" / str(index), cell,
+                                                   conditions=conditions, task=task))
         else:
             usage_receipts.append(("executor", None))
         if review.get("status") not in {"reviewed", "abstained"}:
@@ -107,6 +112,7 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
     analysis = analyze_study(plan, records)
     analysis.update(metric="llm_declared_requirement_preservation", official_evaluation=False,
         local_file_consistency_checked=True, semantic_accuracy_verified=False, source_study_sha256=study_sha256,
+        executor_conditions=conditions, recorded_executor_conditions_checked=True,
         cell_reviews=rows, checked_review_cells=len(records),
         all_scheduled_review_evidence_checked=len(records) == len(schedule))
     analysis["broker_usage"] = summarize_receipts(usage_receipts)

@@ -105,6 +105,7 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     report = json.loads((lease_root / "execution.json").read_text())
     assert seen[-1]["model_request_options"] == {"reasoning_effort": "low"}
     assert report["model_request_options"] == {"reasoning_effort": "low"}
+    assert report["endpoint_sha256"] == hashlib.sha256(b"https://provider.invalid/v1").hexdigest()
     assert report["task_local_memory_enabled"] is memory_enabled
     if with_candidate:
         loaded_candidate = ContextCandidate.from_dict(json.loads(path.read_text()))

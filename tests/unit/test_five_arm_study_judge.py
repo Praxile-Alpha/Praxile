@@ -75,6 +75,9 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
             "reported_calls": {"input": 1, "output": 1}, "total_tokens": {"input": 10, "output": 5}}}).encode()
         (root / "agent/praxile-broker-usage.json").write_bytes(broker_receipt)
         report = {"schema_version": "praxile.owned_native_execution.v1", "task_id": task.task_id,
+            "model": options["model"], "wheel_sha256": options["wheel_sha256"],
+            "endpoint_sha256": sha(options["base_url"].encode()), "max_steps": options["max_steps"],
+            "model_request_options": options["model_request_options"],
             "task_fingerprint": task.fingerprint, "image": task.environment.revision,
             "status": "executor_returned", "cleanup_verified": True, "required_outputs_collected": True,
             "public_inputs": [{"path": "inputs/source.txt", "content_digest": task.inputs[0].content_digest}],
@@ -116,6 +119,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert analysis["reported_cells"] == 5
     assert analysis["metric"] == "llm_declared_requirement_preservation"
     assert analysis["promotion_eligible"] is False
+    assert analysis["recorded_executor_conditions_checked"] is True
     assert analysis["broker_usage"]["total_tokens"] == {"input": 80, "output": 40}
     assert analysis["broker_usage"]["roles"]["executor"]["admitted_calls"] == 6
     assert analysis["broker_usage"]["roles"]["judge"]["admitted_calls"] == 5
@@ -129,6 +133,26 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert main(["--study", str(path.parent), "--study-sha256", sha(original_study),
         "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"])]) == (0 if verdict == "preserved" else 1)
     calls_before = list(calls)
+    # Even a rehashed, unselected attempt must retain the common executor settings.
+    attempt_path = path.parent / "cells/1/attempt-1/lease/execution.json"
+    cell_path = path.parent / "cells/1/cell.json"
+    old_attempt, old_cell = attempt_path.read_bytes(), cell_path.read_bytes()
+    changed_attempt = json.loads(old_attempt)
+    changed_attempt["model_request_options"] = {"reasoning_effort": "high"}
+    attempt_path.write_text(json.dumps(changed_attempt))
+    changed_cell = json.loads(old_cell)
+    changed_cell["attempts"][1]["sha256"] = sha(attempt_path.read_bytes())
+    cell_path.write_text(json.dumps(changed_cell))
+    changed_study = json.loads(original_study)
+    changed_study["cells"][1]["sha256"] = sha(cell_path.read_bytes())
+    path.write_text(json.dumps(changed_study))
+    try:
+        with pytest.raises(ValueError, match="attempt differs from study executor conditions"):
+            audit_study(plan, {"task": task}, **{**audit_args, "study_sha256": sha(path.read_bytes())})
+    finally:
+        path.write_bytes(original_study)
+        cell_path.write_bytes(old_cell)
+        attempt_path.write_bytes(old_attempt)
     for relative in ("reviews/0/manifest.json", "reviews/0/trajectory.json", "reviews/0/report.json",
                      "reviews/0/inputs.json", "reviews/0/broker-usage.json", "cells/0/cell.json",
                      "cells/1/attempt-1/lease/agent/praxile-broker-usage.json",

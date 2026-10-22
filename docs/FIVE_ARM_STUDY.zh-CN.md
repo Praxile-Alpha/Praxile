@@ -83,6 +83,15 @@ API audit_study 接收相同的冻结 plan/tasks，核对任务身份、cell 顺
 拒绝核验。未调度、未选择和结果未知的评审保留缺失，不补零；abstain 或包含
 uncertain 标签不进入完整共同任务集合，缺任务时不输出比较置信区间。
 
+执行条件核验：新 study.json 保存 executor_conditions，包含 model、worker wheel
+摘要、endpoint 摘要、model_request_options 和 max_steps。audit 核对每个已绑定
+cell，以及所有已返回 attempt（包括未被选择的重复尝试）的对应字段；同时核对
+任务 fingerprint 和 image。即使重算文件摘要，只要某次尝试与共同条件不同，
+仍拒绝比较。旧报告缺字段直接拒绝，不依据模型名称或相邻记录推断。
+recorded_executor_conditions_checked 仅说明已绑定记录的局部一致性：未返回尝试
+仍为 unknown，不认证模型权重、请求实际处理方式、worker 依赖或完整来源身份。
+调用方仍须保存可信 study 摘要；同时改写整套证据及摘要不在此检查的防御范围。
+
 统计量明确为 llm_declared_requirement_preservation：已声明要求中被 judge 判为
 preserved 的比例，不是 resolved rate 或官方成功率。共用既有 task-cluster
 分析，记录已检查 cell 数和证据覆盖，重复运行不充当独立任务。引用和输入

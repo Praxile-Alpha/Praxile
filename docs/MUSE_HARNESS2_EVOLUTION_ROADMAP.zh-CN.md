@@ -1044,6 +1044,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
+  离线执行条件核验增补：study 保存共同模型/worker/endpoint/推理参数/步数条件，
+  audit 逐 cell、逐已返回 attempt（含未选尝试）核对，并检查任务及镜像身份。
+  条件变化即使重算中间摘要也拒绝；旧记录缺字段不补造。仅声明局部记录一致，
+  不认证供应商实际模型、完整依赖或未知执行；真实完整五组项保持未勾选。
   模型条件增补：owned-native 与五组入口显式传递白名单 model_request_options，
   经 adapter 下发 worker/broker，写入 execution/cell 报告及命名 run 计划摘要。
   修改推理参数拒绝复用原 run；judge 的 request_options 保持独立。此处冻结的是

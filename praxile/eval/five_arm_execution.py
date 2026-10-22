@@ -13,6 +13,7 @@ from .native_context import owned_candidate_identity
 from .owned_native_run import run_owned_native
 from .persistent_chat_budget import PersistentChatBudget
 from ..utils import write_json
+from .five_arm_conditions import executor_conditions
 
 
 async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
@@ -183,7 +184,8 @@ def prepare_study(plan, tasks, *, directory, execution, input_source_roots=None,
         judge_config_identity = validate_study_judge(judge, tasks, plan, root)
     return {"plan": plan, "tasks": tasks, "root": root, "options": options,
             "roots": roots, "identities": identities, "judge": judge,
-            "judge_config_identity": judge_config_identity}
+            "judge_config_identity": judge_config_identity,
+            "executor_conditions": executor_conditions(options)}
 
 
 async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
@@ -198,6 +200,7 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
     write_json(root / "plan.json", plan)
     report_path = root / "study.json"
     report = {"schema_version": "praxile.five_arm_study_execution.v1", "plan_digest": plan_digest(plan),
+        "executor_conditions": prepared["executor_conditions"],
         "status": "preparing", "planned_cells": len(tasks) * plan["spec"]["repetitions"] * len(plan["arms"]),
         "task_fingerprints": {key: task.fingerprint for key, task in tasks.items()},
         "candidate_identities": identities, "cells": [], "promotion_eligible": False,
