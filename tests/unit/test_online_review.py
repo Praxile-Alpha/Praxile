@@ -50,15 +50,34 @@ def completed(tmp_path, monkeypatch, request):
             (root / name).mkdir(parents=True)
         (root / "inputs/source.txt").write_bytes(source)
         (root / "outputs/result.txt").write_bytes(source)
-        trace = json.dumps({"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
-            "trajectory": {"task_id": "internal", "start_time": "2026-10-22T00:00:00Z", "actions": []}}).encode()
+        worker = {"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
+            "trajectory": {"task_id": "internal", "start_time": "2026-10-22T00:00:00Z", "actions": []}}
+        identity = None
+        if options.get("development_only"):
+            from praxile.eval.native_context import owned_candidate_identity, plan_candidate
+            value = json.loads(options["development_candidate_file"].read_text())
+            identity = owned_candidate_identity(task, options["development_candidate_file"],
+                options["development_candidate_sha256"], options["repository"], development_only=True)
+            context = plan_candidate(value, task.instruction, options["repository"], development_only=True)
+            content = context.pop("content")
+            context["injected"] = bool(content)
+            worker.update(experience_mode="development_candidate", development_context=context)
+            if content:
+                worker["trajectory"]["experimental_context"] = {"content": content, "sha256": sha(content.encode()), "injected": True}
+        trace = json.dumps(worker).encode()
         (root / "agent/praxile-result.json").write_bytes(trace)
         report = {"schema_version": "praxile.owned_native_execution.v1", "task_id": task.task_id,
             "task_fingerprint": task.fingerprint, "image": task.environment.revision,
             "status": "executor_returned", "cleanup_verified": True, "required_outputs_collected": True,
+            "wheel_sha256": options["wheel_sha256"], "model": options["model"],
+            "endpoint_sha256": sha(options["base_url"].encode()), "max_steps": options.get("max_steps", 50),
+            "timeout_seconds": options.get("timeout_seconds", 900), "model_request_options": options.get("model_request_options", {}),
+            "task_local_memory_enabled": options.get("task_local_memory_enabled", False),
             "public_inputs": [{"path": "inputs/source.txt", "content_digest": task.inputs[0].content_digest}],
             "source_result_sha256": sha(trace), "outputs": [{"path": "result.txt", "required": True,
                 "status": "collected", "sha256": sha(source), "bytes": len(source)}]}
+        if identity:
+            report["development_context_identity"] = identity
         path = root / "execution.json"
         path.write_text(json.dumps(report))
         return path
@@ -66,6 +85,92 @@ def completed(tmp_path, monkeypatch, request):
     for _ in tasks:
         asyncio.run(stream.run_next())
     return stream, judge
+
+
+@pytest.fixture
+def composed(completed, tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    from praxile.eval import online_probe, online_composition
+    from praxile.eval.v2.candidate import ContextCandidate
+    stream, judge = completed
+    scope = {"repositories": ["docs"], "task_signals": ["checklist"], "does_not_apply_when": ["unrelated"]}
+    parents = [ContextCandidate(candidate_id=name, version="1", title=name, candidate_type="context_policy",
+        context_item={"content": "Inspect before revising"}, confidence=0, evidence_refs=("event:source",),
+        source_task_ids=("online-task",), expected_effect={"hypothesis": "bounded"}, applies_to=scope).to_dict()
+        for name in ("first", "second")]
+    monkeypatch.setattr(online_probe, "run_owned_native", stream_module.run_owned_native)
+    probe = tmp_path / "probe"
+    asyncio.run(online_probe.run_online_probe(stream.root, [0], parents, directory=probe))
+    class Router:
+        def chat(self, messages, **kwargs):
+            return {"content": json.dumps({"decision": "compose", "content": "Verify source before revising",
+                "hypothesis": "bounded", "evidence_refs": ["event:source"]}), "usage": {}, "finish_reason": "stop"}
+    @contextmanager
+    def router(*args, **kwargs):
+        yield Router(), {"model": "fixture"}
+    monkeypatch.setattr(online_composition, "configured_design_router", router)
+    root = tmp_path / "composition"
+    asyncio.run(online_composition.run_online_composition(SimpleNamespace(), stream.root, probe_directory=probe,
+        manifest_sha256=sha((probe / "manifest.json").read_bytes()), report_sha256=sha((probe / "report.json").read_bytes()),
+        directory=root, composition_id="composed", applies_to=scope))
+    return stream, judge, {"probe_directory": probe, "composition_directory": root,
+        "manifest_sha256": sha((root / "manifest.json").read_bytes()), "report_sha256": sha((root / "report.json").read_bytes()),
+        "directory": tmp_path / "paired-review"}
+
+
+@pytest.mark.parametrize("completed", [False, True], indirect=True)
+def test_paired_composition_review_is_isolated(composed, monkeypatch, tmp_path, capsys):
+    from praxile.eval.online_composition_review import prepare_composition_reviews, run_composition_reviews
+    stream, judge, options = composed
+    before = (stream.root / "stream.json").read_bytes()
+    composition_before = (options["composition_directory"] / "report.json").read_bytes()
+    calls = []
+    def forward(self, raw):
+        calls.append(raw)
+        body = json.loads(raw)
+        units = json.loads(body["messages"][1]["content"])["output_units"]
+        return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
+            "name": body["tool_choice"]["function"]["name"], "arguments": json.dumps({"items": [
+                {"id": "r", "verdict": "preserved", "output_refs": [units[0]["id"]], "reason": "fixture"}]})}}]}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 5}}
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
+    prepare_composition_reviews(stream.root, 0, judge=judge, **options)
+    from praxile.eval.online_stream_cli import main
+    judge_path = tmp_path / "judge-preview.json"
+    judge_path.write_text(json.dumps({**judge, "credential_file": "MISSING_SECRET", "evaluator_root": str(judge["evaluator_root"])}))
+    assert main(["review-composition", "--stream", str(stream.root), "--task-index", "0",
+        "--probe-directory", str(options["probe_directory"]), "--composition-directory", str(options["composition_directory"]),
+        "--manifest-sha256", options["manifest_sha256"], "--report-sha256", options["report_sha256"],
+        "--output", str(options["directory"]), "--judge-config", str(judge_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["action"] == "composition_review_preview_only"
+    assert not calls and not options["directory"].exists()
+    report_path = run_composition_reviews(stream.root, 0, judge=judge, **options)
+    report = json.loads(report_path.read_text())
+    assert [row["arm"] for row in report["reviews"]] == ["baseline", "composition"]
+    assert report["decision"] == "KEEP_BASE" and report["learning_feedback_allowed"] is False
+    assert len(calls) == 2
+    for row in report["reviews"]:
+        path = report_path.parent / row["receipt"]
+        assert sha(path.read_bytes()) == row["receipt_sha256"]
+        assert json.loads(path.read_text())["verdict_counts"]["preserved"] == 1
+        assert json.loads(path.read_text())["judge_precommitted_before_execution"] == stream.status()["judge_precommitted_before_execution"]
+    assert (stream.root / "stream.json").read_bytes() == before
+    assert (options["composition_directory"] / "report.json").read_bytes() == composition_before
+    with pytest.raises(ValueError):
+        run_composition_reviews(stream.root, 0, judge=judge, **options)
+    assert len(calls) == 2
+
+
+def test_composition_pair_preflights_both_outputs_before_judge(composed, monkeypatch):
+    from praxile.eval.online_composition_review import run_composition_reviews
+    stream, judge, options = composed
+    path = options["composition_directory"] / "rerun/task-0/composition/lease/outputs/result.txt"
+    path.write_text("tampered")
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", lambda *args: pytest.fail("model accessed"))
+    with pytest.raises(ValueError):
+        run_composition_reviews(stream.root, 0, judge=judge, **options)
+    assert not options["directory"].exists()
 
 
 @pytest.mark.parametrize("completed", ["budget"], indirect=True)

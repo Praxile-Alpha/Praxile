@@ -226,7 +226,29 @@ abstain 可以单独审计但不能伪装成组合重跑。既有缺少这些摘
 声称通过新审计。调用者须固定摘要；不提供外部签名或供应商响应真实性证明。
 
 输出仍为 KEEP_BASE、semantic_accuracy_verified=false；来源链完整不等于质量
-或迁移效果通过。本接口不调用模型、不写回在线状态，独立质量评测仍待接入。
+或迁移效果通过。本接口不调用模型、不写回在线状态。
+
+### 组合产物独立评审
+
+```sh
+python -m praxile.eval.online_stream_cli review-composition \
+  --stream .praxile/eval/online/example --task-index 0 \
+  --probe-directory .praxile/eval/online-probes/example \
+  --composition-directory .praxile/eval/online-compositions/example \
+  --manifest-sha256 <COMPOSITION_MANIFEST_SHA256> --report-sha256 <COMPOSITION_REPORT_SHA256> \
+  --judge-config judge.json --output .praxile/eval/composition-reviews/example
+```
+
+默认离线预检；加 --execute 才将两侧产物分别发送给独立 Judge。先完成组合来源
+链审计，并预检 baseline/组合两侧全部输入输出摘要，再开始任何评审调用。
+judge.json 格式同独立内容评审，artifacts 只包含选中任务；已预冻结的 stream
+必须匹配原 Judge 身份，未预冻结的情况保持 post-hoc 标记。
+
+评审目录和 evaluator 必须在 stream、probe、composition 之外。两侧使用同一
+评审配置、预算与抽取规则，各自绑定执行报告；共享 stream 配额（若已配置）。
+父 report 记录子 receipt 摘要；失败或中断保留未知，目录禁止自动重放。
+评审文件不进入组合反馈、不批准候选、不改写正式在线账本。输出仍 KEEP_BASE，
+LLM 标签不是官方分数或校准真值；成对结果的独立审计与效果选择仍待完成。
 
 ## 独立内容评审
 
@@ -334,6 +356,7 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 
 目前已接通显式 design、probe、反馈审计、compose 与组合独立重跑，更新正式在线
 候选仍需人工批准。独立内容评审、运行前冻结身份、在线描述性汇总与上述调用的
-共享准入预算及组合来源链审计已接入；尚缺组合重跑的独立质量评测、效果选择与真实模型多任务验收。
+共享准入预算、组合来源链审计及成对独立内容评审已接入；尚缺成对评审结果审计、
+效果选择与真实模型多任务验收，LLM 标签也尚未证明质量校准。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

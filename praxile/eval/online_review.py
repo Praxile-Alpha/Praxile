@@ -48,6 +48,10 @@ def _prepare_online_review(stream_directory, index, *, judge, directory, require
 
 def run_online_review(stream_directory, index, *, judge, directory):
     prepared = prepare_online_review(stream_directory, index, judge=judge, directory=directory)
+    return _run_prepared_review(prepared, quota_factory=lambda: OnlineStream(stream_directory).shared_budget())
+
+
+def _run_prepared_review(prepared, *, quota_factory):
     root, receipt, judge = prepared["root"], prepared["receipt"], prepared["judge"]
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     receipt.update(status="outcome_unknown", automatic_replay_allowed=False)
@@ -56,7 +60,7 @@ def run_online_review(stream_directory, index, *, judge, directory):
         identity = receipt["judge_identity"]
         requirement_count = len(prepared["inputs"]["requirements"])
         calls = (requirement_count + identity["batch_size"] - 1) // identity["batch_size"]
-        quota = OnlineStream(stream_directory).shared_budget()
+        quota = quota_factory()
         if quota is None:
             quota = PersistentChatBudget.create(root / "quota.sqlite", max_calls=calls,
                 output_budget=identity["total_output_tokens"],

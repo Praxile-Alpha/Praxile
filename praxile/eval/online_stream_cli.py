@@ -29,15 +29,20 @@ def main(argv=None):
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
     create.add_argument("--chat-budget", type=Path, help="Freeze shared executor/reflection/judge admission budget")
-    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe", "probe-feedback", "compose", "audit-composition"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe", "probe-feedback", "compose", "audit-composition", "review-composition"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
-        if name in ("probe-feedback", "compose", "audit-composition"):
+        if name in ("probe-feedback", "compose", "audit-composition", "review-composition"):
             command.add_argument("--probe-directory", type=Path, required=True)
             command.add_argument("--manifest-sha256", required=True)
             command.add_argument("--report-sha256", required=True)
-            if name == "audit-composition":
+            if name in ("audit-composition", "review-composition"):
                 command.add_argument("--composition-directory", type=Path, required=True)
+            if name == "review-composition":
+                command.add_argument("--task-index", type=int, required=True)
+                command.add_argument("--judge-config", type=Path, required=True)
+                command.add_argument("--output", type=Path, required=True)
+                command.add_argument("--execute", action="store_true")
             if name == "compose":
                 command.add_argument("--project", type=Path, required=True)
                 command.add_argument("--composition-id", required=True)
@@ -99,6 +104,20 @@ def main(argv=None):
             stream = OnlineStream(args.stream)
             if args.command == "status":
                 result = stream.status()
+            elif args.command == "review-composition":
+                from .online_composition_review import prepare_composition_reviews, run_composition_reviews
+                options = {"probe_directory": args.probe_directory, "composition_directory": args.composition_directory,
+                    "manifest_sha256": args.manifest_sha256, "report_sha256": args.report_sha256,
+                    "judge": _load(args.judge_config), "directory": args.output}
+                if args.execute:
+                    path = run_composition_reviews(args.stream, args.task_index, **options)
+                    report = _load(path)
+                    result = {"status": report["status"], "decision": "KEEP_BASE", "promotion_eligible": False,
+                              "reviews_returned": len(report["reviews"])}
+                else:
+                    prepared = prepare_composition_reviews(args.stream, args.task_index, **options)
+                    result = {"action": "composition_review_preview_only", "arms": [item["receipt"]["arm"] for item in prepared],
+                              "promotion_eligible": False}
             elif args.command == "audit-composition":
                 from .online_composition_audit import audit_online_composition
                 result = audit_online_composition(args.stream, probe_directory=args.probe_directory,
