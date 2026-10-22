@@ -90,7 +90,20 @@ class ChatCredentialBroker:
     def __init__(self, *, key: str, endpoint: str, model: str, max_calls: int,
                  output_budget: int, max_output: int = 4096, ttl_seconds: int = 900,
                  request_timeout: int = 60, request_options: dict | None = None,
-                 shared_budget: SharedChatBudget | None = None, budget_role: str = "executor"):
+                 shared_budget: SharedChatBudget | None = None, budget_role: str = "executor",
+                 response_contracts: list[dict] | None = None):
+        from ..structured_response import submission_request
+        self._submissions = set()
+        if response_contracts is not None:
+            if not isinstance(response_contracts, list) or not 1 <= len(response_contracts) <= 32:
+                raise ValueError("broker requires 1..32 frozen response contracts")
+            for contract in response_contracts:
+                encoded = json.dumps(submission_request(contract), sort_keys=True, allow_nan=False)
+                if encoded in self._submissions:
+                    raise ValueError("duplicate broker response contract")
+                self._submissions.add(encoded)
+            if sum(len(value.encode()) for value in self._submissions) > 1024 * 1024:
+                raise ValueError("broker response contracts exceed 1 MiB")
         if shared_budget is not None and not isinstance(shared_budget, SharedChatBudget):
             raise ValueError("shared budget must be a SharedChatBudget")
         if not isinstance(budget_role, str) or not budget_role or len(budget_role) > 80:
@@ -158,9 +171,19 @@ class ChatCredentialBroker:
     def chat(self, authorization: str, payload: dict) -> dict:
         self._authorize(authorization)
         allowed = {"model", "messages", "max_tokens", "max_completion_tokens", "temperature", "stream"}
+        if self._submissions:
+            allowed.update({"tools", "tool_choice"})
         allowed.update(self._request_options)
         if not isinstance(payload, dict) or set(payload) - allowed or payload.get("model") != self.model:
             raise BrokerDenied("request outside model capability")
+        if self._submissions:
+            try:
+                submission = json.dumps({key: payload.get(key) for key in ("tools", "tool_choice")},
+                                        sort_keys=True, allow_nan=False)
+            except (ValueError, TypeError, RecursionError) as error:
+                raise BrokerDenied("invalid structured submission") from error
+            if submission not in self._submissions:
+                raise BrokerDenied("submission differs from frozen response contracts")
         for key, value in self._request_options.items():
             if key in payload and json.dumps(payload[key], sort_keys=True) != json.dumps(value, sort_keys=True):
                 raise BrokerDenied("request options differ from fixed model capability")

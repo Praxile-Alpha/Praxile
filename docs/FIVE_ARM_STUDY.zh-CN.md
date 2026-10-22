@@ -61,6 +61,21 @@ required_outputs_collected=true 的尝试列为 eligible，按预先固定的首
 继续保留；selection_performed 只表示规则已执行，quality_verified 和
 promotion_eligible 始终 false。当前安全文件读取沿用 POSIX artifact reader。
 
+## 结构化 Judge 的 Broker 前置支持
+
+ChatCredentialBroker 可显式接受 response_contracts（1..32 个既有格式的 name/schema
+对象，总序列化大小不超过 1 MiB）。创建时复制冻结成精确的 submission_request，
+请求只能提交其中一个固定 tools/tool_choice 组合；不得改 schema、函数名、自动
+选工具或开启 parallel_tool_calls。未配置此能力的 executor broker 仍拒绝 tools。
+这仅允许提交结构化结果，不提供工具执行权限；响应仍需 provider 和内容评审器
+完成 schema、引用及覆盖检查。
+
+judge broker 可使用同一 SharedChatBudget/PersistentChatBudget 和 budget_role="judge"，
+实际转发前扣减共享请求/输出额度。真实本机 HTTP + OpenAI-compatible provider
+测试验证 executor 先消耗额度、judge 提交一次、后续转发被拒绝及线程清理；
+上游为 fixture，不是付费模型评审。完整研究的 judge 创建、每组 contract 冻结、
+评分编排和证据绑定尚未接入，本项是协议前置支持，不等同 judge 集成完成。
+
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成
 manifest 当成五组实验已完成。

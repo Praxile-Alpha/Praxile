@@ -42,6 +42,67 @@ def test_worker_cannot_introduce_unconfigured_options(broker):
     assert broker.status()["remaining_calls"] == 2
 
 
+def test_structured_judge_reserves_shared_budget_and_freezes_contracts():
+    from praxile.eval.credential_broker import SharedChatBudget
+    from praxile.structured_response import submission_request
+    contract = {"name": "submit_review", "schema": {"type": "object", "properties": {"verdict": {"type": "string"}}}}
+    body = submission_request(contract)
+    shared = SharedChatBudget(max_calls=2, output_budget=20, ttl_seconds=60)
+    shared.reserve("executor", 10)
+    with ChatCredentialBroker(key="fixture-secret", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=3, output_budget=30, max_output=10, shared_budget=shared,
+            budget_role="judge", response_contracts=[contract]) as broker:
+        contract["schema"]["properties"].clear()
+        forwarded = []
+        broker._forward = lambda raw: forwarded.append(json.loads(raw)) or {"choices": []}
+        request(broker, **body)
+        with pytest.raises(BrokerDenied, match="exhausted"):
+            request(broker, **body)
+        assert len(forwarded) == 1
+        assert forwarded[0]["tools"] == body["tools"]
+        assert shared.status()["roles"]["judge"] == {"reserved_calls": 1, "reserved_output": 10}
+        assert "submit_review" not in json.dumps(broker.status())
+
+
+@pytest.mark.parametrize("defect", ["name", "schema", "choice", "extra_tool", "missing", "parallel"])
+def test_structured_capability_rejects_changes_before_reservation(defect):
+    from praxile.structured_response import submission_request
+    contract = {"name": "submit_review", "schema": {"type": "object"}}
+    body = submission_request(contract)
+    if defect == "name":
+        body["tools"][0]["function"]["name"] = "execute_command"
+    elif defect == "schema":
+        body["tools"][0]["function"]["parameters"]["description"] = "changed"
+    elif defect == "choice":
+        body["tool_choice"] = "auto"
+    elif defect == "extra_tool":
+        body["tools"] *= 2
+    elif defect == "missing":
+        body = {}
+    else:
+        body["parallel_tool_calls"] = True
+    with ChatCredentialBroker(key="fixture-secret", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=1, output_budget=10, max_output=10, response_contracts=[contract]) as broker:
+        broker._forward = lambda raw: pytest.fail("must reject before forwarding")
+        with pytest.raises(BrokerDenied):
+            request(broker, **body)
+        assert broker.status()["remaining_calls"] == 1
+
+
+def test_default_executor_still_rejects_function_submission(broker):
+    from praxile.structured_response import submission_request
+    with pytest.raises(BrokerDenied):
+        request(broker, **submission_request({"name": "submit", "schema": {"type": "object"}}))
+    assert broker.status()["remaining_calls"] == 2
+
+
+@pytest.mark.parametrize("contracts", [[], {}, [None], [{"name": "bad name", "schema": {"type": "object"}}]])
+def test_invalid_contract_registry_rejected(contracts):
+    with pytest.raises(ValueError):
+        ChatCredentialBroker(key="fixture", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=1, output_budget=10, response_contracts=contracts)
+
+
 @pytest.mark.parametrize("options", [{"max_tokens": 999}, {"messages": []}, {"reasoning_effort": "invalid"}])
 def test_controller_rejects_unbounded_or_invalid_options(options):
     with pytest.raises(ValueError):

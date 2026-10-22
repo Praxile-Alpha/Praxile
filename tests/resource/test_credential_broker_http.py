@@ -12,6 +12,45 @@ from praxile.eval.credential_broker import ChatCredentialBroker
 pytestmark = [pytest.mark.resource, pytest.mark.integration, pytest.mark.timeout(20)]
 
 
+def test_structured_provider_uses_shared_judge_quota_over_http(monkeypatch):
+    from praxile.eval.credential_broker import SharedChatBudget
+    from praxile.model import OpenAICompatibleProvider, ModelUnavailable
+    shared = SharedChatBudget(max_calls=2, output_budget=20, ttl_seconds=30)
+    shared.reserve("executor", 10)
+    contract = {"name": "submit_review", "schema": {"type": "object"}}
+    with ChatCredentialBroker(key="host-fixture-secret", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixed", max_calls=3, output_budget=30, max_output=10, shared_budget=shared,
+            budget_role="judge", response_contracts=[contract]) as broker:
+        forwarded = []
+        def forward(raw):
+            forwarded.append(json.loads(raw))
+            return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
+                "name": "submit_review", "arguments": '{"items": []}'}}]}, "finish_reason": "tool_calls"}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3}}
+        broker._forward = forward
+        host, port = broker.start()
+        thread = broker._thread
+        monkeypatch.setenv("PRAXILE_TEST_JUDGE_CAPABILITY", broker.capability)
+        provider = OpenAICompatibleProvider("judge", {"base_url": f"http://{host}:{port}/v1",
+            "api_key_env": "PRAXILE_TEST_JUDGE_CAPABILITY", "max_retries": 0,
+            "models": [{"name": "fixed", "supports_tools": True}]})
+        request = {"model": "fixed", "messages": [{"role": "user", "content": "public fixture"}],
+                   "max_tokens": 10, "timeout": 3, "response_contract": contract}
+        try:
+            result = provider.chat(request)
+            assert json.loads(result["content"]) == {"items": []}
+            with pytest.raises(ModelUnavailable):
+                provider.chat(request)
+        finally:
+            close = getattr(provider.transport, "close", None)
+            if close:
+                close()
+        assert len(forwarded) == 1
+        assert shared.status()["roles"]["judge"]["reserved_calls"] == 1
+        assert broker.status()["usage"]["total_tokens"] == {"input": 5, "output": 3}
+    assert not thread.is_alive()
+
+
 def test_real_http_scoped_auth_revocation_and_cleanup():
     with ChatCredentialBroker(key="fixture-key", endpoint="https://provider.invalid/v1/chat/completions",
                               model="fixed", max_calls=2, output_budget=20, max_output=10) as broker:
