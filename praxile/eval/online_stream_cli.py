@@ -29,13 +29,19 @@ def main(argv=None):
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
     create.add_argument("--chat-budget", type=Path, help="Freeze shared executor/reflection/judge admission budget")
-    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe", "probe-feedback"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review", "summary", "probe", "probe-feedback", "compose"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
-        if name == "probe-feedback":
+        if name in ("probe-feedback", "compose"):
             command.add_argument("--probe-directory", type=Path, required=True)
             command.add_argument("--manifest-sha256", required=True)
             command.add_argument("--report-sha256", required=True)
+            if name == "compose":
+                command.add_argument("--project", type=Path, required=True)
+                command.add_argument("--composition-id", required=True)
+                command.add_argument("--scope", type=Path, required=True)
+                command.add_argument("--output", type=Path, required=True)
+                command.add_argument("--execute", action="store_true")
         elif name == "probe":
             command.add_argument("--task-index", type=int, action="append", required=True)
             command.add_argument("--candidate", type=Path, action="append", required=True)
@@ -91,6 +97,24 @@ def main(argv=None):
             stream = OnlineStream(args.stream)
             if args.command == "status":
                 result = stream.status()
+            elif args.command == "compose":
+                from .native_run_claim import validate_run_id
+                validate_run_id(args.composition_id)
+                if args.execute:
+                    from ..config import Config
+                    from .online_composition import run_online_composition
+                    path = asyncio.run(run_online_composition(Config.load(args.project), args.stream,
+                        probe_directory=args.probe_directory, manifest_sha256=args.manifest_sha256,
+                        report_sha256=args.report_sha256, directory=args.output,
+                        composition_id=args.composition_id, applies_to=_load(args.scope)))
+                    report = _load(path)
+                    result = {"status": report["status"], "decision": report["decision"], "promotion_eligible": False}
+                else:
+                    from .online_probe_feedback import audit_online_probe
+                    feedback = audit_online_probe(args.stream, directory=args.probe_directory,
+                        manifest_sha256=args.manifest_sha256, report_sha256=args.report_sha256)
+                    result = {"action": "composition_feedback_preview_only", "promotion_eligible": False,
+                              "source_ledger_sha256": feedback["source_ledger_sha256"]}
             elif args.command == "probe-feedback":
                 from .online_probe_feedback import audit_online_probe
                 result = audit_online_probe(args.stream, directory=args.probe_directory,

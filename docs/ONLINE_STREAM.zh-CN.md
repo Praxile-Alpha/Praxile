@@ -129,7 +129,8 @@ OpenAI-compatible 和 Anthropic provider；路由若回退，每次实际请求�
 缺少显式 max_tokens 或不支持的 provider 拒绝执行，未启用共享配额时行为不变。
 候选设计 manifest 记录请求准入策略，trajectory 保存配额开始/结束快照。
 恢复已生成结果不额外调用模型；未知请求结果仍不可自动重发。
-预算 scope 为 executor_reflection_judge_online_design；其他离线演化工具或
+在线 compose 也使用该准入通道，其独立重跑共用 stream 配额。
+预算 scope 为 executor_reflection_judge_online_design_composition；其他离线演化工具或
 绕过上述入口的外部调用不在这一份配额内。
 output_budget 是最大输出预留量，不是实际消耗；request_byte_budget 不是输入 token。
 不保证供应商金额、全流程 token 或墙钟上限，不应称为完整费用控制。配额依赖
@@ -162,8 +163,8 @@ manifest 冻结来源账本及任务/候选，report 每次 dispatch 前持久�
 只有全部一致且实际记录注入时 candidate_exposure_verified 才为 true；缺失证据
 保持 false，互相矛盾直接拒绝。机制报告标记 scope=bound_runtime_prompt_construction，
 remote_consumption_verified=false；它不是远端消费证明或因果效果证明。
-尚未基于这些报告调用组合模型，也没有任务级 helped/hurt 或因果提升结论；后续需
-基于下面的反馈回放接入组合，并独立运行组合版本，不能继承父候选的效果。
+可以基于下面的反馈回放调用组合并独立重跑；仍没有任务级 helped/hurt 或因果
+提升结论，不能继承父候选的效果。
 
 ### Probe 反馈回放
 
@@ -182,7 +183,31 @@ repeated_exact_operations 测量；没有测量或覆盖不足时 abstain。
 输出 parent_reports 可供后续组合器使用，保留行为差值与事件引用，但不含正文、
 原始命令、hidden judge 或 rubric。任务 verdict 始终 confounded，原因包括没有
 任务结果评测及单次执行对不证明状态等价；注入缺失时 prediction_verified=false。
-该回放只检查可信本地文件的一致性，不是外部签名。组合模型及组合重跑仍待接入。
+该回放只检查可信本地文件的一致性，不是外部签名。
+
+### 组合并独立重跑
+
+```sh
+python -m praxile.eval.online_stream_cli compose \
+  --stream .praxile/eval/online/example --probe-directory .praxile/eval/online-probes/example \
+  --manifest-sha256 <MANIFEST_SHA256> --report-sha256 <REPORT_SHA256> \
+  --project . --composition-id combined-001 --scope scope.json \
+  --output .praxile/eval/online-compositions/example
+```
+
+默认仅审计反馈；加 --execute 才配置 proposal_composer、调用模型并可能启动新的
+执行环境。scope.json 与 design 的显式适用范围格式相同。组合目录必须新建，
+位于 stream 和原 probe 之外。模型身份、父候选、源摘要和范围先持久化，发送前
+记录 request-intent；结果与模型成本轨迹先保存，再开始重跑。
+
+组合器只接收允许的父候选与局部行为反馈，不接收隐藏 judge/rubric，允许 abstain。
+若生成组合候选，来源仍必须属于冻结已完成前缀，随后对每个 probe 任务启动新的
+baseline/组合两个 lease；不复用父候选输出，不把已见任务改称 held-out。
+超时/中断的同目录执行禁止重放；没有自动恢复或自动选择表现最好的一次。
+
+结果标为 composition_abstained 或 composition_rerun_not_scored。后者只证明重跑
+返回且执行记录可用，任务质量、迁移效果尚未评测；两者 decision 均为 KEEP_BASE，
+candidate_adopted=false、promotion_eligible=false。正式在线候选更新仍需用户审批。
 
 ## 独立内容评审
 
@@ -288,8 +313,8 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 接收模式和候选，不接收全体任务或私有 evaluator。五组 planner 不接受此 split，
 不能把在线结果混入冻结 held-out 分析。
 
-目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
-全链路。独立内容评审、运行前冻结身份及审计后的在线描述性汇总已接入，尚缺在线
-probe 后再组合、覆盖未来 probe/组合调用的统一预算和真实模型多任务验收。
+目前已接通显式 design、probe、反馈审计、compose 与组合独立重跑，更新正式在线
+候选仍需人工批准。独立内容评审、运行前冻结身份、在线描述性汇总与上述调用的
+共享准入预算已接入；尚缺组合重跑的独立质量评测/审计、效果选择与真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

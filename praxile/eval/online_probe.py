@@ -21,6 +21,13 @@ def prepare_online_probe(stream_directory, indices, candidates, *, directory):
 
 async def run_online_probe(stream_directory, indices, candidates, *, directory):
     plan = prepare_online_probe(stream_directory, indices, candidates, directory=directory)
+    return await _execute_probe_plan(stream_directory, plan, directory=directory,
+                                     arms=("baseline", "first", "second"))
+
+
+async def _execute_probe_plan(stream_directory, plan, *, directory, arms):
+    if not arms or arms[0] != "baseline" or len(arms) != len(plan["candidates"]) + 1:
+        raise ValueError("probe arms differ from frozen candidates")
     stream, root = OnlineStream(stream_directory), Path(directory).absolute()
     quota = stream.shared_budget()
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
@@ -41,8 +48,8 @@ async def run_online_probe(stream_directory, indices, candidates, *, directory):
         "candidate_adopted": False, "task_success_proven": False}
     _persist(root / "report.json", report)
     try:
-        for task_index, task in zip(indices, tasks):
-            for arm in ("baseline", "first", "second"):
+        for task_index, task in zip(plan["task_indices"], tasks):
+            for arm_index, arm in enumerate(arms):
                 if stream.status()["ledger_sha256"] != plan["source_ledger_sha256"]:
                     raise ValueError("stream advanced during probe")
                 attempt = {"task_index": task_index, "task_id": task.task_id, "arm": arm, "status": "outcome_unknown"}
@@ -54,8 +61,8 @@ async def run_online_probe(stream_directory, indices, candidates, *, directory):
                 extra = {"shared_chat_budget": quota} if quota else {}
                 parent, identity = None, None
                 if arm != "baseline":
-                    path, digest = parent_paths[0 if arm == "first" else 1]
-                    parent = plan["candidates"][0 if arm == "first" else 1]
+                    path, digest = parent_paths[arm_index - 1]
+                    parent = plan["candidates"][arm_index - 1]
                     identity = owned_candidate_identity(task, path, digest, plan["repository"], development_only=True)
                     extra.update(development_candidate_file=path, development_candidate_sha256=digest,
                                  development_only=True, repository=plan["repository"])

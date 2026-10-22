@@ -434,3 +434,58 @@ def test_online_probe_rejects_invalid_scope_or_replay(tmp_path, monkeypatch, def
         assert calls == [1]
     else:
         assert not root.exists() and not calls
+
+
+@pytest.mark.parametrize("decision", ["compose", "abstain", "timeout"])
+def test_online_composition_audits_feedback_and_reruns_without_adopting(tmp_path, monkeypatch, decision):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    from praxile.eval import online_composition, online_probe
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
+    asyncio.run(stream.run_next())
+    before = (stream.root / "stream.json").read_bytes()
+    parents = [candidate(), {**candidate(), "candidate_id": "other"}]
+    executions, requests = [], []
+    monkeypatch.setattr(online_probe, "run_owned_native", fake_runner(executions, native=True, expose=True))
+    probe = tmp_path / "probe"
+    asyncio.run(online_probe.run_online_probe(stream.root, [0], parents, directory=probe))
+    class Router:
+        def chat(self, messages, **kwargs):
+            requests.append(messages)
+            assert "PRIVATE_SENTINEL" not in json.dumps(messages)
+            if decision == "timeout":
+                raise TimeoutError("fixture")
+            payload = json.loads(messages[1]["content"])
+            value = {"decision": "abstain"} if decision == "abstain" else {
+                "decision": "compose", "content": "Check before revising", "hypothesis": "Bounded combination",
+                "evidence_refs": payload["allowed_refs"]}
+            return {"content": json.dumps(value), "usage": {"prompt_tokens": 5, "completion_tokens": 5}, "finish_reason": "stop"}
+    @contextmanager
+    def router(*args, **kwargs):
+        yield Router(), {"model": "fixture"}
+    monkeypatch.setattr(online_composition, "configured_design_router", router)
+    kwargs = {"probe_directory": probe,
+        "manifest_sha256": hashlib.sha256((probe / "manifest.json").read_bytes()).hexdigest(),
+        "report_sha256": hashlib.sha256((probe / "report.json").read_bytes()).hexdigest(),
+        "directory": tmp_path / "composition", "composition_id": "combined", "applies_to": candidate()["applies_to"]}
+    if decision == "timeout":
+        with pytest.raises(TimeoutError):
+            asyncio.run(online_composition.run_online_composition(SimpleNamespace(), stream.root, **kwargs))
+    else:
+        asyncio.run(online_composition.run_online_composition(SimpleNamespace(), stream.root, **kwargs))
+    report = json.loads((kwargs["directory"] / "report.json").read_text())
+    assert report["decision"] == "KEEP_BASE" and report["candidate_adopted"] is False
+    if decision == "compose":
+        assert report["status"] == "composition_rerun_not_scored"
+        assert len(executions) == 5
+        rerun = json.loads((kwargs["directory"] / "rerun/report.json").read_text())
+        assert [row["arm"] for row in rerun["attempts"]] == ["baseline", "composition"]
+        assert rerun["attempts"][1]["candidate_exposure_verified"] is True
+    else:
+        assert report["status"] == ("outcome_unknown" if decision == "timeout" else "composition_abstained")
+        assert len(executions) == 3
+    with pytest.raises(ValueError):
+        asyncio.run(online_composition.run_online_composition(SimpleNamespace(), stream.root, **kwargs))
+    assert len(requests) == 1
+    assert (stream.root / "stream.json").read_bytes() == before
