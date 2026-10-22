@@ -1044,6 +1044,12 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
+  2026-10-22 真实容器链路验收：新增显式 resource/integration/slow 测试，固定
+  Python 镜像和新 wheel，在 Harbor 0.18/0.22 各完成五组共六次独立 worker 执行
+  与五次 judge，检查实际文件字节、cleanup、broker 撤销、经验注入及 audit。
+  两版本最终同断言分别 52.81s/52.85s 通过。upstream 为脚本化响应，没有付费
+  API 或模型能力证据，任务内记忆未实际调用；真实模型五组总项仍不勾选。
+  详见 results/five-arm-docker-lifecycle-20261022.md。
   实际机制观察增补：audit 读取每次已返回 attempt 摘要绑定的 worker trajectory，
   分开记录激活、注入、记忆/反思动作尝试及成功/拦截；未选尝试也核对，缺字段
   保留 unknown。拒绝开关/状态矛盾与未激活却注入，不把工具 success 当因果

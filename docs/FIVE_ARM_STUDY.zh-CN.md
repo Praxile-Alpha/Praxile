@@ -1,5 +1,27 @@
 # 五组研究计划
 
+## 真实容器链路测试
+
+`tests/resource/test_five_arm_docker.py` 使用真实 Docker lease、固定 worker wheel、
+broker HTTP 通道及持久化额度执行五组；只有上游模型响应是脚本化的。任务为
+读取公开 checklist 文本并交付 answer.txt，共六次独立执行及五次独立评审。
+经验组检查实际 activation/injection，全部尝试检查产物、cleanup 和 broker
+撤销，再运行完整 audit/public summary。它是基础设施测试，不是 LLM 能力或
+benchmark 效果证据；未启用真实付费 API，也不声称任务内改进收益。
+
+```sh
+PRAXILE_TEST_LEASE_IMAGE='python@sha256:YOUR_PINNED_DIGEST' \
+PRAXILE_TEST_WHEEL='/absolute/path/to/fresh-praxile.whl' \
+PRAXILE_TEST_TIMEOUT_SECONDS=300 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=. \
+python -B -m pytest -p pytest_forked --forked -q -o addopts= \
+  tests/resource/test_five_arm_docker.py
+```
+
+使用已安装 Harbor 与 pytest-forked 的独立环境；需 Docker 权限。测试有显式
+resource/integration/slow 标记，默认 fast suite 不运行；未提供镜像或 wheel 则
+skip。不要使用过时 wheel 验证当前代码，也不要将脚本 judge 的 preserved 标签
+解释为真实模型评分。
+
 ## 公开结果摘要
 
 ```sh
