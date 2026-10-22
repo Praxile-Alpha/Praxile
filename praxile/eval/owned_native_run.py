@@ -30,7 +30,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         if not isinstance(shared_chat_budget, SharedChatBudget) or credential_file is None:
             raise ValueError("shared chat budget requires a SharedChatBudget and credential file")
         if resume:
-            raise ValueError("process-local shared chat budget cannot be resumed")
+            raise ValueError("shared-budget executions cannot be resumed")
     shared_start = shared_chat_budget.status() if shared_chat_budget is not None else None
     from .worker_requirements import validate_requirements, identity
     dependencies, capabilities = validate_requirements(dependency_wheels, required_capabilities,

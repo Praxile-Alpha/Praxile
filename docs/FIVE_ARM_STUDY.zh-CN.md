@@ -144,3 +144,18 @@ Python `run_owned_native(..., shared_chat_budget=budget, credential_file=...)` �
 完成证据集合。状态快照可能包括同一共享对象的其他角色消耗，不能直接当成
 单个任务成本。此路径拒绝 shared_chat_budget 与 resume 同时使用，避免以内存
 中新建额度冒充已恢复额度。普通不使用共享预算的恢复流程保持不变。
+
+## 持久化配额对象
+
+`PersistentChatBudget.create(path, max_calls=..., output_budget=..., ttl_seconds=...)`
+创建 SQLite 配额，已有文件拒绝覆盖。之后使用 `PersistentChatBudget(path)`
+打开同一额度，可传给上面的 broker、adapter 和 owned-native Python API。
+BEGIN IMMEDIATE 串行扣减，FULL 同步提交预留后才返回准入；每次操作显式关闭
+连接。角色预留小计必须与剩余额度守恒。数据库丢失、损坏、不一致或过期时
+拒绝请求，不能静默创建一份新预算。
+
+重启和多个协作进程可以打开同一 SQLite 文件；调用失败、超时或预留后崩溃
+均不退款。TTL 保存为墙钟到期时间，检测到时钟早于上次预留时拒绝。该对象
+不防止恶意时钟调整、管理员复制旧数据库或绕过 broker，也不认证金额或输入
+token。owned-native 仍拒绝 shared budget 与 resume 组合：额度持久化不等于
+任务未知操作可安全重放，恢复执行协议尚未接入。

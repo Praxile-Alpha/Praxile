@@ -1071,6 +1071,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   开始与清理后状态，要求 broker 回执并绑定摘要；命名运行完成证据包含回执。
   进程内共享预算不支持恢复，显式拒绝与 resume 组合，防止重建额度被当成续跑。
   Harbor 双版本 fixture 控制器回归各 5 项通过；持久化配额与真实五组仍待完成。
+  SQLite 配额增补：PersistentChatBudget 可创建/重开同一预算，跨进程事务扣减，
+  同步提交后放行 provider，失败不退款，丢失/损坏/守恒失败不重建。15 项共享
+  与持久化预算测试通过，含两个真实子进程竞争最后额度。未防管理员数据库
+  回滚或任意时钟调整，未覆盖输入 token/金额，任务 resume 与五组执行仍未完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
