@@ -1044,6 +1044,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
+  五组预注册计划增补：`python -m praxile.eval.five_arm_plan` 冻结任务/组顺序、
+  repetitions、九项身份摘要和共享预算；重复执行对照的多次尝试共享 cell
+  总预算，不给每次尝试重置额度。调度明确禁止持久化经验更新。15 项本地测试
+  覆盖计划不变性与输入校验，但尚未接入执行器、预算强制及真实五组分析，
+  此项继续不勾选。详见 `FIVE_ARM_STUDY.zh-CN.md`。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
