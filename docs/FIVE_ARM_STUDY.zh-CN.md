@@ -22,6 +22,14 @@ resource/integration/slow 标记，默认 fast suite 不运行；未提供镜像
 skip。不要使用过时 wheel 验证当前代码，也不要将脚本 judge 的 preserved 标签
 解释为真实模型评分。
 
+测试现分 delivery 与 reflection 两个参数场景，可用 `-k reflection` 单独运行后者。
+reflection 场景对所有 arm 执行相同脚本：开始子任务、读取源文本、关闭子任务、
+尝试反思、交付、结束。关闭记忆的 arm 必须硬拦截反思；仅任务内/完整 arm
+产生独立反思调用，返回引用源动作 ID 的临时 note，并在后续模型请求中出现。
+测试验证 note 的 independently_verified=false、证据引用和两类组的动作状态。
+其共同调用额度为 20（delivery 为 12），输出额度仍为 100000；这些场景不能
+混合作同预算性能比较。脚本生成的 note 没有证明模型能自主反思或提高质量。
+
 ## 公开结果摘要
 
 ```sh
@@ -160,6 +168,9 @@ configured_task_local_without_observed_actions，不能据此认定机制永久�
 关闭记忆却记录成功、worker/runtime 开关或注入互相矛盾、未正向激活却注入、
 候选身份不符等情况拒绝核验。工具成功记录仍不是独立的效果验证；没有推断
 反思是否改善后续动作或任务质量，causal_benefit_verified 始终为 false。
+reflection_outcomes 另外统计 requested/note_created/abstained/failed，缺 ledger
+保留 null，避免把 action success（可能只是弃权）解释成已生成 note。关闭记忆
+却出现独立反思请求记录时拒绝核验；该计数仍是绑定轨迹的自报证据，不是收益。
 
 统计量明确为 llm_declared_requirement_preservation：已声明要求中被 judge 判为
 preserved 的比例，不是 resolved rate 或官方成功率。共用既有 task-cluster

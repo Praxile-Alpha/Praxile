@@ -97,3 +97,21 @@ def test_old_worker_record_does_not_invent_mechanism_observations():
     assert result["activation_observed"] is None
     assert result["injection_observed"] is None
     assert result["task_local_actions"] is None
+    assert result["reflection_outcomes"] is None
+
+
+@pytest.mark.parametrize("status", ["requested", "note_created", "abstained", "failed"])
+def test_reflection_return_status_does_not_imply_new_note(status):
+    worker, arm, identity = fixture()
+    worker["trajectory"]["subtask_reflections"] = [{"status": status, "note_text": "PRIVATE"}]
+    result = observe_worker(worker, arm, identity)
+    assert result["reflection_outcomes"][status] == 1
+    assert sum(result["reflection_outcomes"].values()) == 1
+    assert "PRIVATE" not in str(result)
+
+
+def test_disabled_memory_rejects_reflection_model_requests():
+    worker = {"schema_version": "praxile.native_benchmark_run.v1",
+              "trajectory": {"subtask_reflections": [{"status": "abstained"}]}}
+    with pytest.raises(ValueError):
+        observe_worker(worker, {"experience_enabled": False, "task_local_enabled": False}, None)

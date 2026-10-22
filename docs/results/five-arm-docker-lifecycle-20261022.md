@@ -37,3 +37,23 @@ Harbor 0.18 使用最终相同断言复验：1 passed，52.81 秒。
 测试有显式 resource/integration/slow 标记，默认 fast 命令不启动容器。复现命令
 见 `../FIVE_ARM_STUDY.zh-CN.md`。本记录不包含凭据或私有绝对路径，不自动发布
 测试临时目录或原始轨迹；它不是外部来源认证或完整真实模型研究结果。
+
+## 任务内反思增补
+
+后续新增独立 `reflection` 参数场景：五组执行相同的子任务开始、读取、结束、
+反思、交付脚本。关闭任务内记忆的组必须阻止反思；启用的两组必须创建带真实
+动作证据引用的未验证临时 note，并在后续请求中实际使用。反思响应仍为脚本，
+因此只证明运行时控制与数据链路，不证明自主反思能力或质量收益。
+
+审计另外读取 `subtask_reflections`，分别统计 requested、note_created、abstained、
+failed；工具返回 success 不再被误解为一定创建了 note。旧轨迹缺少该账本时为
+unknown，不补零；摘要不包含 note 内容。
+
+- 新 worker wheel SHA-256：`4fb2ba7f46da0a1f3c89d745c94275ccc87a03356f7d31e09f68288abb9c8be5`。
+- 每 cell 调用额度为 20，不能与上文 12 次的 delivery 场景合并为同预算比较。
+- Harbor 0.18 最终反思断言：1 passed、1 deselected，53.38 秒。
+- Harbor 0.22 反思场景：自动审批服务额度耗尽，命令未启动，无测试结果。
+- 针对性单元测试：30 passed，2.00 秒。
+- fast suite：1689 passed、16 skipped、267 deselected，35.61 秒。
+
+上述结果不替代真实多任务、held-out、迁移、完整成本账本及收益验收。

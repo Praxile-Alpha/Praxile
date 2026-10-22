@@ -78,7 +78,21 @@ def observe_worker(worker, scheduled, candidate_identity):
                 raise ValueError("disabled task-local mechanism reported success")
             counts[name]["attempted"] += 1
             counts[name][status if status in {"success", "blocked"} else "other"] += 1
+    reflections = None
+    if "subtask_reflections" in trajectory:
+        records = trajectory["subtask_reflections"]
+        if not isinstance(records, list):
+            raise ValueError("invalid reflection outcome ledger")
+        reflections = {status: 0 for status in ("requested", "note_created", "abstained", "failed")}
+        for record in records:
+            status = record.get("status") if isinstance(record, dict) else None
+            if not isinstance(status, str) or status not in reflections:
+                raise ValueError("invalid reflection outcome")
+            if not scheduled["task_local_enabled"]:
+                raise ValueError("disabled task-local mechanism contains reflection requests")
+            reflections[status] += 1
     return {"activation_observed": activation, "injection_observed": injected,
+            "reflection_outcomes": reflections,
             "task_local_actions": counts,
             "configured_task_local_without_observed_actions":
                 scheduled["task_local_enabled"] and all(item["attempted"] == 0 for item in counts.values())
