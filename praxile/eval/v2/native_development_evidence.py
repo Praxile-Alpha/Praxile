@@ -26,7 +26,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
     if not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
         raise EvalSchemaError("explicit native source SHA256 required")
     dev, heldout = set(development_task_ids), set(heldout_task_ids)
-    if track != "development" or not dev or dev & heldout:
+    if track not in {"development", "online_stream"} or not dev or dev & heldout:
         raise EvalSchemaError("explicit disjoint development membership required")
     if type(limit) is not int or not 1 <= limit <= 20:
         raise EvalSchemaError("evidence limit must be in [1, 20]")
@@ -36,6 +36,9 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
     digest = hashlib.sha256(raw).hexdigest()
     if digest != expected_sha256:
         raise EvalSchemaError("native evidence digest mismatch")
+    allowed_modes = {"fresh_disabled", "online_stream_candidate" if track == "online_stream" else "development_candidate"}
+    if not isinstance(result, dict) or result.get("experience_mode") not in allowed_modes:
+        raise EvalSchemaError("source experience mode differs from learning track")
     trajectory = result.get("trajectory") if isinstance(result, dict) else None
     task = trajectory.get("task_id") if isinstance(trajectory, dict) else None
     if not isinstance(task, str) or task not in dev or task in heldout:
@@ -79,7 +82,7 @@ def collect_native_evidence(result_path, *, expected_sha256, development_task_id
                         "event_sha256": hashlib.sha256(event.to_json().encode()).hexdigest()})
         priorities.append(1 if status == "success" else 0)
     order = list(range(len(evidence))) if all_eligible else select_evidence(evidence, priorities, limit)
-    return {"schema_version": "praxile.native_development_evidence.v1", "track": track,
+    return {"schema_version": "praxile.native_online_evidence.v1" if track == "online_stream" else "praxile.native_development_evidence.v1", "track": track,
         "source_result_sha256": digest, "task_id": task,
         "evidence": [evidence[i] for i in order], "sources": [sources[i] for i in order],
         "eligible_count": len(evidence), "omitted_count": len(evidence) - len(order),

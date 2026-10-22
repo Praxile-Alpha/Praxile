@@ -28,7 +28,7 @@ def candidate(source="first"):
                     "does_not_apply_when": ["unrelated"]}).to_dict()
 
 
-def fake_runner(calls):
+def fake_runner(calls, *, native=False):
     async def run(task, **options):
         calls.append((task.task_id, options))
         if "online_protocol" in options:
@@ -37,7 +37,12 @@ def fake_runner(calls):
             assert identity["track"] == "online_stream"
         root = options["state_root"] / "lease"
         (root / "agent").mkdir(parents=True)
-        raw = b'{"fixture":true}'
+        raw = (json.dumps({"schema_version": "praxile.native_benchmark_run.v1", "experience_mode": "fresh_disabled",
+            "trajectory": {"task_id": "native-" + task.task_id, "start_time": "2026-10-22T00:00:00Z",
+                "user_task": "PRIVATE_SENTINEL", "actions": [{"step": 1, "action_type": "run_command",
+                    "input": {"command": "PRIVATE_SENTINEL"}, "status": "failure",
+                    "observation": {"data": {"exit_code": 1, "stdout": "PRIVATE_SENTINEL"}}}]}}).encode()
+            if native else b'{"fixture":true}')
         (root / "agent/praxile-result.json").write_bytes(raw)
         report = root / "execution.json"
         report.write_text(json.dumps({"task_fingerprint": task.fingerprint, "status": "executor_returned",
@@ -220,3 +225,66 @@ def test_invalid_execution_settings_rejected_before_creation(tmp_path, field, va
     with pytest.raises(ValueError):
         module.OnlineStream.create(root, tasks, execution=options, repository="docs")
     assert not root.exists()
+
+
+@pytest.mark.parametrize("propose", [False, True])
+def test_online_design_uses_bound_prefix_and_never_auto_approves(tmp_path, monkeypatch, propose):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    from praxile.eval.online_design import collect_online_evidence, run_online_design
+    from praxile.eval.v2 import candidate_design_run
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
+    asyncio.run(stream.run_next())
+    bundle = collect_online_evidence(stream.root)
+    assert "PRIVATE_SENTINEL" not in json.dumps(bundle)
+    assert bundle["evidence"][0]["task_id"] == "first"
+    assert bundle["sources"][0]["native_task_id"] == "native-first"
+    calls = []
+    class Router:
+        def chat(self, messages, **kwargs):
+            calls.append(messages)
+            assert "PRIVATE_SENTINEL" not in json.dumps(messages)
+            body = json.loads(messages[1]["content"])
+            assert {item["task_id"] for item in body["evidence"]} == {"first"}
+            drafts = [{"content": "Bounded advice " + str(index), "hypothesis": "Hypothesis " + str(index),
+                       "evidence_refs": body["allowed_refs"]} for index in range(3)]
+            result = {"decision": "propose", "candidates": drafts[:2], "composition": drafts[2]} if propose else {"decision": "abstain"}
+            return {"content": json.dumps(result), "usage": {"prompt_tokens": 10, "completion_tokens": 5}, "finish_reason": "stop"}
+    @contextmanager
+    def router(*args, **kwargs):
+        yield Router(), {"model": "fixture", "config_digest": "fixed"}
+    monkeypatch.setattr(candidate_design_run, "configured_design_router", router)
+    config = SimpleNamespace(paths=SimpleNamespace(state=tmp_path / "design-state"))
+    kwargs = {"design_id": "online-design", "applies_to": candidate()["applies_to"]}
+    before = stream.status()
+    result = run_online_design(config, stream.root, **kwargs)
+    assert result["track"] == "online_stream"
+    assert result["source_ledger_sha256"] == before["ledger_sha256"]
+    assert stream.status() == before
+    assert run_online_design(config, stream.root, **kwargs, resume=True) == result
+    assert len(calls) == 1
+    root = config.paths.state / "eval/v2/candidate_designs/online-design"
+    assert json.loads((root / "report.json").read_text())["track"] == "online_stream"
+    if propose:
+        generated = json.loads((root / result["candidate_files"][0]).read_text())
+        assert generated["source_task_ids"] == ["first"]
+        stream.accept_candidate(generated, approved=True, approved_by="human")
+        assert stream.status()["candidate_digest"] is not None
+    else:
+        assert result["decision"] == "NO_ENTRY"
+
+
+def test_online_design_cli_preview_does_not_load_model_config(tmp_path, monkeypatch, capsys):
+    from praxile.eval.online_stream_cli import main
+    from praxile.config import Config
+    stream, _ = create(tmp_path)
+    monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
+    asyncio.run(stream.run_next())
+    scope = tmp_path / "scope.json"
+    scope.write_text(json.dumps(candidate()["applies_to"]))
+    monkeypatch.setattr(Config, "load", lambda *args: pytest.fail("preview accessed model configuration"))
+    assert main(["design", "--stream", str(stream.root), "--project", str(tmp_path), "--design-id", "preview",
+                 "--scope", str(scope)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["action"] == "design_preview_only" and result["evidence_count"] == 1

@@ -35,6 +35,17 @@ def test_projection_excludes_raw_text_and_grader_feedback(source):
     assert result == collect_native_evidence(source, **options(source))
 
 
+@pytest.mark.parametrize("mode,track", [("heldout_frozen_candidate", "development"),
+    ("heldout_frozen_candidate", "online_stream"), ("online_stream_candidate", "development"),
+    ("development_candidate", "online_stream")])
+def test_learning_projection_rejects_cross_track_sources(source, mode, track):
+    value = json.loads(source.read_text())
+    value["experience_mode"] = mode
+    source.write_text(json.dumps(value))
+    with pytest.raises(EvalSchemaError, match="learning track"):
+        collect_native_evidence(source, **{**options(source), "track": track})
+
+
 @pytest.mark.parametrize("field,value", [("track", "heldout"), ("heldout_task_ids", ["dev-task"]),
     ("development_task_ids", ["another"]), ("expected_sha256", "0" * 64), ("limit", 21),
     ("development_task_ids", "dev-task"), ("heldout_task_ids", [None]), ("expected_sha256", None)])

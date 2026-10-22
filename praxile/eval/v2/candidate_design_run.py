@@ -77,11 +77,13 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
     if response_mode == "function_json_actions" and executor_profile is None:
         raise EvalSchemaError("JSON action submission requires an executor profile")
     with configured_design_router(config, cycle_id=design_id, applies_to=applies_to, private=private) as (router, identity):
+        online = {"track": "online_stream", "source_ledger_sha256": bundle["ledger_sha256"]} if bundle.get("track") == "online_stream" else {}
         root = config.paths.state / "eval/v2/candidate_designs" / design_id
         plan = {"schema_version": "praxile.candidate_design_run.v1", "design_id": design_id,
                 "source_evidence": bundle, "designer": {**identity, "implementation": "praxile.candidate_designer.v2"},
                 "development_task_ids": sorted(set(development_task_ids)),
                 "heldout_task_ids": sorted(set(heldout_task_ids)), "applies_to": applies_to}
+        plan.update(online)
         if max_output_tokens is not None or request_timeout_seconds is not None:
             plan.update(schema_version="praxile.candidate_design_run.v2",
                         generation_budget={"max_output_tokens": max_output_tokens if max_output_tokens is not None else 4000,
@@ -106,7 +108,7 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
             _write_once(root / "manifest.json", plan)
             generated = read_json(root / "generated.json", None)
             if generated is not None:
-                return _finish(root, design_id, generated)
+                return _finish(root, design_id, generated, online=online)
             attempt_path = root / "request-intent.json"
             if bundle["evidence"] and (existed or attempt_path.exists()):
                 raise EvalSchemaError(
@@ -142,10 +144,10 @@ def _run_design(config, bundle, *, design_id, development_task_ids, heldout_task
                 write_json(trajectory_path, logger.data)
             # Persist the generation once, then materialize recoverable derived files.
             write_json(root / "generated.json", result)
-            return _finish(root, design_id, result)
+            return _finish(root, design_id, result, online=online)
 
 
-def _finish(root, design_id, result):
+def _finish(root, design_id, result, *, online=None):
     files = []
     for candidate in [*result["candidates"], *([result["composition"]] if result["composition"] else [])]:
         candidate = ContextCandidate.from_dict(candidate).to_dict()
@@ -155,6 +157,8 @@ def _finish(root, design_id, result):
     report = {"schema_version": "praxile.candidate_design_report.v1", "design_id": design_id,
               "decision": result["decision"], "candidate_files": files, "promotion_eligible": False,
               "experiments_started": False}
+    if online:
+        report.update(online)
     if result.get("abstention") is not None:
         report["abstention"] = result["abstention"]
     write_json(root / "report.json", report)

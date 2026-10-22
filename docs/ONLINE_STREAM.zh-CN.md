@@ -75,6 +75,41 @@ asyncio.run(stream.run_next())
 落盘，后续批准不会改写之前运行。审批只改变实验内候选，不写生产 memory/skill，
 也不授予长期 promotion。`approved_by` 是可信控制面传入的声明，不是身份认证。
 
+## 候选生成
+
+已完成任务后可从结构化证据生成草案：
+
+```sh
+python -m praxile.eval.online_stream_cli design \
+  --stream .praxile/eval/online/example --project . \
+  --design-id online-draft-001 --scope scope.json
+
+python -m praxile.eval.online_stream_cli design \
+  --stream .praxile/eval/online/example --project . \
+  --design-id online-draft-001 --scope scope.json \
+  --generate --max-output-tokens 4000 --request-timeout 60
+```
+
+默认仅预览证据数量和账本摘要，不加载模型配置、不请求模型。--generate 使用
+项目配置的 proposal_composer 角色，最多一次生成请求、无自动修复重试；scope.json
+必须明确 repositories、task_signals、does_not_apply_when 三个字符串数组。
+需先确认这些工具执行事实可以发送给配置的模型。
+
+生成输入来自已完成前缀，优先选择最近任务、最多 20 条结构化工具证据；原生内部
+task ID 映射到受账本绑定的 benchmark task ID，事件 ID 保持原值。映射、来源
+摘要、选中数及遗漏任务数保存在生成 manifest，不发送原始命令/输出、文档正文、
+未来任务或私有评审材料。无可用证据时不调用模型，返回 NO_ENTRY；被判定为
+held-out 的候选轨迹不能经该投影进入在线学习。
+
+草案写入项目 `.praxile/eval/v2/candidate_designs/<design-id>/`，报告明确标记
+online_stream 和 source_ledger_sha256。两个候选及组合仍是未经验证的草案，
+不会自动批准、试用或继承其他版本成绩。审查其中一个候选后，计算其文件摘要，
+再执行上面的 accept 命令。原生 worker 仍复核适用范围及 anti-scope。
+
+加 --resume 只复用同一来源、配置和范围的已保存生成；缺少保存结果时拒绝重发。
+后续任务或批准事件改变来源账本摘要时需新的 design-id。Python 对应接口为
+`run_online_design(config, stream_directory, design_id=..., applies_to=...)`。
+
 ## 顺序账本和中断
 
 stream.json 保存冻结任务、执行配置及哈希关联的事件链：dispatch、completed、
@@ -99,7 +134,7 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 接收模式和候选，不接收全体任务或私有 evaluator。五组 planner 不接受此 split，
 不能把在线结果混入冻结 held-out 分析。
 
-目前是人工批准候选的执行 API，不是自动 Propose/Probe/Compose 全链路。尚缺
-自动候选生成接入、独立在线评分/统计、全流总预算和真实模型多任务验收。
+目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
+全链路。尚缺在线 probe 后再组合、独立在线评分/统计、全流总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

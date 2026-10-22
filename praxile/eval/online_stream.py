@@ -190,6 +190,26 @@ class OnlineStream:
                 "ledger_sha256": state["events"][-1]["sha256"] if state["events"] else state["spec_sha256"],
                 "promotion_eligible": False, "official_evaluation": False}
 
+    def completed_sources(self):
+        """Snapshot verified learning inputs; never expose future tasks or evaluators."""
+        with file_lock(self.root / "stream"):
+            state, completed, pending, _ = self._read()
+            if pending is not None or not completed:
+                raise ValueError("learning requires a completed prefix without an active dispatch")
+            sources = []
+            for event in state["events"]:
+                if event["kind"] != "completed":
+                    continue
+                data = event["data"]
+                matches = [(path, digest) for path, digest in data["evidence"].items()
+                           if path.endswith("/agent/praxile-result.json")]
+                if len(matches) != 1:
+                    raise ValueError("completed task has no unique worker trajectory")
+                path, digest = matches[0]
+                sources.append({"task_id": completed[data["index"]], "path": self.root / path, "sha256": digest})
+            return {"ledger_sha256": state["events"][-1]["sha256"], "completed_task_ids": completed,
+                    "sources": sources}
+
     def accept_candidate(self, value, *, approved=False, approved_by=""):
         if approved is not True or not isinstance(approved_by, str) or not approved_by.strip():
             raise ValueError("candidate update requires explicit human approval identity")

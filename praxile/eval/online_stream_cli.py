@@ -26,7 +26,7 @@ def main(argv=None):
     create.add_argument("--execution-config", type=Path, required=True)
     create.add_argument("--repository", required=True)
     create.add_argument("--input-roots", type=Path)
-    for name in ("status", "next", "accept"):
+    for name in ("status", "next", "accept", "design"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
         if name == "next":
@@ -36,6 +36,14 @@ def main(argv=None):
             command.add_argument("--candidate-sha256", required=True)
             command.add_argument("--approve", action="store_true", help="Explicitly approve the frozen candidate for later tasks")
             command.add_argument("--approved-by", default="")
+        elif name == "design":
+            command.add_argument("--project", type=Path, required=True, help="Project with proposal_composer role configuration")
+            command.add_argument("--design-id", required=True)
+            command.add_argument("--scope", type=Path, required=True)
+            command.add_argument("--generate", action="store_true", help="Send projected public evidence to the configured model")
+            command.add_argument("--resume", action="store_true")
+            command.add_argument("--max-output-tokens", type=int, default=4000)
+            command.add_argument("--request-timeout", type=int, default=60)
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -61,6 +69,21 @@ def main(argv=None):
             elif args.command == "next":
                 result = ({**asyncio.run(stream.run_next()), "action": "execution_completed_not_scored"}
                           if args.execute else {**stream.status(), "action": "preview_only"})
+            elif args.command == "design":
+                from .online_design import collect_online_evidence, run_online_design
+                from .native_run_claim import validate_run_id
+                validate_run_id(args.design_id)
+                scope = _load(args.scope)
+                if args.generate:
+                    from ..config import Config
+                    result = run_online_design(Config.load(args.project), args.stream, design_id=args.design_id,
+                        applies_to=scope, resume=args.resume, max_output_tokens=args.max_output_tokens,
+                        request_timeout_seconds=args.request_timeout)
+                else:
+                    bundle = collect_online_evidence(args.stream)
+                    result = {"track": "online_stream", "action": "design_preview_only",
+                        "source_ledger_sha256": bundle["ledger_sha256"], "evidence_count": len(bundle["evidence"]),
+                        "completed_tasks": len(bundle["completed_task_ids"]), "promotion_eligible": False}
             else:
                 value = load_candidate(args.candidate, args.candidate_sha256)
                 result = stream.preview_candidate(value)
