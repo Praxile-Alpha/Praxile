@@ -1,5 +1,59 @@
 # 五组研究计划
 
+## 命令行预检与执行
+
+```sh
+python -m praxile.eval.five_arm_cli \
+  --plan /path/to/compiled-plan.json \
+  --task /path/to/frozen-task.json \
+  --execution-config /path/to/execution.json \
+  --judge-config /path/to/judge.json \
+  --input-roots /path/to/input-roots.json \
+  --output /path/to/new-study
+```
+
+默认仅预检；检查通过后，在同一命令末尾添加 `--execute` 才开始 Docker、模型
+及可计费 judge 调用。多任务重复 `--task`，重复 task_id 拒绝。plan 必须为
+five_arm_plan 编译结果，而非原始 spec。CLI 与 execute_study 共用 prepare_study，
+验证任务、候选摘要、预算及冻结 judge/selection；CLI 另检查 worker/dependency
+wheel。模型要求非空，镜像须 digest-pinned，凭据 broker 使用无内嵌认证的 HTTPS。
+
+execution.json 必填字段如下，替换示例路径、模型及 SHA256 后使用：
+
+```json
+{
+  "wheel": "/path/to/praxile.whl",
+  "wheel_sha256": "ACTUAL_WHEEL_SHA256",
+  "model": "YOUR_EXECUTOR_MODEL",
+  "base_url": "https://YOUR_PROVIDER/v1",
+  "credential_file": "/path/to/private-executor-key",
+  "output_budget": 10000,
+  "max_steps": 50,
+  "development_candidate_file": "/path/to/candidate.json",
+  "development_candidate_sha256": "ACTUAL_CANDIDATE_SHA256",
+  "repository": "public/docs",
+  "terminal_selection": {
+    "schema_version": "praxile.five_arm_selection.v1",
+    "strategy": "first_delivered",
+    "eligibility": "executor_returned_cleanup_and_required_outputs",
+    "uses_quality_scores": false
+  }
+}
+```
+
+可选 dependency_wheels 是 `[{"path":"/path/to/dependency.whl","sha256":"..."}]`；
+required_capabilities 是版本化能力名称数组。禁止未知字段和按 arm 覆盖配置。
+judge.json 使用下文 judge API 的同名配置字段；其中 credential_file、evaluator_root
+为路径字符串，不嵌入 API key。input-roots.json 为 `{"TASK_ID":"/path/to/public-inputs"}`；
+无输入任务可省略此参数。所有相对路径均相对于**当前工作目录**，不是配置文件目录。
+
+预检只读取候选、评审要求和包等本地证据，不读取密钥正文、不创建实验目录或
+quota，也不联网。stdout 仅展示计划摘要、计数和预算，不输出私有路径/任务正文。
+预检成功不代表凭据可用、公共输入已核验或基础设施可运行；实际执行再次校验，
+目录必须不存在，不提供 resume 或自动重放。执行返回 0 只说明调度完成，不是
+任务成功；随后使用下节 audit。错误返回 2，中断返回 130。完整总 token 控制、
+来源认证、真实五组收益及自动晋升均未由该入口完成。
+
 ## 离线核验与开发标签分析
 
 ```sh

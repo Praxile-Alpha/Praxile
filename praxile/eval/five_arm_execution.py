@@ -1,10 +1,12 @@
-"""Development cell dispatch, without selection, scoring or promotion."""
+"""Development dispatch with frozen selection and optional independent review."""
 import asyncio
 import hashlib
 import json
 from pathlib import Path
 import time
 from copy import deepcopy
+import re
+from urllib.parse import urlsplit
 
 from .five_arm_plan import iter_schedule, plan_digest
 from .native_context import owned_candidate_identity
@@ -117,11 +119,10 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
     return report_path
 
 
-async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
-    """Execute every development cell in frozen order; stop on uncertain failure.
+def prepare_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
+    """Validate and snapshot dispatch arguments without allocating state or quota.
 
-    A separate quota is created per cell. Roles within a cell must share that
-    quota; this entry point currently dispatches only executor-side roles.
+    This does not read credentials, verify Docker, or attest remote model identity.
     """
     from .contracts import BenchmarkTask
     plan = deepcopy(plan)
@@ -133,6 +134,12 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
     if not isinstance(execution, dict) or not required <= execution.keys() or set(execution) - required - optional:
         raise ValueError("study execution requires explicit native options without per-arm overrides")
     options = deepcopy(execution)
+    if not isinstance(options["model"], str) or not options["model"].strip() or not isinstance(options["base_url"], str):
+        raise ValueError("study requires an explicit model and endpoint")
+    endpoint = urlsplit(options["base_url"])
+    if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password
+            or endpoint.query or endpoint.fragment):
+        raise ValueError("broker study requires a fixed HTTPS endpoint")
     if options.get("terminal_selection") is not None:
         from .five_arm_selection import validate_selection
         validate_selection(options["terminal_selection"], plan)
@@ -146,7 +153,8 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
     identities = {}
     for task_id, task in tasks.items():
         if (not isinstance(task, BenchmarkTask) or task.task_id != task_id or task.split != "development"
-                or task.environment.kind != "harbor"):
+                or task.environment.kind != "harbor"
+                or not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision)):
             raise ValueError("invalid development task binding")
         if bool(task.inputs) != (roots.get(task_id) is not None):
             raise ValueError("public task inputs require a matching source root")
@@ -167,6 +175,19 @@ async def execute_study(plan, tasks, *, directory, execution, input_source_roots
         if options.get("terminal_selection") is None:
             raise ValueError("study judge requires precommitted terminal selection")
         judge_config_identity = validate_study_judge(judge, tasks, plan, root)
+    return {"plan": plan, "tasks": tasks, "root": root, "options": options,
+            "roots": roots, "identities": identities, "judge": judge,
+            "judge_config_identity": judge_config_identity}
+
+
+async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
+    """Dispatch frozen development cells; executor and judge share each cell quota."""
+    prepared = prepare_study(plan, tasks, directory=directory, execution=execution,
+                             input_source_roots=input_source_roots, judge=judge)
+    plan, tasks, root = prepared["plan"], prepared["tasks"], prepared["root"]
+    options, roots = prepared["options"], prepared["roots"]
+    identities = prepared["identities"]
+    judge, judge_config_identity = prepared["judge"], prepared["judge_config_identity"]
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     write_json(root / "plan.json", plan)
     report_path = root / "study.json"
