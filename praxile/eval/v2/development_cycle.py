@@ -4,7 +4,7 @@ import re
 
 from ...utils import file_lock, read_json, write_json
 from .candidate import ContextCandidate
-from .cycle_usage import cycle_usage
+from .cycle_usage import CycleUsageCheckpoint
 from .executor_profile import common_parent_capability
 from .experiment import ControlledABExperiment, _write_once
 from .schema import EvalSchemaError
@@ -67,7 +67,11 @@ class DevelopmentContextCycle:
             if (root / "manifest.json").exists() and not resume:
                 raise EvalSchemaError("development cycle already exists; resume explicitly")
             _write_once(root / "manifest.json", plan)
+            if (adaptive and (root / "composition-attempt.json").exists()
+                    and not (root / "composition.json").exists()):
+                raise EvalSchemaError("composition attempt has no durable result; automatic replay refused")
             reports = []
+            usage_checkpoint = CycleUsageCheckpoint(root, reports, composer_requested=adaptive)
             for index, experiment_id in enumerate(plan["experiment_ids"]):
                 if adaptive and index == 2:
                     frozen_path = root / "composition.json"
@@ -78,11 +82,12 @@ class DevelopmentContextCycle:
                             raise EvalSchemaError("composition attempt has no durable result; automatic replay refused")
                         _write_once(attempt_path, {"status": "requested", "composer_identity": composer_identity,
                                                   "parents": plan["composition_parents"]})
-                        composed_candidate = composer(tuple(candidates), deepcopy(reports))
-                        frozen = {"candidate": composed_candidate.to_dict() if composed_candidate is not None else None,
-                                  "parents": plan["composition_parents"],
-                                  "composer_identity": composer_identity}
-                        _write_once(frozen_path, frozen)
+                        with usage_checkpoint.operation("proposal_composer"):
+                            composed_candidate = composer(tuple(candidates), deepcopy(reports))
+                            frozen = {"candidate": composed_candidate.to_dict() if composed_candidate is not None else None,
+                                      "parents": plan["composition_parents"],
+                                      "composer_identity": composer_identity}
+                            _write_once(frozen_path, frozen)
                     if (frozen.get("parents") != plan["composition_parents"]
                             or frozen.get("composer_identity") != composer_identity):
                         raise EvalSchemaError("frozen composition lineage mismatch")
@@ -100,11 +105,12 @@ class DevelopmentContextCycle:
                 candidate = versions[index]
                 # Completed children are resumed, never replaced or treated as inherited results.
                 child = self.state_root / "eval" / "v2" / "experiments" / experiment_id / "manifest.json"
-                reports.append(self.experiments.run(
-                    task_set, adapter=adapter, evaluator=evaluator, baseline_policy=baseline_policy,
-                    candidate=candidate, model=model, experiment_id=experiment_id,
-                    resume=resume and child.exists(), development_only=True,
-                    keep_workspaces=keep_workspaces, source_overrides=source_overrides))
+                with usage_checkpoint.operation(experiment_id):
+                    reports.append(self.experiments.run(
+                        task_set, adapter=adapter, evaluator=evaluator, baseline_policy=baseline_policy,
+                        candidate=candidate, model=model, experiment_id=experiment_id,
+                        resume=resume and child.exists(), development_only=True,
+                        keep_workspaces=keep_workspaces, source_overrides=source_overrides))
                 write_json(root / "progress.json", {"completed_experiments": [
                     item["experiment_id"] for item in reports], "promotion_eligible": False})
             composition = reports[-1] if len(reports) == 3 else {}
@@ -125,8 +131,7 @@ class DevelopmentContextCycle:
                 "decision": "TASK_LOCAL_TRIAL_RECOMMENDED" if verified else "KEEP_BASE",
                 "selected_candidate_digest": composed_candidate.digest if verified else None,
                 "composition_status": "executed" if len(reports) == 3 else "abstained",
-                "usage": cycle_usage(reports, composer_requested=adaptive,
-                    composer_trajectory=read_json(root / "composer-trajectory.json", None) if adaptive else None),
+                "usage": usage_checkpoint.save(status="complete"),
                 "adopted": False, "promotion_eligible": False, "experience_entry": "NO_ENTRY",
                 "limitations": ["Split membership is explicitly declared, not independently attested.",
                     "Composition uses preset content or development feedback only, never held-out feedback.",

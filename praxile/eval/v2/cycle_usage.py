@@ -1,7 +1,9 @@
 """Explicit scope accounting for development execution and composition."""
 import math
+from contextlib import contextmanager
 
 from ...usage_evidence import summarize_usage
+from ...utils import read_json, write_json
 
 
 def cycle_usage(reports, *, composer_requested, composer_trajectory=None):
@@ -32,8 +34,8 @@ def cycle_usage(reports, *, composer_requested, composer_trajectory=None):
             if isinstance(calls, list) and type(count) is int and count >= len(calls):
                 evidence = summarize_usage(calls, count)
         components.append({"role": "proposal_composer", "known_tokens": {
-            "input": evidence["known_tokens"]["prompt_tokens"] if evidence else None,
-            "output": evidence["known_tokens"]["completion_tokens"] if evidence else None,
+            "input": evidence["known_tokens"]["prompt_tokens"] if evidence and evidence["reported_calls"]["prompt_tokens"] else None,
+            "output": evidence["known_tokens"]["completion_tokens"] if evidence and evidence["reported_calls"]["completion_tokens"] else None,
             "cache": None}, "tokens_complete": False, "cost_total": None, "known_cost_subtotal": None,
             "usage_evidence": evidence})
     totals = {}
@@ -52,3 +54,35 @@ def cycle_usage(reports, *, composer_requested, composer_trajectory=None):
             "whole_experiment_cost_total": None, "whole_experiment_complete": False,
             "unaccounted_scope": ["upstream candidate generation", "independent judge calls", "unrecorded requests"],
             "scope": "reported execution arms and optional composer; not a full experiment ledger"}
+
+
+class CycleUsageCheckpoint:
+    """Persist known usage before/after operations without declaring unknown work free."""
+
+    def __init__(self, root, reports, *, composer_requested):
+        self.root = root
+        self.reports = reports
+        self.composer_requested = composer_requested
+
+    def save(self, *, operation=None, status="in_progress"):
+        usage = cycle_usage(self.reports, composer_requested=self.composer_requested,
+            composer_trajectory=read_json(self.root / "composer-trajectory.json", None)
+            if self.composer_requested else None)
+        usage.update(checkpoint_status=status, pending_operation=operation,
+                     completed_experiment_ids=[report["experiment_id"] for report in self.reports])
+        if operation is not None:
+            # The recorded subtotal excludes this operation until it returns a report.
+            usage["unaccounted_scope"].append("unfinished operation: " + operation)
+        write_json(self.root / "usage.json", usage)
+        return usage
+
+    @contextmanager
+    def operation(self, name):
+        self.save(operation=name)
+        finished = False
+        try:
+            yield
+            finished = True
+        finally:
+            self.save(operation=None if finished else name,
+                      status="in_progress" if finished else "outcome_unknown")

@@ -775,6 +775,15 @@ praxile eval ab first.json development-tasks.jsonl \
 
 ## 不完整用量
 
+cycle 目录中的 `usage.json` 在每个子实验与 composer 调用前后更新。它记录
+`completed_experiment_ids`、`pending_operation` 和 `checkpoint_status`；正常结束
+为 complete，异常退出为 outcome_unknown。complete 仅指周期结束，不代表费用
+完整，`whole_experiment_complete` 仍为 false。强杀无法运行 finally，只保留调用
+开始前的 in_progress 快照；未完成 arm 的消耗不被推算成零，也不包含在已返回
+report 的小计中。composer 中断但缺 composition.json 时拒绝自动重放，恢复操作
+不会覆盖该中断快照。缺 token 字段的 composer 不计入 reported_components，
+只有供应商显式报告零才算已报告零值。该文件可变且无来源签名，不是账单凭证。
+
 开发 cycle 的 usage 字段列出各执行 arm 和可选组合器，报告已知 token/费用小计
 及覆盖计数。组合器从 composer-trajectory.json 重算用量，不信任缓存摘要；
 无日志的自定义回调保持 unknown。recorded_scope_cost_total 仅在所有组件完整

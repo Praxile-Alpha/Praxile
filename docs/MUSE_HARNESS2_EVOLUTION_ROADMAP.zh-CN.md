@@ -1052,6 +1052,12 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   cycle 局部账本增补：报告现在集中列出执行 arms 与组合器已知用量、小计及
   覆盖情况，缺价格不补零；全实验总额继续 unknown，上游设计和独立 judge
   仍未合并。fixture 验证预先组合六个 arm、弃权四个 arm 加组合器的记录范围。
+  2026-10-22 持久化增补：每个子实验及 composer 开始前/返回后写入 cycle
+  `usage.json`，保留已完成子实验小计、pending_operation 与完成状态；异常或
+  KeyboardInterrupt 标记 outcome_unknown，强杀只能保留开始前快照。未落盘的
+  进行中 arm 消耗仍不统计为零，未完成 composer 恢复时先拒绝重放且保留账本。
+  composer 缺 token 字段不再计为“已报告零值”，显式零仍保留。这不是完整成本
+  接入或供应商账单核验，完整 R3 成本项继续不勾选。
   轨迹用量完整性增补：`cost.usage_evidence` 区分已知 token 小计与完整总量，
   按 purpose 记录覆盖率；字段缺失、类型非法、别名冲突和旧轨迹缺失调用均不补零。
   旧 `prompt_tokens/completion_tokens` 字段仅保留已知小计兼容语义。该证据仅覆盖

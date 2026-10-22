@@ -6,6 +6,7 @@ from praxile.adapters import AdapterPolicy, FixtureAgentAdapter
 from praxile.eval.v2.candidate import ContextCandidate
 from praxile.eval.v2.development_cycle import DevelopmentContextCycle
 from praxile.eval.v2.schema import EvalSchemaError
+from praxile.utils import read_json
 
 
 @pytest.mark.parametrize("composition_verdict,confounders,decision", [
@@ -38,6 +39,8 @@ def test_composition_never_inherits_success_from_individuals(tmp_path, compositi
     assert len(calls) == 3 and all(call["development_only"] for call in calls)
     assert report["decision"] == decision
     assert report["adopted"] is False and report["promotion_eligible"] is False
+    assert read_json(tmp_path / "eval/v2/development_cycles/cycle/usage.json") == report["usage"]
+    assert report["usage"]["checkpoint_status"] == "complete"
     with pytest.raises(EvalSchemaError, match="different content"):
         cycle.run(tasks, resume=True, **{**kwargs, "model": {"model": "changed"}})
     assert len(calls) == 3
@@ -68,8 +71,14 @@ def test_composition_resume_never_repeats_an_uncertain_call(tmp_path, interrupte
     if interrupted:
         with pytest.raises(KeyboardInterrupt):
             cycle.run(tasks, **kwargs)
+        checkpoint = tmp_path / "eval/v2/development_cycles/cycle/usage.json"
+        interrupted_usage = read_json(checkpoint)
+        assert interrupted_usage["pending_operation"] == "proposal_composer"
+        assert interrupted_usage["checkpoint_status"] == "outcome_unknown"
+        assert len(interrupted_usage["completed_experiment_ids"]) == 2
         with pytest.raises(EvalSchemaError, match="automatic replay refused"):
             cycle.run(tasks, **kwargs, resume=True)
+        assert read_json(checkpoint) == interrupted_usage
     else:
         assert cycle.run(tasks, **kwargs)["composition_status"] == "abstained"
         assert cycle.run(tasks, **kwargs, resume=True)["composition_status"] == "abstained"
