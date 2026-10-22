@@ -15,6 +15,18 @@ def specification():
             "arm_order": list(ARMS)}
 
 
+def test_optional_request_bytes_are_frozen_and_shared_by_every_arm():
+    spec = specification()
+    old = plan_digest(compile_plan(spec))
+    spec["budget"]["request_bytes"] = 1000000
+    plan = compile_plan(spec)
+    assert plan_digest(plan) != old
+    assert all(row["shared_budget"]["request_bytes"] == 1000000 for row in iter_schedule(plan))
+    spec["budget"]["request_bytes"] = True
+    with pytest.raises(EvalSchemaError):
+        compile_plan(spec)
+
+
 def test_five_arms_have_distinct_mechanisms_but_shared_budget_and_no_updates():
     spec = specification()
     plan = compile_plan(spec)

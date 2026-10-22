@@ -19,22 +19,25 @@ class PersistentChatBudget(SharedChatBudget):
     """
 
     @classmethod
-    def create(cls, path, *, max_calls, output_budget, ttl_seconds):
-        SharedChatBudget(max_calls=max_calls, output_budget=output_budget, ttl_seconds=ttl_seconds)
+    def create(cls, path, *, max_calls, output_budget, ttl_seconds, request_byte_budget=None):
+        SharedChatBudget(max_calls=max_calls, output_budget=output_budget, ttl_seconds=ttl_seconds,
+                         request_byte_budget=request_byte_budget)
         path = Path(path).absolute()
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.close(descriptor)
         now = time.time()
+        byte_state = {} if request_byte_budget is None else {
+            "request_byte_budget": request_byte_budget, "remaining_request_bytes": request_byte_budget}
         with closing(sqlite3.connect(path, timeout=5)) as connection:
             connection.execute("PRAGMA synchronous=FULL")
             with connection:
                 connection.execute("CREATE TABLE quota (id INTEGER PRIMARY KEY CHECK(id=1), state TEXT NOT NULL)")
                 connection.execute("INSERT INTO quota VALUES (1, ?)", (json.dumps({
-                    "schema_version": "praxile.persistent_chat_budget.v1", "max_calls": max_calls,
+                    "schema_version": "praxile.persistent_chat_budget.v2" if byte_state else "praxile.persistent_chat_budget.v1", "max_calls": max_calls,
                     "output_budget": output_budget, "expires_at": now + ttl_seconds,
                     "last_reserved_at": now, "remaining_calls": max_calls,
-                    "remaining_output": output_budget, "roles": {}}),))
+                    "remaining_output": output_budget, "roles": {}, **byte_state}),))
         return cls(path)
 
     def __init__(self, path):
@@ -46,16 +49,25 @@ class PersistentChatBudget(SharedChatBudget):
         if row is None:
             raise BrokerDenied("quota state missing")
         state = json.loads(row[0])
+        version = state.get("schema_version") if isinstance(state, dict) else None
+        byte_limited = version == "praxile.persistent_chat_budget.v2"
         fields = {"schema_version", "max_calls", "output_budget", "expires_at", "last_reserved_at",
                   "remaining_calls", "remaining_output", "roles"}
+        if byte_limited:
+            fields.update({"request_byte_budget", "remaining_request_bytes"})
         if (not isinstance(state, dict) or set(state) != fields
-                or state["schema_version"] != "praxile.persistent_chat_budget.v1"):
+                or version not in {"praxile.persistent_chat_budget.v1", "praxile.persistent_chat_budget.v2"}):
             raise BrokerDenied("invalid quota state")
         for limit, remaining, maximum in (("max_calls", "remaining_calls", 10000),
                                           ("output_budget", "remaining_output", 100_000_000)):
             if (type(state[limit]) is not int or not 1 <= state[limit] <= maximum
                     or type(state[remaining]) is not int or not 0 <= state[remaining] <= state[limit]):
                 raise BrokerDenied("invalid quota balance")
+        if byte_limited and (type(state["request_byte_budget"]) is not int
+                or not 1 <= state["request_byte_budget"] <= 10**9
+                or type(state["remaining_request_bytes"]) is not int
+                or not 0 <= state["remaining_request_bytes"] <= state["request_byte_budget"]):
+            raise BrokerDenied("invalid byte quota balance")
         if any(type(state[key]) not in (int, float) or not math.isfinite(state[key]) for key in
                ("expires_at", "last_reserved_at")):
             raise BrokerDenied("invalid quota clock")
@@ -64,12 +76,16 @@ class PersistentChatBudget(SharedChatBudget):
             raise BrokerDenied("invalid quota roles")
         for role, usage in roles.items():
             if (not isinstance(role, str) or not role or len(role) > 80 or not isinstance(usage, dict)
-                    or set(usage) != {"reserved_calls", "reserved_output"}
+                    or set(usage) != ({"reserved_calls", "reserved_output", "reserved_request_bytes"}
+                                      if byte_limited else {"reserved_calls", "reserved_output"})
                     or any(type(value) is not int or value < 0 for value in usage.values())):
                 raise BrokerDenied("invalid role reservation")
         if (sum(value["reserved_calls"] for value in roles.values()) != state["max_calls"] - state["remaining_calls"]
                 or sum(value["reserved_output"] for value in roles.values()) != state["output_budget"] - state["remaining_output"]):
             raise BrokerDenied("quota conservation mismatch")
+        if byte_limited and sum(value["reserved_request_bytes"] for value in roles.values()) != (
+                state["request_byte_budget"] - state["remaining_request_bytes"]):
+            raise BrokerDenied("byte quota conservation mismatch")
         return state
 
     def _connect(self):
@@ -83,10 +99,12 @@ class PersistentChatBudget(SharedChatBudget):
             raise
         return connection
 
-    def reserve(self, role, maximum):
+    def reserve(self, role, maximum, *, request_bytes=None):
         if (not isinstance(role, str) or not role or len(role) > 80
                 or type(maximum) is not int or maximum <= 0):
             raise ValueError("invalid shared reservation")
+        if request_bytes is not None and (type(request_bytes) is not int or request_bytes < 0):
+            raise ValueError("invalid request byte reservation")
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -96,12 +114,18 @@ class PersistentChatBudget(SharedChatBudget):
                     raise BrokerDenied("shared budget expired or clock moved backwards")
                 if state["remaining_calls"] < 1 or state["remaining_output"] < maximum:
                     raise BrokerDenied("shared budget exhausted")
+                if "remaining_request_bytes" in state:
+                    if request_bytes is None or request_bytes <= 0 or request_bytes > state["remaining_request_bytes"]:
+                        raise BrokerDenied("shared request byte budget exhausted or measurement missing")
+                    state["remaining_request_bytes"] -= request_bytes
                 state["remaining_calls"] -= 1
                 state["remaining_output"] -= maximum
                 state["last_reserved_at"] = now
                 usage = state["roles"].setdefault(role, {"reserved_calls": 0, "reserved_output": 0})
                 usage["reserved_calls"] += 1
                 usage["reserved_output"] += maximum
+                if "remaining_request_bytes" in state:
+                    usage["reserved_request_bytes"] = usage.get("reserved_request_bytes", 0) + request_bytes
                 connection.execute("UPDATE quota SET state=? WHERE id=1", (json.dumps(state),))
 
     def status(self):
@@ -110,9 +134,12 @@ class PersistentChatBudget(SharedChatBudget):
         now = time.time()
         return {"schema_version": "praxile.shared_chat_budget.v1", "storage": "sqlite",
                 "remaining_calls": state["remaining_calls"], "remaining_output": state["remaining_output"],
+                "remaining_request_bytes": state.get("remaining_request_bytes"),
                 "expires_at": state["expires_at"], "expired": now >= state["expires_at"],
                 "clock_rollback_detected": now < state["last_reserved_at"], "roles": state["roles"],
-                "scope": "local_controller_request_admission_and_output_reservations",
+                "scope": ("local_controller_request_admission_output_and_request_bytes"
+                          if "remaining_request_bytes" in state
+                          else "local_controller_request_admission_and_output_reservations"),
                 "total_token_bound_verified": False, "cost_bound_verified": False}
 
 
@@ -124,13 +151,15 @@ def main(argv=None):
     create.add_argument("--max-calls", type=int, required=True)
     create.add_argument("--output-budget", type=int, required=True)
     create.add_argument("--ttl-seconds", type=int, required=True)
+    create.add_argument("--request-byte-budget", type=int)
     show = commands.add_parser("show", help="Read quota state without reserving or extending it")
     show.add_argument("--database", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
             budget = PersistentChatBudget.create(args.database, max_calls=args.max_calls,
-                output_budget=args.output_budget, ttl_seconds=args.ttl_seconds)
+                output_budget=args.output_budget, ttl_seconds=args.ttl_seconds,
+                request_byte_budget=args.request_byte_budget)
         else:
             budget = PersistentChatBudget(args.database)
         print(json.dumps(budget.status(), indent=2))

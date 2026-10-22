@@ -45,8 +45,13 @@ def test_reasoning_overrides_reject_before_cell_or_study_allocation(tmp_path, op
 
 
 @pytest.mark.parametrize("arm", ARMS)
-def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm):
+@pytest.mark.parametrize("request_bytes", [None, 1000])
+def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm, request_bytes):
     plan, cell, task, kwargs = setup(tmp_path, arm)
+    if request_bytes is not None:
+        plan["spec"]["budget"]["request_bytes"] = request_bytes
+        plan = compile_plan(plan["spec"])
+        cell = next(row for row in iter_schedule(plan) if row["arm"] == arm)
     kwargs["model_request_options"] = {"thinking": {"type": "disabled"}, "reasoning_effort": "low"}
     budgets = []
     async def run(task, **options):
@@ -56,7 +61,7 @@ def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm):
         assert "persist_workspace" not in options
         budget = options["shared_chat_budget"]
         budgets.append(budget)
-        budget.reserve("executor", 10)
+        budget.reserve("executor", 10, request_bytes=100)
         root = options["state_root"]
         root.mkdir()
         path = root / "execution.json"
@@ -71,6 +76,8 @@ def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm):
     assert all(item is budgets[0] for item in budgets)
     assert report["shared_budget"]["remaining_calls"] == 4 - cell["max_attempts"]
     assert report["shared_budget"]["remaining_output"] == 100 - 10 * cell["max_attempts"]
+    assert report["shared_budget"]["remaining_request_bytes"] == (
+        None if request_bytes is None else request_bytes - 100 * cell["max_attempts"])
     assert report["selected_attempt"] is None
     assert report["promotion_eligible"] is False
     assert "PRIVATE" not in path.read_text()

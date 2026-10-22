@@ -73,7 +73,8 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
     started = time.monotonic()
     try:
         quota = PersistentChatBudget.create(root / "quota.sqlite", max_calls=budget["model_calls"],
-            output_budget=output_budget, ttl_seconds=budget["wall_seconds"])
+            output_budget=output_budget, ttl_seconds=budget["wall_seconds"],
+            request_byte_budget=budget.get("request_bytes"))
         for index in range(cell["max_attempts"]):
             remaining = int(budget["wall_seconds"] - (time.monotonic() - started))
             status = quota.status()

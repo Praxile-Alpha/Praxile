@@ -44,7 +44,8 @@ def compile_plan(spec):
                    for value in identities.values())):
         raise EvalSchemaError("all frozen identities require sha256 digests")
     budget = spec["budget"]
-    if (not isinstance(budget, dict) or set(budget) != {"total_tokens", "model_calls", "wall_seconds"}
+    if (not isinstance(budget, dict) or not {"total_tokens", "model_calls", "wall_seconds"} <= set(budget)
+            or set(budget) - {"total_tokens", "model_calls", "wall_seconds", "request_bytes"}
             or any(type(value) is not int or not 1 <= value <= 10**9 for value in budget.values())):
         raise EvalSchemaError("budget requires positive integer tokens, model calls and wall seconds")
     if budget["model_calls"] < spec["repeat_attempts"]:

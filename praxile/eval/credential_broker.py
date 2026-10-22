@@ -46,37 +46,51 @@ class SharedChatBudget:
     This is not a total-token, monetary, or whole-task wall-time guarantee.
     """
 
-    def __init__(self, *, max_calls, output_budget, ttl_seconds):
+    def __init__(self, *, max_calls, output_budget, ttl_seconds, request_byte_budget=None):
         if any(type(value) is not int or not 1 <= value <= limit for value, limit in (
                 (max_calls, 10000), (output_budget, 100_000_000), (ttl_seconds, 86400))):
             raise ValueError("invalid shared chat budget")
+        if request_byte_budget is not None and (type(request_byte_budget) is not int
+                or not 1 <= request_byte_budget <= 10**9):
+            raise ValueError("invalid request byte budget")
         self._lock = threading.Lock()
         self._deadline = time.monotonic() + ttl_seconds
         self._calls, self._output = max_calls, output_budget
         self._roles = {}
+        self._request_bytes = request_byte_budget
 
-    def reserve(self, role, maximum):
+    def reserve(self, role, maximum, *, request_bytes=None):
         if (not isinstance(role, str) or not role or len(role) > 80
                 or type(maximum) is not int or maximum <= 0):
             raise ValueError("invalid shared reservation")
+        if request_bytes is not None and (type(request_bytes) is not int or request_bytes < 0):
+            raise ValueError("invalid request byte reservation")
         with self._lock:
             if time.monotonic() >= self._deadline:
                 raise BrokerDenied("shared budget expired")
             if self._calls < 1 or self._output < maximum:
                 raise BrokerDenied("shared budget exhausted")
+            if self._request_bytes is not None:
+                if request_bytes is None or request_bytes <= 0 or request_bytes > self._request_bytes:
+                    raise BrokerDenied("shared request byte budget exhausted or measurement missing")
+                self._request_bytes -= request_bytes
             self._calls -= 1
             self._output -= maximum
             usage = self._roles.setdefault(role, {"reserved_calls": 0, "reserved_output": 0})
             usage["reserved_calls"] += 1
             usage["reserved_output"] += maximum
+            if self._request_bytes is not None:
+                usage["reserved_request_bytes"] = usage.get("reserved_request_bytes", 0) + request_bytes
 
     def status(self):
         with self._lock:
             return {"schema_version": "praxile.shared_chat_budget.v1",
                     "remaining_calls": self._calls, "remaining_output": self._output,
+                    "remaining_request_bytes": self._request_bytes,
                     "expired": time.monotonic() >= self._deadline,
                     "roles": {role: dict(value) for role, value in self._roles.items()},
-                    "scope": "process_local_request_admission_and_output_reservations",
+                    "scope": ("process_local_request_admission_output_and_request_bytes" if self._request_bytes is not None
+                              else "process_local_request_admission_and_output_reservations"),
                     "total_token_bound_verified": False, "cost_bound_verified": False}
 
 
@@ -222,7 +236,7 @@ class ChatCredentialBroker:
                 if self._remaining_calls < 1 or self._remaining_output < maximum:
                     raise BrokerDenied("capability budget exhausted")
                 if self._shared_budget is not None:
-                    self._shared_budget.reserve(self._budget_role, maximum)
+                    self._shared_budget.reserve(self._budget_role, maximum, request_bytes=len(body))
                 self._remaining_calls -= 1
                 self._remaining_output -= maximum
                 self._admitted += 1
