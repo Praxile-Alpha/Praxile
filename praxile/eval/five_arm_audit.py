@@ -55,6 +55,8 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
         review = entry.get("review", {})
         if not isinstance(review, dict):
             raise ValueError("invalid review receipt")
+        row["execution_status"] = entry.get("status", "unknown")
+        row["review_status"] = review.get("status", "not_recorded")
         if "report" in entry:
             if entry["report"] != f"cells/{index}/cell.json":
                 raise ValueError("cost cell path mismatch")

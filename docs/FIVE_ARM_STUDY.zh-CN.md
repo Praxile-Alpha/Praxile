@@ -1,5 +1,29 @@
 # 五组研究计划
 
+## 公开结果摘要
+
+```sh
+python -m praxile.eval.five_arm_public \
+  --study /path/to/study --study-sha256 EXPECTED_STUDY_JSON_SHA256 \
+  --task /path/to/frozen-task.json \
+  --evaluator-root /path/to/development-requirements --public
+```
+
+默认 stdout 为 Markdown；追加 --json 输出白名单 JSON。多任务重复 --task。
+命令先执行同一套离线 audit，证据不一致返回 2，不打印未经核验的报告。成功
+生成返回 0，即使实验缺失/弃权；该退出码不是实验通过。无 --public 不读取
+证据，显式同意披露后才生成。命令不写文件、不联网、不自动提交或发布。
+
+摘要覆盖全部预注册 cell，保留执行预算耗尽/结果未知、评审弃权/未选择/未记录、
+逐项 verdict 计数、共同任务数量、描述性 label/token 差值及 token 已知小计和
+未知总量。任务按冻结顺序编号，不输出任务 ID、模型名称、路径、提示词、候选
+正文或原始产物；生成的摘要不是完整可复现实验包。保留证据摘要与统计数量，
+所以只是减少披露，不声称完全匿名。完整私有证据应另行保存用于复核。
+
+报告固定标明 development LLM requirements labels，official_evaluation=false、
+promotion_eligible=false；不能把 preserved 比例称为官方成功率。质量与成本
+完整任务集合可能不同，不能直接将两种差值组合为质量调整后的收益结论。
+
 ## 命令行预检与执行
 
 ```sh

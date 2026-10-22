@@ -143,6 +143,15 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     task_file.write_text(json.dumps(task.to_dict()))
     assert main(["--study", str(path.parent), "--study-sha256", sha(original_study),
         "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"])]) == (0 if verdict == "preserved" else 1)
+    from praxile.eval.five_arm_public import public_summary, render_markdown, main as public_main
+    published = public_summary(plan, {"task": task}, **audit_args, public=True)
+    assert len(published["cells"]) == 5
+    assert published["complete_label_tasks"] == (1 if verdict == "preserved" else 0)
+    assert "retain source" not in str(published)
+    assert "fixture-secret" not in str(published)
+    assert str(tmp_path) not in render_markdown(published)
+    assert public_main(["--study", str(path.parent), "--study-sha256", sha(original_study),
+        "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"]), "--public", "--json"]) == 0
     calls_before = list(calls)
     # A declared candidate change cannot silently relabel the experience arms.
     changed_identity = json.loads(original_study)
