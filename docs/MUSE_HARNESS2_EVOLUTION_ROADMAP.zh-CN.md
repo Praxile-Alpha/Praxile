@@ -1110,6 +1110,12 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   fallback，独占运行目录，保存输入/轨迹/判断/额度回执并撤销 capability。
   测试使用 fixture 上游；selected_attempt 产物来源绑定、研究评分编排及真实
   模型验收仍未完成，不能把开发判断当作官方质量或晋升证据。
+  选中产物绑定增补：prepare_selected_cell_review/review_selected_cell 校验冻结
+  plan/cell/selection、执行报告、完整产物集合和开发要求摘要，再复用受限
+  文本/DOCX/PDF 抽取及 broker judge；manifest 保存选择与执行来源绑定。
+  使用原 cell quota，不续期；judge 状态/要求存储必须在 cell 外，只支持开发
+  evaluator。fixture 上游端到端及篡改拒绝已测试，研究自动评分和真实质量
+  收益仍未完成，不据此勾选 R3 总项。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

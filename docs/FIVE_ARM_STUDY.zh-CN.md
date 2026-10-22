@@ -83,6 +83,26 @@ fallback，额度过期或不足会弃权。它仍需控制面显式提供已抽
 尚未自动从五组 selected_attempt 绑定产物/来源，研究级评分集成仍未完成。
 详见 CONTENT_PRESERVATION_REVIEW.zh-CN.md。
 
+## 选中产物到 Judge 的来源绑定
+
+`praxile.eval.five_arm_review.prepare_selected_cell_review` 接受冻结 plan、cell_id、
+BenchmarkTask、cell_directory 和预期 cell_sha256，以及独立 evaluator_root、
+source_path/output_path。先验证 cell 摘要/计划/任务身份、重放冻结 selection，
+再复用 prepare_owned_review 验证完整输入输出合同、产物集合摘要、trajectory
+与开发要求摘要。支持 text/docx_body/pdf_text 抽取，保留现有抽取版本和限制。
+选择摘要不一致、缺交付版本、链接、篡改或任务不匹配时，在模型调用前拒绝。
+
+`review_selected_cell` 进一步打开该 cell 已有 quota.sqlite，调用独立 broker
+内容评审；要求 public=True（显式授权发送该次开发要求和产物）。不创建、补充
+或续期额度。judge 状态和 evaluator_root 必须位于整个执行 cell 外。只支持
+praxile-content-review/1 开发 evaluator，不接官方隐藏 rubric。
+
+judge manifest 保存 execution_binding 和 selection_binding，串联 plan/cell/
+policy/选中执行报告、产物/trajectory/要求/抽取摘要。它检查本地证据一致性，
+不是恶意主机上的真实性证明；纯文本/DOCX/PDF 抽取也不代表视觉质量验收。
+该显式入口已通过真实本地文件、SQLite、评审链路的 fixture 上游测试；完整
+研究尚未在每个 cell 结束后自动调度 judge，过期额度会弃权而非自动延长。
+
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成
 manifest 当成五组实验已完成。

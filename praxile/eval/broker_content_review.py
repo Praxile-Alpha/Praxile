@@ -47,7 +47,7 @@ class _JudgeRouter:
 
 def run_broker_content_review(*, directory, inputs, credential_file, endpoint, model, shared_budget,
                              total_output_tokens, public=False, batch_size=4, timeout_per_call=90,
-                             request_options=None):
+                             request_options=None, execution_binding=None, selection_binding=None):
     """No fallback, transport retry, key in config, automatic replay or promotion.
 
     Caller supplies extracted public text and development requirements, not a
@@ -58,6 +58,12 @@ def run_broker_content_review(*, directory, inputs, credential_file, endpoint, m
     if not isinstance(inputs, dict) or set(inputs) != {"source_text", "output_text", "requirements"}:
         raise ValueError("invalid review input fields")
     inputs = deepcopy(inputs)
+    from .content_review_run import validate_execution_binding
+    execution_binding = validate_execution_binding(execution_binding, output_text=inputs["output_text"],
+                                                   source_text=inputs["source_text"])
+    if selection_binding is not None:
+        from .five_arm_review import validate_selection_binding
+        selection_binding = validate_selection_binding(selection_binding, execution_binding)
     options = dict(total_output_tokens=total_output_tokens, batch_size=batch_size,
         timeout_per_call=timeout_per_call, private=False, response_mode="function", citation_mode="units")
     plan = plan_content_review_batch(**inputs, **options)
@@ -81,6 +87,10 @@ def run_broker_content_review(*, directory, inputs, credential_file, endpoint, m
             "request_options": deepcopy(request_options or {}),
             "contract_sha256": [hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest() for value in contracts],
             "shared_budget_start": shared_budget.status(), "official_evaluation": False, "promotion_eligible": False}
+        if execution_binding is not None:
+            manifest["execution_binding"] = execution_binding
+        if selection_binding is not None:
+            manifest["selection_binding"] = selection_binding
         write_json(root / "manifest.json", manifest)
         write_json(root / "inputs.json", inputs)
         write_json(root / "report.json", report)

@@ -56,6 +56,103 @@ def test_binding_uses_verified_bytes_and_does_not_reveal_locations(tmp_path):
     assert "rubric.json" not in json.dumps(binding)
 
 
+def selected_fixture(tmp_path):
+    from praxile.eval.five_arm_plan import compile_plan, ARMS, IDENTITIES, iter_schedule, plan_digest
+    from praxile.eval.five_arm_selection import selection_policy, select_delivered
+    from praxile.eval.v2.schema import canonical_json
+    task, options = setup(tmp_path)
+    root = tmp_path / "cell"
+    (root / "attempt-0").mkdir(parents=True)
+    execution = root / "attempt-0/lease"
+    options["execution_dir"].rename(execution)
+    policy = selection_policy("first_delivered")
+    identities = {key: "sha256:" + "a" * 64 for key in IDENTITIES}
+    identities["terminal_selection"] = "sha256:" + sha(canonical_json(policy).encode())
+    plan = compile_plan({"study_id": "bound", "task_ids": [task.task_id], "heldout_task_ids": ["heldout"],
+        "repetitions": 1, "repeat_attempts": 2, "identities": identities,
+        "budget": {"total_tokens": 300, "model_calls": 3, "wall_seconds": 60}, "arm_order": list(ARMS)})
+    row = next(iter_schedule(plan))
+    attempts = [{"index": 0, "status": "returned", "report": "attempt-0/lease/execution.json",
+                 "sha256": sha((execution / "execution.json").read_bytes())}]
+    cell = {"schema_version": "praxile.five_arm_execution.v1", "plan_digest": plan_digest(plan),
+        "cell": row, "task_fingerprint": task.fingerprint, "status": "executed_not_scored",
+        "terminal_selection_policy": policy, "attempts": attempts, "selected_attempt": 0,
+        "selection": select_delivered(attempts, root, policy)}
+    (root / "cell.json").write_text(json.dumps(cell))
+    return plan, row["cell_id"], task, dict(cell_directory=root,
+        cell_sha256=sha((root / "cell.json").read_bytes()), evaluator_root=options["evaluator_root"],
+        source_path=options["source_path"], output_path=options["output_path"])
+
+
+def test_selected_artifact_reaches_broker_judge_with_bound_receipts(tmp_path, monkeypatch):
+    from praxile.eval.five_arm_review import review_selected_cell
+    from praxile.eval.credential_broker import ChatCredentialBroker
+    from praxile.eval.persistent_chat_budget import PersistentChatBudget
+    plan, cell_id, task, kwargs = selected_fixture(tmp_path)
+    quota = PersistentChatBudget.create(kwargs["cell_directory"] / "quota.sqlite",
+        max_calls=2, output_budget=200, ttl_seconds=60)
+    quota.reserve("executor", 100)
+    key = tmp_path / "private-key"
+    key.write_text("fixture-provider-secret")
+    key.chmod(0o600)
+    calls = []
+    def forward(self, raw):
+        body = json.loads(raw)
+        calls.append(body)
+        assert json.loads(body["messages"][1]["content"])["output_units"][0]["text"] == "draft output"
+        return {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
+            "name": body["tool_choice"]["function"]["name"], "arguments": json.dumps({"items": [
+                {"id": "r", "verdict": "uncertain", "output_refs": [], "reason": "Not enough evidence"}]})}}]}}]}
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", forward)
+    result = review_selected_cell(plan, cell_id, task, **kwargs, directory=tmp_path / "judge",
+        credential_file=key, endpoint="https://provider.invalid/v1/chat/completions", model="fixture",
+        total_output_tokens=100, public=True)
+    assert len(calls) == 1
+    manifest = json.loads((result.parent / "manifest.json").read_text())
+    assert manifest["selection_binding"]["cell_sha256"] == kwargs["cell_sha256"]
+    assert manifest["selection_binding"]["execution_sha256"] == manifest["execution_binding"]["execution_sha256"]
+    assert quota.status()["roles"]["judge"]["reserved_calls"] == 1
+    assert manifest["promotion_eligible"] is False
+
+
+@pytest.mark.parametrize("defect", ["cell", "selected", "output", "trajectory", "requirements", "policy"])
+def test_selected_review_rejects_changed_evidence_before_dispatch(tmp_path, monkeypatch, defect):
+    from praxile.eval.five_arm_review import review_selected_cell
+    plan, cell_id, task, kwargs = selected_fixture(tmp_path)
+    root = kwargs["cell_directory"]
+    if defect in {"cell", "selected"}:
+        path = root / "cell.json"
+        cell = json.loads(path.read_text())
+        cell["selected_attempt"] = 1
+        path.write_text(json.dumps(cell))
+        if defect == "selected":
+            kwargs["cell_sha256"] = sha(path.read_bytes())
+    elif defect == "policy":
+        plan["spec"]["identities"]["terminal_selection"] = "sha256:" + "b" * 64
+    else:
+        path = {"output": root / "attempt-0/lease/outputs/output.txt",
+                "trajectory": root / "attempt-0/lease/agent/praxile-result.json",
+                "requirements": kwargs["evaluator_root"] / "rubric.json"}[defect]
+        path.write_text("changed")
+    judge = Mock()
+    monkeypatch.setattr("praxile.eval.broker_content_review.run_broker_content_review", judge)
+    with pytest.raises(ValueError):
+        review_selected_cell(plan, cell_id, task, **kwargs, directory=tmp_path / "judge",
+            credential_file=tmp_path / "unused", endpoint="https://provider.invalid/v1/chat/completions",
+            model="fixture", total_output_tokens=100, public=True)
+    judge.assert_not_called()
+    assert not (tmp_path / "judge").exists()
+
+
+def test_selected_requirements_cannot_be_inside_cell_via_parent_root(tmp_path):
+    from praxile.eval.five_arm_review import prepare_selected_cell_review
+    plan, cell_id, task, kwargs = selected_fixture(tmp_path)
+    task = replace(task, evaluator=replace(task.evaluator, private_ref="cell/requirements.json"))
+    kwargs["evaluator_root"] = tmp_path
+    with pytest.raises(ValueError, match="outside all cell executions"):
+        prepare_selected_cell_review(plan, cell_id, task, **kwargs)
+
+
 @pytest.mark.parametrize("location", ["inputs/source.txt", "outputs/output.txt", "agent/praxile-result.json", "rubric.json"])
 def test_changed_evidence_rejected_before_judge(tmp_path, monkeypatch, location):
     task, options = setup(tmp_path)
