@@ -59,7 +59,7 @@ class OnlineStream:
     """
 
     @classmethod
-    def create(cls, directory, tasks, *, execution, repository, input_source_roots=None):
+    def create(cls, directory, tasks, *, execution, repository, input_source_roots=None, judge=None):
         tasks = list(tasks)
         if (not tasks or len(tasks) > 10000 or any(not isinstance(task, BenchmarkTask)
                 or task.split != "online_stream" or task.environment.kind != "harbor" for task in tasks)
@@ -109,6 +109,15 @@ class OnlineStream:
             raise ValueError("stream input roots differ from public task inputs")
         spec = _paths({"tasks": [task.to_dict() for task in tasks], "execution": execution,
                        "repository": repository, "input_source_roots": roots})
+        if judge is not None:
+            from .five_arm_judge import judge_identity
+            identity = judge_identity(judge, {task.task_id: task for task in tasks})
+            stream_root = Path(directory).resolve()
+            evaluator = Path(judge["evaluator_root"]).resolve()
+            if evaluator.is_relative_to(stream_root) or any(
+                    (evaluator / task.evaluator.private_ref).resolve().is_relative_to(stream_root) for task in tasks):
+                raise ValueError("judge evaluator must be outside the stream")
+            spec["judge_identity"] = identity
         if len(canonical_json(spec).encode()) > 8 * 1024**2:
             raise ValueError("stream plan exceeds 8 MiB")
         _digest(spec)
@@ -188,6 +197,7 @@ class OnlineStream:
         return {"track": "online_stream", "completed_task_ids": completed, "pending_index": pending,
                 "task_count": len(state["spec"]["tasks"]), "candidate_digest": candidate.digest if candidate else None,
                 "ledger_sha256": state["events"][-1]["sha256"] if state["events"] else state["spec_sha256"],
+                "judge_precommitted_before_execution": "judge_identity" in state["spec"],
                 "promotion_eligible": False, "official_evaluation": False}
 
     def completed_sources(self):
@@ -224,6 +234,7 @@ class OnlineStream:
                 raise ValueError("completed task has no unique execution receipt")
             path, digest = matches[0]
             return {"task": BenchmarkTask.from_dict(state["spec"]["tasks"][index]),
+                    "frozen_judge_identity": deepcopy(state["spec"].get("judge_identity")),
                     "execution_dir": (self.root / path).parent, "execution_sha256": digest,
                     "completion_event_sha256": event["sha256"], "task_index": index}
 

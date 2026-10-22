@@ -134,10 +134,20 @@ output_path 以及可选 text/docx_body/pdf_text 抽取格式。私有 evaluator
 一次，失败后不静默重试；传输失败可表示为 abstained，未知 token 不补零。
 
 CLI 输出 preserved/missing/contradicted/uncertain 标签计数。它们是未校准的 LLM
-内容保留判断，不是任务成功率；本阶段 judge 在任务结束后配置，明确记录
+内容保留判断，不是任务成功率。默认 judge 在任务结束后配置，明确记录
 judge_precommitted_before_execution=false，不能据此声称冻结对照或性能提升。
 这份评审不会写入 stream 账本、自动批准候选或进入 design 的工具证据。
 Python 接口为 `run_online_review(stream_directory, index, judge=..., directory=...)`。
+
+创建 stream 时可增加 `--judge-config judge.json`，或调用
+`OnlineStream.create(..., judge=judge_config)`，在任何任务 dispatch 前冻结评审身份。
+创建阶段 artifacts 必须覆盖所有任务，评审某个任务时配置只包含该任务。
+冻结内容包括模型、endpoint 摘要、请求选项、调用超时、batch size、输出额度、
+抽取路径/格式和 evaluator 摘要；评审时任何身份变化都会在调用模型前拒绝。
+凭据内容及 evaluator 正文不会写入 stream；凭据文件可轮换。status 和评审 receipt
+报告 judge_precommitted_before_execution=true。既有流不能补写这一声明。
+这是可信本地控制器的配置承诺，不是签名时间戳，也不证明模型供应商版本未变。
+独立评审仍不进入学习链路，不自动 promotion；预冻结不等于质量校准或官方评分。
 
 ## 顺序账本和中断
 
@@ -164,7 +174,7 @@ CONTEXT_INJECT 保留 online_stream。控制面记录完整已完成前缀，但
 不能把在线结果混入冻结 held-out 分析。
 
 目前是显式生成、人工批准候选的执行链路，不是自动 Propose/Probe/Compose
-全链路。独立内容评审已接入，尚缺运行前冻结的在线评分协议、多任务统计、在线
+全链路。独立内容评审及运行前冻结的内容评审身份已接入，尚缺多任务统计、在线
 probe 后再组合、全流总预算和真实模型多任务验收。
 测试以替身执行器验证顺序、审批、源限制、证据变化、重启、取消及并发拒绝；
 Harbor 兼容测试验证模式透传，不等于真实模型收益。不要把本阶段称为 R3 完成。

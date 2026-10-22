@@ -15,7 +15,7 @@ def sha(raw):
 
 
 @pytest.fixture
-def completed(tmp_path, monkeypatch):
+def completed(tmp_path, monkeypatch, request):
     source = b"retain source"
     evaluator = tmp_path / "evaluator"
     evaluator.mkdir()
@@ -29,7 +29,11 @@ def completed(tmp_path, monkeypatch):
     key = tmp_path / "key"
     key.write_text("fixture-secret")
     key.chmod(0o600)
+    judge = {"credential_file": key, "endpoint": "https://judge.invalid/v1/chat/completions", "model": "judge",
+        "public": True, "total_output_tokens": 100, "evaluator_root": evaluator,
+        "artifacts": {task.task_id: {"source_path": "source.txt", "output_path": "result.txt"}}}
     stream = stream_module.OnlineStream.create(tmp_path / "stream", [task], repository="docs",
+        judge=judge if getattr(request, "param", False) else None,
         input_source_roots={task.task_id: tmp_path}, execution={"wheel": tmp_path / "worker.whl",
             "wheel_sha256": "a" * 64, "model": "executor", "base_url": "https://provider.invalid/v1", "credential_file": key})
     async def run(task, **options):
@@ -52,13 +56,11 @@ def completed(tmp_path, monkeypatch):
         return path
     monkeypatch.setattr(stream_module, "run_owned_native", run)
     asyncio.run(stream.run_next())
-    judge = {"credential_file": key, "endpoint": "https://judge.invalid/v1/chat/completions", "model": "judge",
-        "public": True, "total_output_tokens": 100, "evaluator_root": evaluator,
-        "artifacts": {task.task_id: {"source_path": "source.txt", "output_path": "result.txt"}}}
     return stream, judge
 
 
 @pytest.mark.parametrize("verdict", ["preserved", "uncertain"])
+@pytest.mark.parametrize("completed", [False, True], indirect=True)
 def test_review_binds_outputs_without_changing_learning_state(completed, tmp_path, monkeypatch, verdict):
     from praxile.eval.online_design import collect_online_evidence
     stream, judge = completed
@@ -83,7 +85,7 @@ def test_review_binds_outputs_without_changing_learning_state(completed, tmp_pat
     assert receipt["status"] == "reviewed"
     assert receipt["verdict_counts"][verdict] == 1
     assert receipt["execution_binding"] == prepared["binding"]
-    assert receipt["judge_precommitted_before_execution"] is False
+    assert receipt["judge_precommitted_before_execution"] == stream.status()["judge_precommitted_before_execution"]
     assert receipt["learning_feedback_allowed"] is False
     for name, digest in receipt["evidence_sha256"].items():
         assert sha((root / "judge" / name).read_bytes()) == digest
@@ -93,6 +95,19 @@ def test_review_binds_outputs_without_changing_learning_state(completed, tmp_pat
     with pytest.raises(ValueError):
         run_online_review(stream.root, 0, judge=judge, directory=root)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("completed", [True], indirect=True)
+@pytest.mark.parametrize("field,value", [("model", "different"), ("total_output_tokens", 99),
+    ("batch_size", 2), ("endpoint", "https://other.invalid/v1/chat/completions"),
+    ("timeout_per_call", 30), ("request_options", {"reasoning_effort": "low"})])
+def test_precommitted_judge_cannot_change(completed, tmp_path, monkeypatch, field, value):
+    stream, judge = completed
+    judge[field] = value
+    monkeypatch.setattr(ChatCredentialBroker, "_forward", lambda *args: pytest.fail("model accessed"))
+    with pytest.raises(ValueError, match="precommitted"):
+        run_online_review(stream.root, 0, judge=judge, directory=tmp_path / "review")
+    assert not (tmp_path / "review").exists()
 
 
 @pytest.mark.parametrize("defect", ["future", "inside", "no_consent", "changed_output", "invalid_endpoint"])

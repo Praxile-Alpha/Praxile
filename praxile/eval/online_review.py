@@ -15,6 +15,11 @@ def prepare_online_review(stream_directory, index, *, judge, directory):
     task = target["task"]
     judge = deepcopy(judge)
     identity = judge_identity(judge, {task.task_id: task})
+    frozen = target["frozen_judge_identity"]
+    if frozen is not None:
+        expected = {**frozen, "artifacts": {task.task_id: frozen["artifacts"][task.task_id]}}
+        if identity != expected:
+            raise ValueError("judge differs from precommitted online review protocol")
     stream = Path(stream_directory).resolve()
     root = Path(directory).absolute()
     evaluator = Path(judge["evaluator_root"]).resolve()
@@ -31,7 +36,7 @@ def prepare_online_review(stream_directory, index, *, judge, directory):
         "task_id": task.task_id, "task_index": index, "task_fingerprint": task.fingerprint,
         "completion_event_sha256": target["completion_event_sha256"], "execution_binding": binding,
         "judge_identity": identity, "official_evaluation": False, "promotion_eligible": False,
-        "judge_precommitted_before_execution": False, "learning_feedback_allowed": False}
+        "judge_precommitted_before_execution": frozen is not None, "learning_feedback_allowed": False}
     return {"root": root, "inputs": inputs, "binding": binding, "receipt": receipt, "judge": judge}
 
 
