@@ -7,7 +7,7 @@ from ...model import ModelRouter
 from ...trajectory import TrajectoryLogger
 from ...utils import read_json, write_json
 from .manifest import _redact
-from .probe_composer import compose_after_development_probes
+from .probe_composer import COMPOSER_PROTOCOL, compose_after_development_probes
 from .schema import EvalSchemaError, canonical_json
 
 
@@ -25,7 +25,7 @@ def configured_design_router(config, *, cycle_id, applies_to, private=False):
         router.route("proposal_composer", private=private)
         route = router.describe_route("proposal_composer", private=private)
         # Freeze configuration without storing credentials or raw endpoint settings.
-        identity = {"implementation": "praxile.probe_composer.v1", "role": "proposal_composer",
+        identity = {"implementation": COMPOSER_PROTOCOL, "role": "proposal_composer",
                     "provider": route["provider"], "model": route["model"], "private": private,
                     "config_digest": hashlib.sha256(canonical_json(_redact(config.data)).encode()).hexdigest(),
                     "scope_digest": hashlib.sha256(canonical_json(applies_to).encode()).hexdigest()}

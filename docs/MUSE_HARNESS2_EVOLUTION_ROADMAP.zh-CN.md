@@ -874,6 +874,11 @@ unknown，已有条件门控在下次模型请求前停止失效上下文。13 �
 
 ### R2-C 自动候选与执行组件
 
+组合恢复边界增补（2026-10-22）：行为反馈 composer 身份升级 v2，冻结计划不
+允许与 v1 混用。模型组合调用前记录 durable attempt；缺失 durable result 时
+拒绝自动重放，避免不确定调用被静默重复计费。完成/弃权可复用保存结果，变更
+身份拒绝恢复。中断 fixture 已验证，非供应商 exactly-once 或丢失响应恢复。
+
 局部反馈组合增补：probe composer 可消费按冻结测量从 operation alignment
 复算的行为摘要，绑定 task/candidate/event 分组为 probe 摘要引用；原始参数、
 工具输出和 rubric 不发送。修改 delta、错候选和重复任务记录拒绝；暴露不足

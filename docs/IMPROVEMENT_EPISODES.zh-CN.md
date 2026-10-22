@@ -31,6 +31,14 @@ evidence_sha256 对引用、观察、任务 verdict 和混杂因素作确定性�
 
 ## 开发任务组合实验
 
+行为反馈版配置 composer 的冻结身份现为 `praxile.probe_composer.v2`，不与旧 v1
+实验等价；旧计划恢复时身份不符会拒绝，应使用新的 cycle ID。每次组合调用前
+先持久化 composition-attempt.json，调用成功/弃权后再写 composition.json。
+若只有 attempt 而没有结果，恢复明确拒绝自动重试，包括调用抛错或进程中断；
+这时不能确认是否已消耗额度。必须审阅后以新 cycle ID 显式发起另一实验，不能
+删除 attempt 冒充首次调用。完整已保存组合（含 abstain）仍复用结果，不重复调用。
+此规则不等于对供应商请求提供 exactly-once，也不自动恢复丢失的模型响应。
+
 `praxile.eval.v2.development_cycle.DevelopmentContextCycle(state_root, event_store)`
 提供显式 opt-in Python API。`run(task_set, ...)` 接收 `candidates=[first, second]`、
 `composed_candidate`、`development_task_ids`、`heldout_task_ids`、`cycle_id`，以及

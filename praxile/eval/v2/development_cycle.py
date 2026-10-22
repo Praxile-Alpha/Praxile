@@ -73,6 +73,11 @@ class DevelopmentContextCycle:
                     frozen_path = root / "composition.json"
                     frozen = read_json(frozen_path, None)
                     if frozen is None:
+                        attempt_path = root / "composition-attempt.json"
+                        if attempt_path.exists():
+                            raise EvalSchemaError("composition attempt has no durable result; automatic replay refused")
+                        _write_once(attempt_path, {"status": "requested", "composer_identity": composer_identity,
+                                                  "parents": plan["composition_parents"]})
                         composed_candidate = composer(tuple(candidates), deepcopy(reports))
                         frozen = {"candidate": composed_candidate.to_dict() if composed_candidate is not None else None,
                                   "parents": plan["composition_parents"],

@@ -100,6 +100,18 @@ def test_unverified_exposure_does_not_supply_measurement_reference():
         "status": "abstained", "reason": "candidate_exposure_not_established"}
 
 
+def test_configured_composer_freezes_current_protocol(tmp_path, monkeypatch):
+    from praxile.config import Config
+    from praxile.eval.v2 import configured_composer
+    from praxile.eval.v2.probe_composer import COMPOSER_PROTOCOL
+    router = SimpleNamespace(providers={}, route=lambda *args, **kwargs: None,
+        describe_route=lambda *args, **kwargs: {"provider": "fixture", "model": "fixture"})
+    monkeypatch.setattr(configured_composer, "ModelRouter", lambda config: router)
+    scope = {"repositories": ["owner/repo"], "task_signals": ["repair"], "does_not_apply_when": ["unrelated"]}
+    with configured_composer.configured_design_router(Config.load(tmp_path), cycle_id="c", applies_to=scope) as (_, identity):
+        assert identity["implementation"] == COMPOSER_PROTOCOL == "praxile.probe_composer.v2"
+
+
 @pytest.mark.parametrize("invalid", ["track", "digest", "invariants"])
 def test_invalid_probes_never_call_model(invalid):
     parents, reports, kwargs, calls = setup({})

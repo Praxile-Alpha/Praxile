@@ -7,6 +7,8 @@ from .schema import EvalSchemaError, canonical_json
 from .executor_profile import common_parent_capability, validate_action_examples
 from .behavior_probe import probe_repetition
 
+COMPOSER_PROTOCOL = "praxile.probe_composer.v2"
+
 
 def _behavior_feedback(candidate, episode):
     if "behavior_probe" not in episode:
