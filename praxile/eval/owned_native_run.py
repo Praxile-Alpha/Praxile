@@ -28,7 +28,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            development_candidate_file: Path | None = None,
                            development_candidate_sha256: str | None = None,
                            development_only: bool = False, repository: str | None = None,
-                           model_request_options: dict | None = None, frozen_protocol: dict | None = None):
+                           model_request_options: dict | None = None, frozen_protocol: dict | None = None,
+                           online_protocol: dict | None = None):
     from ..model_options import validate_request_options
     model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
     if type(task_local_memory_enabled) is not bool:
@@ -50,7 +51,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         raise ValueError("owned native execution requires a Harbor BenchmarkTask")
     from .native_context import owned_candidate_identity
     candidate_identity = owned_candidate_identity(task, development_candidate_file,
-        development_candidate_sha256, repository, development_only=development_only, frozen_protocol=frozen_protocol)
+        development_candidate_sha256, repository, development_only=development_only, frozen_protocol=frozen_protocol,
+        online_protocol=online_protocol)
     if task.environment.revision != image:
         raise ValueError("image must match the frozen task environment revision")
     for output in task.outputs:
@@ -124,7 +126,8 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             shared_chat_budget=shared_chat_budget, task_local_memory_enabled=task_local_memory_enabled,
             development_candidate_file=str(development_candidate_file) if development_candidate_file is not None else None,
             development_candidate_sha256=development_candidate_sha256,
-            development_only=development_only, repository=repository, heldout_frozen=frozen_protocol is not None)
+            development_only=development_only, repository=repository, heldout_frozen=frozen_protocol is not None,
+            online_stream=online_protocol is not None)
         report["worker_environment_sha256"] = agent.worker_environment_sha256
         await lease.prepare()
         if lease.workspace_path is not None:

@@ -152,7 +152,7 @@ def test_model_options_forwarded_and_worker_receipt_bound(tmp_path, monkeypatch,
     assert not (tmp_path / "praxile-result.json").exists()
 
 
-@pytest.mark.parametrize("heldout", [False, True])
+@pytest.mark.parametrize("heldout", [False, True, "online"])
 def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, monkeypatch, heldout):
     import shlex
     from types import SimpleNamespace
@@ -175,7 +175,8 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
         repository="public/docs")
     with pytest.raises(ValueError, match="explicit development"):
         PraxileAgent(**kwargs)
-    agent = PraxileAgent(**kwargs, development_only=not heldout, heldout_frozen=heldout)
+    agent = PraxileAgent(**kwargs, development_only=not heldout, heldout_frozen=heldout is True,
+                        online_stream=heldout == "online")
     path.write_text("changed after construction")
     commands, uploads = [], {}
     class Environment:
@@ -188,8 +189,8 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
     monkeypatch.setattr(agent, "_record_supervision", AsyncMock())
     asyncio.run(agent.run("Make a checklist", Environment(), AgentContext()))
     argv = commands[0]
-    assert ("--heldout-frozen" if heldout else "--development-only") in argv
-    assert ("--development-only" if heldout else "--heldout-frozen") not in argv
+    expected_flag = "--online-stream" if heldout == "online" else "--heldout-frozen" if heldout else "--development-only"
+    assert {flag for flag in ("--online-stream", "--heldout-frozen", "--development-only") if flag in argv} == {expected_flag}
     assert argv[argv.index("--repository") + 1] == "public/docs"
     uploaded = uploads[argv[argv.index("--development-candidate") + 1]]
     assert json.loads(uploaded) == candidate.to_dict()
@@ -201,7 +202,7 @@ def test_development_candidate_is_frozen_and_forwarded_with_identity(tmp_path, m
     class ResultEnvironment:
         async def download_file(self, remote, local):
             local.write_text(json.dumps(result))
-    track = "heldout_frozen" if heldout else "development"
+    track = "online_stream" if heldout == "online" else "heldout_frozen" if heldout else "development"
     valid_context = {"schema_version": "praxile.native_development_context.v1", "track": track,
         "candidate_digest": agent.development_context_identity["candidate_digest"],
         "activation": {"repository": "public/docs", "activated": False}, "injected": False,

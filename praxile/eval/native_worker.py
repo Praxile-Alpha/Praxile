@@ -99,15 +99,17 @@ def run_native(root: Path, instruction: str | TaskInput, *, model: str, base_url
                renderer_executable: str = "", deliverable_contract: dict | None = None,
                development_candidate: dict | None = None, repository: str | None = None,
                development_only: bool = False, model_request_options: dict | None = None,
-               task_local_memory_enabled: bool = False, heldout_frozen: bool = False) -> dict[str, Any]:
+               task_local_memory_enabled: bool = False, heldout_frozen: bool = False,
+               online_stream: bool = False) -> dict[str, Any]:
     from ..services.run_service import normalize_deliverable_contract
     deliverable_contract = normalize_deliverable_contract(deliverable_contract)
     context_plan = None
     if development_candidate is not None:
         from .native_context import plan_candidate
         context_plan = plan_candidate(development_candidate, instruction, repository,
-                                      development_only=development_only, heldout_frozen=heldout_frozen)
-    elif heldout_frozen is not False:
+                                      development_only=development_only, heldout_frozen=heldout_frozen,
+                                      online_stream=online_stream)
+    elif heldout_frozen is not False or online_stream is not False:
         raise ValueError("held-out context requires a candidate")
     if isinstance(instruction, str) and not instruction.strip():
         raise ValueError("public instruction is empty")
@@ -166,6 +168,7 @@ def main() -> None:
     parser.add_argument("--development-candidate-sha256")
     parser.add_argument("--development-only", action="store_true")
     parser.add_argument("--heldout-frozen", action="store_true")
+    parser.add_argument("--online-stream", action="store_true")
     parser.add_argument("--task-local-memory", action="store_true",
                         help="Explicitly enable task-local notes and reflection in this isolated worker")
     parser.add_argument("--repository")
@@ -199,7 +202,8 @@ def main() -> None:
                         renderer_executable=args.renderer_executable, deliverable_contract=contract,
                         development_candidate=candidate, repository=args.repository, development_only=args.development_only,
                         model_request_options=model_request_options,
-                        task_local_memory_enabled=args.task_local_memory, heldout_frozen=args.heldout_frozen)
+                        task_local_memory_enabled=args.task_local_memory, heldout_frozen=args.heldout_frozen,
+                        online_stream=args.online_stream)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.result.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

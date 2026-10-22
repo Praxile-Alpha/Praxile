@@ -21,8 +21,8 @@ def native_run_to_events(result: dict[str, Any]) -> list[AgentEvent]:
     if mode == "fresh_disabled":
         if result.get("development_context") is not None or trajectory.get("experimental_context") is not None:
             raise ValueError("baseline cannot contain experimental context")
-    elif mode in {"development_candidate", "heldout_frozen_candidate"}:
-        track = "heldout_frozen" if mode == "heldout_frozen_candidate" else "development"
+    elif mode in {"development_candidate", "heldout_frozen_candidate", "online_stream_candidate"}:
+        track = mode.removesuffix("_candidate")
         context = result.get("development_context")
         decision = context.get("activation") if isinstance(context, dict) else None
         if (not isinstance(decision, dict) or context.get("schema_version") != "praxile.native_development_context.v1"

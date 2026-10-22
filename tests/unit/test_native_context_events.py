@@ -41,14 +41,15 @@ def test_legacy_baseline_event_ids_are_unchanged():
     assert native_run_to_events(value) == v1_trajectory_to_events(value["trajectory"])
 
 
-def test_heldout_context_is_not_projected_as_development():
+@pytest.mark.parametrize("track", ["heldout_frozen", "online_stream"])
+def test_heldout_context_is_not_projected_as_development(track):
     value = result()
-    value["experience_mode"] = "heldout_frozen_candidate"
+    value["experience_mode"] = track + "_candidate"
     with pytest.raises(ValueError, match="activation"):
         native_run_to_events(value)
-    value["development_context"]["track"] = "heldout_frozen"
+    value["development_context"]["track"] = track
     events = native_run_to_events(value)
-    assert {e.payload["track"] for e in events if e.type in {"CONTEXT_ACTIVATION", "CONTEXT_INJECT"}} == {"heldout_frozen"}
+    assert {e.payload["track"] for e in events if e.type in {"CONTEXT_ACTIVATION", "CONTEXT_INJECT"}} == {track}
 
 
 def test_forged_injection_or_digest_rejected():
