@@ -1,5 +1,31 @@
 # 开发产物内容保持评审
 
+## 独立 Broker Judge 与共享额度
+
+`praxile.eval.broker_content_review.run_broker_content_review` 提供显式的公开材料
+开发评审入口，复用现有分组、命名函数提交、引用和覆盖验证。参数包括 directory、
+inputs、credential_file、固定 HTTPS chat endpoint、model、shared_budget、
+total_output_tokens，以及显式 public=True；可设置 batch_size、timeout_per_call、
+request_options。inputs 仅允许 source_text/output_text/requirements，不能把官方
+私有 rubric 作为普通开发要求传入；入口不具备自动识别正文来源的能力。
+
+shared_budget 可直接打开执行 cell 的 quota.sqlite（PersistentChatBudget），
+judge 以独立角色在实际转发前扣减同一份请求/输出额度。不会增加或延长已有
+quota；过期/不足则评审弃权。不重试、不 fallback，不修改全局 provider、环境
+变量或项目配置。通过进程内 broker transport 转发固定上游，无额外监听端口。
+密钥只由权限受限文件读取，provider/评审模块不获取上游凭据。
+
+每个分组的 submission contract 在调用前生成并冻结，执行使用同一构造器；
+broker 拒绝任何未声明 tools/tool_choice。运行目录独占创建，不支持自动 replay。
+manifest.json 保存模型/endpoint 摘要、协议摘要、计划及额度起点；inputs.json、
+trajectory.json、report.json 和 broker-usage.json 保存输入、进度、判断与额度
+回执，结束或异常时撤销 broker。目录可能含正文，只应作为本地评审证据保管。
+
+本入口是开发评审，不是官方评分器：不自动绑定选中的五组产物，不认证文本
+抽取完整性，不授予 promotion，也不证明 judge 质量。五组研究的调度集成和
+产物来源绑定仍待完成。测试跑通真实评审/SQLite quota 逻辑，模型上游为 fixture；
+不据此声称真实模型评分改善或完整输入 token/费用已受控。
+
 `praxile.eval.content_review.review_content` 是显式调用的 Python API，不会自动
 加入 runtime、官方 evaluator 或 promotion。调用方传入已抽取的原文、产物正文
 和保留要求，配置独立 `content_review_judge` 角色及 ModelRouter，再提供

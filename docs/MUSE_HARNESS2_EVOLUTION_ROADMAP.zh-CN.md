@@ -1105,6 +1105,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   tools/tool_choice 白名单；默认 executor 仍禁用 tools。以 judge 角色共用
   持久化配额的转发前扣减已通过真实回环 HTTP/provider 测试（上游 fixture），
   完整内容评审分组协议冻结、研究评分编排及真实模型验收仍待接入。
+  Broker 内容评审增补：run_broker_content_review 已贯通分组协议预冻结、固定
+  上游 provider 解析、引用/覆盖校验与 judge 角色共享 SQLite 配额；不重试、不
+  fallback，独占运行目录，保存输入/轨迹/判断/额度回执并撤销 capability。
+  测试使用 fixture 上游；selected_attempt 产物来源绑定、研究评分编排及真实
+  模型验收仍未完成，不能把开发判断当作官方质量或晋升证据。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

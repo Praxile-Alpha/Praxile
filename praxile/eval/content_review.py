@@ -93,6 +93,24 @@ VERDICT_POLICY = (
 )
 
 
+def content_response_contract(requirement_ids, unit_ids=()):
+    """Build the same frozen submission contract for preflight and execution."""
+    quote_field = "output_refs" if unit_ids else "output_quote"
+    return {"name": "submit_content_review_units_v1" if unit_ids else "submit_content_review_v1", "schema": {
+        "type": "object", "additionalProperties": False, "required": ["items"],
+        "properties": {"items": {"type": "array", "minItems": len(requirement_ids),
+            "maxItems": len(requirement_ids), "items": {"type": "object",
+                "additionalProperties": False,
+                "required": ["id", "verdict", quote_field, "reason"],
+                "properties": {
+                    "id": {"type": "string", "enum": list(requirement_ids)},
+                    "verdict": {"type": "string", "enum": ["preserved", "missing", "contradicted", "uncertain"]},
+                    quote_field: ({"type": "array", "maxItems": 8, "uniqueItems": True,
+                        "items": {"type": "string", "enum": list(unit_ids)}} if unit_ids else
+                        {"type": "string", "maxLength": 4000}),
+                    "reason": {"type": "string", "minLength": 1, "maxLength": 2000}}}}}}}
+
+
 def review_content(router, logger, *, source_text, output_text, requirements,
                    role="content_review_judge", private=True, max_tokens=3000,
                    timeout=90, response_mode="text", response_checkpoint=None,
@@ -113,20 +131,7 @@ def review_content(router, logger, *, source_text, output_text, requirements,
     quote_field = "output_refs" if units else "output_quote"
     contract = None
     if response_mode == "function":
-        contract = {"name": "submit_content_review_units_v1" if units else "submit_content_review_v1", "schema": {
-            "type": "object", "additionalProperties": False, "required": ["items"],
-            "properties": {"items": {"type": "array", "minItems": len(expected),
-                "maxItems": len(expected), "items": {"type": "object",
-                    "additionalProperties": False,
-                    "required": ["id", "verdict", quote_field, "reason"],
-                    "properties": {
-                        "id": {"type": "string", "enum": list(expected)},
-                        "verdict": {"type": "string", "enum": [
-                            "preserved", "missing", "contradicted", "uncertain"]},
-                        quote_field: ({"type": "array", "maxItems": 8, "uniqueItems": True,
-                            "items": {"type": "string", "enum": list(units)}} if units else
-                            {"type": "string", "maxLength": 4000}),
-                        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}}}}}}}
+        contract = content_response_contract(expected, units)
     record = {
         "schema_version": "praxile.content_review.v1", "scope": "caller_supplied_text",
         "role": role, "input_sha256": _digest(payload),

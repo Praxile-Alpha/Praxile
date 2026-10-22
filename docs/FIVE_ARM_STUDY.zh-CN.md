@@ -76,6 +76,13 @@ judge broker 可使用同一 SharedChatBudget/PersistentChatBudget 和 budget_ro
 上游为 fixture，不是付费模型评审。完整研究的 judge 创建、每组 contract 冻结、
 评分编排和证据绑定尚未接入，本项是协议前置支持，不等同 judge 集成完成。
 
+开发内容评审入口现已实现：run_broker_content_review 在调用前冻结各分组
+contract，实际请求经 broker 以 judge 角色扣减共享额度；支持直接打开 cell 的
+PersistentChatBudget，保留独立输入/轨迹/评审及 broker 用量回执。没有重试或
+fallback，额度过期或不足会弃权。它仍需控制面显式提供已抽取的公开正文，
+尚未自动从五组 selected_attempt 绑定产物/来源，研究级评分集成仍未完成。
+详见 CONTENT_PRESERVATION_REVIEW.zh-CN.md。
+
 计划模块只冻结开发实验计划，不运行模型，不评分，不授予晋升资格。声明结果
 分析见后文；真实五组验收、完整预算控制和来源验证尚未完成，不能把成功生成
 manifest 当成五组实验已完成。
