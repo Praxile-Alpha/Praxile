@@ -6,6 +6,7 @@ from .native_context import owned_candidate_identity
 from .online_stream import OnlineStream, _persist
 from .owned_content_review import _reader, _json, _sha
 from .owned_native_run import run_owned_native
+from .online_probe_exposure import observe_probe_exposure
 from .v2.native_development_evidence import collect_native_evidence
 
 
@@ -51,8 +52,11 @@ async def run_online_probe(stream_directory, indices, candidates, *, directory):
                 for key in ("wheel", "credential_file"):
                     options[key] = Path(options[key])
                 extra = {"shared_chat_budget": quota} if quota else {}
+                parent, identity = None, None
                 if arm != "baseline":
                     path, digest = parent_paths[0 if arm == "first" else 1]
+                    parent = plan["candidates"][0 if arm == "first" else 1]
+                    identity = owned_candidate_identity(task, path, digest, plan["repository"], development_only=True)
                     extra.update(development_candidate_file=path, development_candidate_sha256=digest,
                                  development_only=True, repository=plan["repository"])
                 source = plan["input_source_roots"][task.task_id]
@@ -70,6 +74,8 @@ async def run_online_probe(stream_directory, indices, candidates, *, directory):
                         or execution.get("source_result_sha256") != _sha(trace_raw)):
                     raise ValueError("probe lacks bound terminal execution evidence")
                 trace = _json(trace_raw)
+                exposure = observe_probe_exposure(trace, execution, candidate=parent, identity=identity,
+                    task_local_enabled=options.get("task_local_memory_enabled", False))
                 native_id = trace.get("trajectory", {}).get("task_id")
                 evidence = collect_native_evidence(path.parent / "agent/praxile-result.json",
                     expected_sha256=_sha(trace_raw), development_task_ids=[native_id], heldout_task_ids=[],
@@ -77,7 +83,7 @@ async def run_online_probe(stream_directory, indices, candidates, *, directory):
                 attempt.update(status="executor_returned", report=path.relative_to(root).as_posix(),
                     report_sha256=_sha(raw), trajectory_sha256=_sha(trace_raw),
                     evidence=evidence, required_outputs_collected=execution.get("required_outputs_collected"),
-                    candidate_exposure_verified=False)
+                    candidate_exposure_verified=exposure["candidate_exposure_verified"], mechanisms=exposure)
                 _persist(root / "report.json", report)
         if stream.status()["ledger_sha256"] != plan["source_ledger_sha256"]:
             raise ValueError("stream advanced during probe")

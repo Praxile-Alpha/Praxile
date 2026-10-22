@@ -158,9 +158,12 @@ manifest 冻结来源账本及任务/候选，report 每次 dispatch 前持久�
 所有动作仍由 owned native 环境执行，检查输入摘要及隔离生命周期。
 
 本阶段 `executions_returned_not_scored` 只证明执行器返回且清理完成，不证明任务成功。
-候选实际激活/注入还需独立核验，candidate_exposure_verified 保守为 false。
+候选暴露会核对执行身份、worker 激活/注入、runtime 注入标志及冻结正文/摘要。
+只有全部一致且实际记录注入时 candidate_exposure_verified 才为 true；缺失证据
+保持 false，互相矛盾直接拒绝。机制报告标记 scope=bound_runtime_prompt_construction，
+remote_consumption_verified=false；它不是远端消费证明或因果效果证明。
 尚未基于这些报告调用组合模型，也没有 helped/hurt 或因果提升结论；后续需先
-完成暴露与行为证据校验，再运行组合版本，不能继承父候选的效果。
+完成行为证据校验，再运行组合版本，不能继承父候选的效果。
 
 ## 独立内容评审
 

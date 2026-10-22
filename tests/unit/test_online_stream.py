@@ -28,7 +28,7 @@ def candidate(source="first"):
                     "does_not_apply_when": ["unrelated"]}).to_dict()
 
 
-def fake_runner(calls, *, native=False):
+def fake_runner(calls, *, native=False, expose=False):
     async def run(task, **options):
         calls.append((task.task_id, options))
         if "online_protocol" in options:
@@ -43,10 +43,28 @@ def fake_runner(calls, *, native=False):
                     "input": {"command": "PRIVATE_SENTINEL"}, "status": "failure",
                     "observation": {"data": {"exit_code": 1, "stdout": "PRIVATE_SENTINEL"}}}]}}).encode()
             if native else b'{"fixture":true}')
+        if native and options.get("development_only"):
+            from praxile.eval.native_context import plan_candidate
+            value = json.loads(options["development_candidate_file"].read_text())
+            context = plan_candidate(value, task.instruction, options["repository"], development_only=True)
+            content = context.pop("content")
+            context["injected"] = bool(expose and content)
+            record = json.loads(raw)
+            record["experience_mode"] = "development_candidate"
+            record["development_context"] = context
+            if context["injected"]:
+                record["trajectory"]["experimental_context"] = {"content": content,
+                    "sha256": hashlib.sha256(content.encode()).hexdigest(), "injected": True}
+            raw = json.dumps(record).encode()
         (root / "agent/praxile-result.json").write_bytes(raw)
         report = root / "execution.json"
-        report.write_text(json.dumps({"task_fingerprint": task.fingerprint, "status": "executor_returned",
-            "cleanup_verified": True, "source_result_sha256": hashlib.sha256(raw).hexdigest()}))
+        data = {"task_fingerprint": task.fingerprint, "status": "executor_returned",
+            "cleanup_verified": True, "source_result_sha256": hashlib.sha256(raw).hexdigest()}
+        if options.get("development_only"):
+            data["development_context_identity"] = owned_candidate_identity(task,
+                options["development_candidate_file"], options["development_candidate_sha256"],
+                options["repository"], development_only=True)
+        report.write_text(json.dumps(data))
         return report
     return run
 
@@ -304,7 +322,8 @@ def test_online_design_cli_preview_does_not_load_model_config(tmp_path, monkeypa
     assert result["action"] == "design_preview_only" and result["evidence_count"] == 1
 
 
-def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("expose", [False, True])
+def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monkeypatch, capsys, expose):
     from praxile.eval.online_probe import run_online_probe, prepare_online_probe
     stream, _ = create(tmp_path)
     monkeypatch.setattr(module, "run_owned_native", fake_runner([], native=True))
@@ -312,7 +331,7 @@ def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monk
     parents = [candidate(), {**candidate(), "candidate_id": "other"}]
     from praxile.eval import online_probe
     calls = []
-    monkeypatch.setattr(online_probe, "run_owned_native", fake_runner(calls, native=True))
+    monkeypatch.setattr(online_probe, "run_owned_native", fake_runner(calls, native=True, expose=expose))
     root = tmp_path / "probe"
     before = (stream.root / "stream.json").read_bytes()
     plan = prepare_online_probe(stream.root, [0], parents, directory=root)
@@ -331,6 +350,7 @@ def test_online_prefix_probe_isolated_and_does_not_advance_stream(tmp_path, monk
     report = json.loads(result.read_text())
     assert report["status"] == "executions_returned_not_scored"
     assert [row["arm"] for row in report["attempts"]] == ["baseline", "first", "second"]
+    assert [row["candidate_exposure_verified"] for row in report["attempts"]] == [False, expose, expose]
     assert len({str(options["state_root"]) for _, options in calls}) == 3
     assert "development_candidate_file" not in calls[0][1]
     assert calls[1][1]["development_only"] is True
