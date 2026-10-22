@@ -31,11 +31,26 @@ def setup(tmp_path, arm):
     return plan, cell, task, kwargs
 
 
+@pytest.mark.parametrize("options", [{"max_tokens": 999}, {"thinking": {"type": "PRIVATE"}}, [],
+                                    {"reasoning_effort": True}])
+def test_reasoning_overrides_reject_before_cell_or_study_allocation(tmp_path, options):
+    plan, cell, task, kwargs = setup(tmp_path, "frozen_executor")
+    kwargs["model_request_options"] = options
+    with pytest.raises(ValueError):
+        asyncio.run(module.execute_cell(plan, cell["cell_id"], task, **kwargs))
+    root = kwargs.pop("directory")
+    with pytest.raises(ValueError):
+        module.prepare_study(plan, {"task": task}, directory=root, execution=kwargs)
+    assert not root.exists()
+
+
 @pytest.mark.parametrize("arm", ARMS)
 def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm):
     plan, cell, task, kwargs = setup(tmp_path, arm)
+    kwargs["model_request_options"] = {"thinking": {"type": "disabled"}, "reasoning_effort": "low"}
     budgets = []
     async def run(task, **options):
+        assert options["model_request_options"] == kwargs["model_request_options"]
         assert options["task_local_memory_enabled"] is cell["task_local_enabled"]
         assert ("development_candidate_file" in options) is cell["experience_enabled"]
         assert "persist_workspace" not in options
@@ -51,6 +66,7 @@ def test_dispatch_maps_five_arms_and_shares_quota(tmp_path, monkeypatch, arm):
     path = asyncio.run(module.execute_cell(plan, cell["cell_id"], task, **kwargs))
     report = json.loads(path.read_text())
     assert report["status"] == "executed_not_scored"
+    assert report["executor"]["model_request_options"] == kwargs["model_request_options"]
     assert len(budgets) == cell["max_attempts"]
     assert all(item is budgets[0] for item in budgets)
     assert report["shared_budget"]["remaining_calls"] == 4 - cell["max_attempts"]

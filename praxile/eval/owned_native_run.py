@@ -27,7 +27,10 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
                            shared_chat_budget=None, task_local_memory_enabled: bool = False,
                            development_candidate_file: Path | None = None,
                            development_candidate_sha256: str | None = None,
-                           development_only: bool = False, repository: str | None = None):
+                           development_only: bool = False, repository: str | None = None,
+                           model_request_options: dict | None = None):
+    from ..model_options import validate_request_options
+    model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
     if type(task_local_memory_enabled) is not bool:
         raise ValueError("task_local_memory_enabled must be boolean")
     from .credential_broker import SharedChatBudget
@@ -64,6 +67,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
             "max_steps": max_steps, "timeout_seconds": timeout_seconds,
             "credential_broker": credential_file is not None}
         plan["task_local_memory_enabled"] = task_local_memory_enabled
+        plan["model_request_options"] = model_request_options
         if candidate_identity is not None:
             plan["development_context_identity"] = candidate_identity
         if persist_workspace:
@@ -95,6 +99,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         "outputs": [], "cleanup_verified": False,
         "official_evaluation": "not_run", "promotion_eligible": False}
     report["task_local_memory_enabled"] = task_local_memory_enabled
+    report["model_request_options"] = model_request_options
     if candidate_identity is not None:
         report["development_context_identity"] = candidate_identity
     report["worker_requirements"] = requirements
@@ -111,6 +116,7 @@ async def run_owned_native(task: BenchmarkTask, *, state_root: Path, image: str,
         check_worker_wheel(wheel, wheel_sha256)
         agent = PraxileAgent(logs_dir=logs, wheel_path=str(wheel), wheel_sha256=wheel_sha256,
             workspace="/workspace", base_url=base_url, model_name=model,
+            model_request_options=model_request_options,
             max_steps=max_steps, timeout_seconds=timeout_seconds,
             credential_file=str(credential_file) if credential_file else None,
             dependency_wheels=dependencies, required_capabilities=capabilities,

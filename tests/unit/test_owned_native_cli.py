@@ -26,6 +26,32 @@ def setup_args(tmp_path):
         "--model", "fixture", "--base-url", "https://provider.invalid/v1"]
 
 
+@pytest.mark.parametrize("invalid", [False, True])
+def test_reasoning_options_are_validated_and_forwarded(tmp_path, monkeypatch, capsys, invalid):
+    from praxile.eval import owned_native_run
+    options = {"reasoning_effort": "low", "thinking": {"type": "disabled"}}
+    if invalid:
+        options["messages"] = "PRIVATE_OVERRIDE"
+    path = tmp_path / "request-options.json"
+    path.write_text(json.dumps(options))
+    args = setup_args(tmp_path) + ["--model-request-options", str(path)]
+    assert main(args) == (2 if invalid else 0)
+    captured = capsys.readouterr()
+    assert "PRIVATE" not in captured.out + captured.err
+    if not invalid:
+        assert json.loads(captured.out.splitlines()[0])["model_request_options"] == options
+    calls = []
+    async def run(task, **kwargs):
+        calls.append(kwargs)
+        assert kwargs["model_request_options"] == options
+        report = tmp_path / "report.json"
+        report.write_text('{"cleanup_verified": true, "required_outputs_collected": true}')
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main(args + ["--execute"]) == (2 if invalid else 0)
+    assert len(calls) == (0 if invalid else 1)
+
+
 def candidate_args(tmp_path):
     from praxile.eval.v2.candidate import ContextCandidate
     candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture",

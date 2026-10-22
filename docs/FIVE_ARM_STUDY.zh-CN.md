@@ -25,6 +25,7 @@ execution.json 必填字段如下，替换示例路径、模型及 SHA256 后使
   "wheel": "/path/to/praxile.whl",
   "wheel_sha256": "ACTUAL_WHEEL_SHA256",
   "model": "YOUR_EXECUTOR_MODEL",
+  "model_request_options": {"reasoning_effort": "low"},
   "base_url": "https://YOUR_PROVIDER/v1",
   "credential_file": "/path/to/private-executor-key",
   "output_budget": 10000,
@@ -43,6 +44,16 @@ execution.json 必填字段如下，替换示例路径、模型及 SHA256 后使
 
 可选 dependency_wheels 是 `[{"path":"/path/to/dependency.whl","sha256":"..."}]`；
 required_capabilities 是版本化能力名称数组。禁止未知字段和按 arm 覆盖配置。
+model_request_options 可省略（空对象）；只允许 thinking.type、reasoning_effort、
+reasoning_split，不允许覆盖 messages、工具或 token 预算。参数传递至所有 arm 的
+owned-native/adapter/worker 和 broker，并记录在 cell 与 execution 报告；供应商
+是否接受这些参数仍需真实调用验证，不能从配置推断后端实际执行了何种推理。
+独立 judge 仍使用自己的 request_options，不继承 executor 设置。
+
+单次 owned-native CLI 使用 `--model-request-options /path/to/options.json` 读取
+相同白名单对象。参数纳入命名 run 的计划摘要；改变参数不能 resume 已完成
+记录。新计划显式记录空对象，因此缺该字段的旧记录也不能冒充新条件复用，
+应保留旧证据并使用新 run-id，而不是修改原 claim。
 judge.json 使用下文 judge API 的同名配置字段；其中 credential_file、evaluator_root
 为路径字符串，不嵌入 API key。input-roots.json 为 `{"TASK_ID":"/path/to/public-inputs"}`；
 无输入任务可省略此参数。所有相对路径均相对于**当前工作目录**，不是配置文件目录。

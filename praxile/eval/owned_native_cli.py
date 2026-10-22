@@ -35,6 +35,8 @@ def main(argv=None):
     parser.add_argument("--wheel", type=Path, required=True)
     parser.add_argument("--wheel-sha256", required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--model-request-options", type=Path,
+                        help="JSON file with allowlisted reasoning controls; frozen in the run plan")
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--input-source-root", type=Path)
     parser.add_argument("--credential-file", type=Path)
@@ -58,6 +60,10 @@ def main(argv=None):
     parser.add_argument("--persist-workspace", action="store_true", help="Retain per-generation workspace on host; does not enable action resume")
     args = parser.parse_args(argv)
     try:
+        from .owned_content_review import _json, _reader
+        from ..model_options import validate_request_options
+        model_request_options = validate_request_options(_json(_reader(args.model_request_options.parent)(
+            args.model_request_options.name)) if args.model_request_options else {})
         from .native_run_claim import validate_run_id
         if args.run_id is not None:
             validate_run_id(args.run_id)
@@ -97,6 +103,7 @@ def main(argv=None):
             args.require_capability, worker_filename=args.wheel.name)
         plan = {"task_id": task.task_id, "task_fingerprint": task.fingerprint,
                 "image": task.environment.revision, "model": args.model,
+                "model_request_options": model_request_options,
                 "wheel_sha256": args.wheel_sha256, "input_count": len(task.inputs),
                 "output_count": len(task.outputs), "max_steps": args.max_steps,
                 "timeout_seconds": args.timeout, "execute": args.execute,
@@ -117,6 +124,7 @@ def main(argv=None):
         report_path = asyncio.run(run_owned_native(task, state_root=args.state_root,
             image=task.environment.revision, wheel=args.wheel, wheel_sha256=args.wheel_sha256,
             model=args.model, base_url=args.base_url, input_source_root=args.input_source_root,
+            model_request_options=model_request_options,
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
             run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace,
             dependency_wheels=dependencies, required_capabilities=capabilities,

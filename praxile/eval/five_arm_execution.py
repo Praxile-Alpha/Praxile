@@ -20,12 +20,14 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
                        max_steps=50, input_source_root=None,
                        development_candidate_file=None, development_candidate_sha256=None,
                        repository=None, dependency_wheels=None, required_capabilities=None,
-                       terminal_selection=None):
+                       terminal_selection=None, model_request_options=None):
     """One exclusive cell, with no automatic replay after uncertain execution.
 
     output_budget is an explicit additional ceiling, not the plan's total_tokens.
     Frozen study identities remain declarations, not verified model attestations.
     """
+    from ..model_options import validate_request_options
+    model_request_options = validate_request_options({} if model_request_options is None else model_request_options)
     rows = iter_schedule(plan)
     cell = next((row for row in rows if row["cell_id"] == cell_id), None)
     if cell is None:
@@ -59,6 +61,7 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
         "cell": cell, "task_fingerprint": task.fingerprint, "status": "preparing",
         "output_budget": output_budget, "max_steps": max_steps,
         "executor": {"model": model, "wheel_sha256": wheel_sha256,
+                     "model_request_options": model_request_options,
                      "image": task.environment.revision,
                      "endpoint_sha256": hashlib.sha256(base_url.encode()).hexdigest()},
         "candidate_identity": identity, "attempts": [], "selected_attempt": None,
@@ -84,6 +87,7 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
                 path = await asyncio.wait_for(run_owned_native(task, state_root=root / f"attempt-{index}",
                     image=task.environment.revision, wheel=wheel, wheel_sha256=wheel_sha256,
                     model=model, base_url=base_url, credential_file=credential_file,
+                    model_request_options=model_request_options,
                     input_source_root=input_source_root, max_steps=max_steps, timeout_seconds=remaining,
                     shared_chat_budget=quota, task_local_memory_enabled=cell["task_local_enabled"],
                     dependency_wheels=dependency_wheels, required_capabilities=required_capabilities,
@@ -130,10 +134,12 @@ def prepare_study(plan, tasks, *, directory, execution, input_source_roots=None,
     next(iter_schedule(plan))
     required = {"wheel", "wheel_sha256", "model", "base_url", "credential_file", "output_budget",
                 "development_candidate_file", "development_candidate_sha256", "repository"}
-    optional = {"max_steps", "dependency_wheels", "required_capabilities", "terminal_selection"}
+    optional = {"max_steps", "dependency_wheels", "required_capabilities", "terminal_selection", "model_request_options"}
     if not isinstance(execution, dict) or not required <= execution.keys() or set(execution) - required - optional:
         raise ValueError("study execution requires explicit native options without per-arm overrides")
     options = deepcopy(execution)
+    from ..model_options import validate_request_options
+    options["model_request_options"] = validate_request_options(options.get("model_request_options", {}))
     if not isinstance(options["model"], str) or not options["model"].strip() or not isinstance(options["base_url"], str):
         raise ValueError("study requires an explicit model and endpoint")
     endpoint = urlsplit(options["base_url"])

@@ -37,6 +37,14 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     from praxile.utils import write_json
     budget = SharedChatBudget(max_calls=2, output_budget=100, ttl_seconds=10)
     seen = []
+    from praxile.eval import native_run_claim
+    claim_type = native_run_claim.NativeRunClaim
+    plans = []
+    class CapturingClaim(claim_type):
+        def __init__(self, root, run_id, plan):
+            plans.append(plan)
+            super().__init__(root, run_id, plan)
+    monkeypatch.setattr(native_run_claim, "NativeRunClaim", CapturingClaim)
     candidate_kwargs = {}
     if with_candidate:
         from praxile.eval.v2.candidate import ContextCandidate
@@ -88,13 +96,15 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
     call = run_owned_native(task, state_root=tmp_path, image=image, wheel=tmp_path / "fixture.whl",
         wheel_sha256="a" * 64, model="fixture", base_url="https://provider.invalid/v1",
         credential_file=tmp_path / "key", shared_chat_budget=budget, run_id="shared-fixture",
-        task_local_memory_enabled=memory_enabled, **candidate_kwargs)
+        task_local_memory_enabled=memory_enabled, model_request_options={"reasoning_effort": "low"}, **candidate_kwargs)
     if missing_receipt:
         with pytest.raises(ValueError, match="broker usage receipt"):
             asyncio.run(call)
     else:
         asyncio.run(call)
     report = json.loads((lease_root / "execution.json").read_text())
+    assert seen[-1]["model_request_options"] == {"reasoning_effort": "low"}
+    assert report["model_request_options"] == {"reasoning_effort": "low"}
     assert report["task_local_memory_enabled"] is memory_enabled
     if with_candidate:
         loaded_candidate = ContextCandidate.from_dict(json.loads(path.read_text()))
@@ -111,6 +121,11 @@ def test_owned_controller_forwards_shared_budget_and_records_boundaries(tmp_path
         assert report["broker_usage_sha256"] == hashlib.sha256(receipt.read_bytes()).hexdigest()
         claim = json.loads((tmp_path / "run-claims/shared-fixture.json").read_text())
         assert claim["status"] == "completed"
+        assert plans[0]["model_request_options"] == {"reasoning_effort": "low"}
+        assert claim_type(tmp_path, "shared-fixture", plans[0]).resume() == lease_root / "execution.json"
+        changed = dict(plans[0], model_request_options={"reasoning_effort": "high"})
+        with pytest.raises(ValueError, match="frozen execution plan"):
+            claim_type(tmp_path, "shared-fixture", changed).resume()
         assert claim["files"][receipt.relative_to(tmp_path).as_posix()] == report["broker_usage_sha256"]
 
 

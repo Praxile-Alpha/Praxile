@@ -41,12 +41,17 @@ def test_execute_requires_optin_and_forwards_options(tmp_path, monkeypatch, caps
     async def run(plan, tasks, **kwargs):
         assert len(tasks) == 1
         assert kwargs["execution"]["credential_file"] == tmp_path / "key"
+        assert kwargs["execution"]["model_request_options"] == {"reasoning_effort": "low"}
         assert kwargs["judge"] is None
         output.mkdir()
         path = output / "study.json"
         path.write_text(json.dumps({"status": status}))
         return path
     monkeypatch.setattr(cli, "execute_study", run)
+    config = tmp_path / "execution.json"
+    options = json.loads(config.read_text())
+    options["model_request_options"] = {"reasoning_effort": "low"}
+    config.write_text(json.dumps(options))
     assert cli.main(args + ["--execute"]) == code
     assert "not task success" in capsys.readouterr().out
 

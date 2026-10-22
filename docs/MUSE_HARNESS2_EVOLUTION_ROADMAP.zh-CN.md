@@ -1044,6 +1044,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 
 - [ ] 冻结模型、executor、环境、数据修订、judge、预算、任务顺序和记忆快照；保存可公开复现的 manifest。
 - [ ] 比较 frozen executor、等预算重复执行、仅经验、仅任务内改进、完整 Praxile 五组，必要时另做同条件 Harness² 参考组。
+  模型条件增补：owned-native 与五组入口显式传递白名单 model_request_options，
+  经 adapter 下发 worker/broker，写入 execution/cell 报告及命名 run 计划摘要。
+  修改推理参数拒绝复用原 run；judge 的 request_options 保持独立。此处冻结的是
+  请求条件，不认证供应商后端实际推理或模型权重；真实五组项继续不勾选。
   命令行执行增补：five_arm_cli 默认离线预检，显式 --execute 才调度五组；与
   Python API 共用 prepare_study 的任务/候选/预算/judge 冻结校验，CLI 另验 wheel。
   凭据文件仅在实际调用时读取；未知配置、重复任务、已有目录及 judge 身份变化
