@@ -28,7 +28,7 @@ def main(argv=None):
     create.add_argument("--repository", required=True)
     create.add_argument("--input-roots", type=Path)
     create.add_argument("--judge-config", type=Path, help="Freeze independent content judge before any execution")
-    for name in ("status", "next", "accept", "design", "review"):
+    for name in ("status", "next", "accept", "design", "review", "audit-review"):
         command = commands.add_parser(name)
         command.add_argument("--stream", type=Path, required=True)
         if name == "next":
@@ -46,11 +46,14 @@ def main(argv=None):
             command.add_argument("--resume", action="store_true")
             command.add_argument("--max-output-tokens", type=int, default=4000)
             command.add_argument("--request-timeout", type=int, default=60)
-        elif name == "review":
+        elif name in ("review", "audit-review"):
             command.add_argument("--task-index", type=int, required=True, help="Zero-based completed task index")
             command.add_argument("--judge-config", type=Path, required=True)
             command.add_argument("--output", type=Path, required=True)
-            command.add_argument("--execute", action="store_true", help="Send declared artifacts/requirements to the independent judge")
+            if name == "review":
+                command.add_argument("--execute", action="store_true", help="Send declared artifacts/requirements to the independent judge")
+            else:
+                command.add_argument("--receipt-sha256", required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -92,6 +95,10 @@ def main(argv=None):
                     result = {"track": "online_stream", "action": "design_preview_only",
                         "source_ledger_sha256": bundle["ledger_sha256"], "evidence_count": len(bundle["evidence"]),
                         "completed_tasks": len(bundle["completed_task_ids"]), "promotion_eligible": False}
+            elif args.command == "audit-review":
+                from .online_review import audit_online_review
+                result = audit_online_review(args.stream, args.task_index, judge=_load(args.judge_config),
+                    directory=args.output, receipt_sha256=args.receipt_sha256)
             elif args.command == "review":
                 from .online_review import prepare_online_review, run_online_review
                 judge = _load(args.judge_config)

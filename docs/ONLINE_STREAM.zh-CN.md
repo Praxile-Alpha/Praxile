@@ -149,6 +149,25 @@ Python 接口为 `run_online_review(stream_directory, index, judge=..., director
 这是可信本地控制器的配置承诺，不是签名时间戳，也不证明模型供应商版本未变。
 独立评审仍不进入学习链路，不自动 promotion；预冻结不等于质量校准或官方评分。
 
+### 离线审计
+
+保留 receipt.json 的 SHA-256 后，可独立复核，不读取密钥或调用模型：
+
+```sh
+python -m praxile.eval.online_stream_cli audit-review \
+  --stream .praxile/eval/online/example --task-index 0 \
+  --judge-config judge.json --output .praxile/eval/online-reviews/example-task-0 \
+  --receipt-sha256 <64位SHA256>
+```
+
+审计重新检查 stream 完成事件、原始产物、evaluator、评审输入、manifest、
+报告、trajectory 和各文件摘要；重新生成 batch plan，核对标签计数，拒绝跨任务
+或跨模型结果。`complete_judge_labels` 只表示标签完整且没有 uncertain，
+不是任务成功；abstained/uncertain 返回 unknown。缺失证据直接拒绝，不能补零。
+broker usage 文件校验摘要，但本接口不证明供应商计费准确。
+调用者固定的 receipt 摘要与本地文件一致性不等于外部签名或语义正确性，
+结果始终保留 semantic_accuracy_verified=false、promotion_eligible=false。
+
 ## 顺序账本和中断
 
 stream.json 保存冻结任务、执行配置及哈希关联的事件链：dispatch、completed、

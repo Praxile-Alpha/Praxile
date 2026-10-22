@@ -5,7 +5,7 @@ import json
 import pytest
 
 from praxile.eval import online_stream as stream_module
-from praxile.eval.online_review import prepare_online_review, run_online_review
+from praxile.eval.online_review import audit_online_review, prepare_online_review, run_online_review
 from praxile.eval.credential_broker import ChatCredentialBroker
 from praxile.eval.contracts import BenchmarkTask, EnvironmentSpec, EvaluatorReference, InputArtifact, OutputContract
 
@@ -92,6 +92,29 @@ def test_review_binds_outputs_without_changing_learning_state(completed, tmp_pat
     assert (stream.root / "stream.json").read_bytes() == before
     assert collect_online_evidence(stream.root) == learning_before
     assert len(calls) == 1
+    audit = audit_online_review(stream.root, 0, judge=judge, directory=root, receipt_sha256=sha(path.read_bytes()))
+    assert audit["status"] == ("unknown" if verdict == "uncertain" else "complete_judge_labels")
+    assert audit["local_file_consistency_checked"] is True
+    assert audit["semantic_accuracy_verified"] is False
+    original = path.read_bytes()
+    for field, value in (("task_index", 1), ("promotion_eligible", True), ("verdict_counts", {})):
+        changed = {**receipt, field: value}
+        path.write_text(json.dumps(changed))
+        with pytest.raises(ValueError):
+            audit_online_review(stream.root, 0, judge=judge, directory=root, receipt_sha256=sha(path.read_bytes()))
+        path.write_bytes(original)
+    manifest_path = root / "judge/manifest.json"
+    manifest_raw = manifest_path.read_bytes()
+    manifest_path.write_text(json.dumps({**json.loads(manifest_raw), "model": "other-judge"}))
+    with pytest.raises(ValueError, match="evidence changed"):
+        audit_online_review(stream.root, 0, judge=judge, directory=root, receipt_sha256=sha(original))
+    receipt["evidence_sha256"]["manifest.json"] = sha(manifest_path.read_bytes())
+    path.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="judge mismatch"):
+        audit_online_review(stream.root, 0, judge=judge, directory=root, receipt_sha256=sha(path.read_bytes()))
+    manifest_path.write_bytes(manifest_raw)
+    path.write_bytes(original)
+    assert len(calls) == 1
     with pytest.raises(ValueError):
         run_online_review(stream.root, 0, judge=judge, directory=root)
     assert len(calls) == 1
@@ -172,7 +195,7 @@ def test_review_storage_boundaries_fail_before_model(completed, tmp_path, monkey
     assert not (root / "receipt.json").exists()
 
 
-def test_failed_review_is_preserved_and_cannot_replay(completed, tmp_path, monkeypatch):
+def test_failed_review_is_preserved_and_cannot_replay(completed, tmp_path, monkeypatch, capsys):
     stream, judge = completed
     before = stream.status()
     calls = []
@@ -188,6 +211,17 @@ def test_failed_review_is_preserved_and_cannot_replay(completed, tmp_path, monke
     usage = json.loads((root / "judge/broker-usage.json").read_text())["usage"]
     assert usage["failed_calls"] == 1 and usage["total_tokens"]["input"] is None
     assert receipt["automatic_replay_allowed"] is False
+    audit = audit_online_review(stream.root, 0, judge=judge, directory=root,
+                                receipt_sha256=sha((root / "receipt.json").read_bytes()))
+    assert audit["status"] == "unknown" and audit["verdict_counts"] is None
+    from praxile.eval.online_stream_cli import main
+    config = tmp_path / "judge.json"
+    config.write_text(json.dumps({**judge, "credential_file": "MISSING_SECRET",
+                                 "evaluator_root": str(judge["evaluator_root"])}))
+    assert main(["audit-review", "--stream", str(stream.root), "--task-index", "0",
+        "--judge-config", str(config), "--output", str(root), "--receipt-sha256",
+        sha((root / "receipt.json").read_bytes())]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "unknown"
     assert stream.status() == before
     with pytest.raises(ValueError):
         run_online_review(stream.root, 0, judge=judge, directory=root)

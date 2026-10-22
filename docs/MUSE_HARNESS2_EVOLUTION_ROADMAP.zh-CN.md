@@ -1222,7 +1222,9 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   不自动批准或调用下一任务。独立 post-hoc 内容评审已绑定完成事件及产物，
   评审状态存放于 stream 外，不进入设计证据；标签不是官方成功率，也不称为
   运行前冻结 judge。现另支持 create 时可选冻结完整内容评审身份，后续评审必须匹配，
-  旧流不可追认；不冻结凭据或向执行器发送 rubric。尚缺在线 probe 后组合、
+  旧流不可追认；不冻结凭据或向执行器发送 rubric。audit-review 可离线复核
+  完成事件、源产物、评审文件、batch plan 和标签计数；只证明本地一致性，
+  uncertain/abstained 保留 unknown，不称为质量验证。尚缺在线 probe 后组合、
   多任务统计与真实多任务验收，
   不据此勾选完整协议；详见 ONLINE_STREAM.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
