@@ -112,3 +112,21 @@ task_id、任务 checksum 和分母后，仅提取该 benchmark 的官方主评�
 文件由官方评分器生成，不能证明任务 checksum 与计划 dataset 摘要的关系，
 也不复验原始 verifier 证据、executor 配置或预算。完整的执行来源绑定和真实
 五组验收仍待实现，controlled_execution_verified/promotion_eligible 保持 false。
+
+## 共享 broker 配额
+
+控制器可创建一个 `SharedChatBudget(max_calls=..., output_budget=..., ttl_seconds=...)`，
+并把同一对象传给各 `ChatCredentialBroker` 的 shared_budget，budget_role 分别
+声明 executor/composer/judge。各 broker 仍保留自己的本地限制，共享配额通过
+锁串行预留。未通过鉴权、本地验证或本地配额时不消耗共享额度；一旦预留则
+失败、超时或缺少 usage 都不退款。创建新 broker 但复用该预算不会重置余额。
+
+status 包含各角色 reserved_calls/reserved_output。它只限制同一进程中经过
+这些 broker 的调用准入与请求输出上限，不限制输入 token、计费金额，也不会
+在 TTL 到期后取消已经发出的请求。该对象不落盘、不支持跨进程共享；控制器
+重新创建预算或绕过 broker 的请求不在保证范围内。
+
+五组计划中的 total_tokens 包含输入和输出，不能直接当成 output_budget 使用
+并宣称总 token 已被限制。五组调度尚未自动配置共享预算，真实输入 token
+计数、所有角色接入及任务总墙钟控制仍未完成，budget_enforcement_verified
+继续为 false。

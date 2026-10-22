@@ -39,6 +39,47 @@ def read_private_key(path: Path) -> str:
     return key
 
 
+class SharedChatBudget:
+    """Controller-owned, process-local quota shared across broker instances.
+
+    Reservations are never refunded, including on timeout or missing usage.
+    This is not a total-token, monetary, or whole-task wall-time guarantee.
+    """
+
+    def __init__(self, *, max_calls, output_budget, ttl_seconds):
+        if any(type(value) is not int or not 1 <= value <= limit for value, limit in (
+                (max_calls, 10000), (output_budget, 100_000_000), (ttl_seconds, 86400))):
+            raise ValueError("invalid shared chat budget")
+        self._lock = threading.Lock()
+        self._deadline = time.monotonic() + ttl_seconds
+        self._calls, self._output = max_calls, output_budget
+        self._roles = {}
+
+    def reserve(self, role, maximum):
+        if (not isinstance(role, str) or not role or len(role) > 80
+                or type(maximum) is not int or maximum <= 0):
+            raise ValueError("invalid shared reservation")
+        with self._lock:
+            if time.monotonic() >= self._deadline:
+                raise BrokerDenied("shared budget expired")
+            if self._calls < 1 or self._output < maximum:
+                raise BrokerDenied("shared budget exhausted")
+            self._calls -= 1
+            self._output -= maximum
+            usage = self._roles.setdefault(role, {"reserved_calls": 0, "reserved_output": 0})
+            usage["reserved_calls"] += 1
+            usage["reserved_output"] += maximum
+
+    def status(self):
+        with self._lock:
+            return {"schema_version": "praxile.shared_chat_budget.v1",
+                    "remaining_calls": self._calls, "remaining_output": self._output,
+                    "expired": time.monotonic() >= self._deadline,
+                    "roles": {role: dict(value) for role, value in self._roles.items()},
+                    "scope": "process_local_request_admission_and_output_reservations",
+                    "total_token_bound_verified": False, "cost_bound_verified": False}
+
+
 class ChatCredentialBroker:
     """Single-flight, expiring chat endpoint. Issued capabilities are still secrets.
 
@@ -48,7 +89,13 @@ class ChatCredentialBroker:
 
     def __init__(self, *, key: str, endpoint: str, model: str, max_calls: int,
                  output_budget: int, max_output: int = 4096, ttl_seconds: int = 900,
-                 request_timeout: int = 60, request_options: dict | None = None):
+                 request_timeout: int = 60, request_options: dict | None = None,
+                 shared_budget: SharedChatBudget | None = None, budget_role: str = "executor"):
+        if shared_budget is not None and not isinstance(shared_budget, SharedChatBudget):
+            raise ValueError("shared budget must be a SharedChatBudget")
+        if not isinstance(budget_role, str) or not budget_role or len(budget_role) > 80:
+            raise ValueError("invalid budget role")
+        self._shared_budget, self._budget_role = shared_budget, budget_role
         from ..model_options import validate_request_options
         self._request_options = validate_request_options({} if request_options is None else request_options)
         url = urlsplit(endpoint)
@@ -87,6 +134,7 @@ class ChatCredentialBroker:
         with self._lock:
             return {"revoked": self._revoked, "expired": time.monotonic() >= self._deadline,
                     "remaining_calls": self._remaining_calls, "remaining_output": self._remaining_output,
+                    "shared_budget": self._shared_budget.status() if self._shared_budget is not None else None,
                     "usage": {
                         "schema_version": "praxile.broker_usage.v1",
                         "admitted_calls": self._admitted, "responses": self._responses,
@@ -150,6 +198,8 @@ class ChatCredentialBroker:
                     raise BrokerDenied("capability expired or revoked")
                 if self._remaining_calls < 1 or self._remaining_output < maximum:
                     raise BrokerDenied("capability budget exhausted")
+                if self._shared_budget is not None:
+                    self._shared_budget.reserve(self._budget_role, maximum)
                 self._remaining_calls -= 1
                 self._remaining_output -= maximum
                 self._admitted += 1

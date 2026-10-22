@@ -1058,6 +1058,11 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   文件字节摘要、任务 ID/checksum 和官方主评分分母，拒绝复用同一报告冒充多
   个 cell，不复制 rubric 或路径。12 项本地测试通过；只证明本地文件一致性，
   尚未复验上游评分器、模型/环境配置或预算，五组项继续不勾选。
+  共享请求配额增补：credential broker 可复用一个进程内 SharedChatBudget，
+  按角色记录调用和输出预留，失败不退额度、并发不能超用、新 broker 不重置
+  同一预算。43 项 forked broker/回环 HTTP 测试通过、1 跳过。只限制准入和
+  请求输出，不覆盖输入 token/费用/跨进程/已发请求取消；五组自动接入及全
+  角色总预算仍未完成，不能将该对象视为完整预算验收。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把
