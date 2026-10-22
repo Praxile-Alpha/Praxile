@@ -6,7 +6,7 @@ from .v2.candidate import ContextCandidate
 from .v2.schema import canonical_json
 
 
-def validate_protocol(protocol, task, candidate, file_sha256, repository):
+def validate_protocol_shape(protocol):
     fields = {"schema_version", "development_task_ids", "heldout_task_ids",
               "candidate_file_sha256", "repository"}
     if (not isinstance(protocol, dict) or set(protocol) != fields
@@ -19,7 +19,17 @@ def validate_protocol(protocol, task, candidate, file_sha256, repository):
                 or len(set(values)) != len(values)):
             raise ValueError("protocol requires explicit unique task lists")
     development, heldout = map(set, (protocol["development_task_ids"], protocol["heldout_task_ids"]))
-    if development & heldout or task.split != "heldout" or task.task_id not in heldout:
+    import re
+    if (development & heldout or not isinstance(protocol["repository"], str) or not protocol["repository"].strip()
+            or not isinstance(protocol["candidate_file_sha256"], str)
+            or not re.fullmatch(r"[a-f0-9]{64}", protocol["candidate_file_sha256"])):
+        raise ValueError("invalid frozen protocol identity or overlapping splits")
+    return development, heldout
+
+
+def validate_protocol(protocol, task, candidate, file_sha256, repository):
+    development, heldout = validate_protocol_shape(protocol)
+    if task.split != "heldout" or task.task_id not in heldout:
         raise ValueError("task does not belong to disjoint held-out protocol")
     if protocol["candidate_file_sha256"] != file_sha256 or protocol["repository"] != repository:
         raise ValueError("candidate identity differs from frozen protocol")

@@ -1208,8 +1208,10 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
 - [ ] held-out 下使用冻结经验；另设明确标识的 online-stream 实验，记录顺序，禁止把两种协议合并报分。
   原生执行通道增补：显式 frozen protocol 约束开发/评测集合与候选来源，CLI
   校验文件摘要，controller 在创建 lease 前检查，worker 与事件保留 heldout_frozen
-  标记，禁止 development-only 混用。名单不传 worker，无经验写回。此为单任务
-  通道，尚未接五组 held-out 调度、online-stream 或真实模型迁移验收，总项不勾选。
+  标记，禁止 development-only 混用。名单不传 worker，无经验写回。五组 v2
+  计划现可绑定该协议，执行/选择/judge/审计/公开摘要保留轨道，旧 v1 行为不变。
+  fixture 串联五组、重复尝试和独立评审；online-stream 与真实模型迁移验收
+  尚未完成，总项不勾选。
   详见 FROZEN_NATIVE_EVALUATION.zh-CN.md。
 - [ ] 做跨任务/跨领域/跨执行模型迁移、反例与旧能力保留测试；按 executor + task family 分别晋升。
 - [ ] 公开失败、abstain、无输出、评分失败和负迁移案例；CI 检查、fixture 与真实任务证据分别标注。

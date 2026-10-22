@@ -1,4 +1,4 @@
-"""Preflight a five-arm development study; execution requires --execute."""
+"""Preflight a frozen five-arm study; execution requires --execute."""
 import argparse
 import asyncio
 import json
@@ -61,6 +61,7 @@ def main(argv=None):
         if args.output.exists() or args.output.is_symlink():
             raise ValueError("study output already exists; replay is forbidden")
         print(json.dumps({"plan_digest": plan_digest(prepared["plan"]),
+            "track": plan["track"],
             "task_count": len(tasks), "planned_cells": len(tasks) * plan["spec"]["repetitions"] * len(plan["arms"]),
             "budget_per_cell": plan["spec"]["budget"], "output_budget_per_cell": execution["output_budget"],
             "independent_judge_configured": judge is not None, "execute": args.execute,

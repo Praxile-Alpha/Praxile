@@ -2,7 +2,7 @@
 
 原生执行入口现在支持显式 `heldout_frozen` 候选通道。它复用隔离 lease、固定
 worker、语义激活门控与轨迹转换，不开放经验写回或评测反馈生成候选的路径。
-这不是五组 held-out 调度或 online-stream 实验的完成声明。
+五组 held-out 调度已接入下述显式协议；online-stream 仍未实现。
 
 ## 冻结协议
 
@@ -55,7 +55,20 @@ Python 调用 `run_owned_native(..., frozen_protocol=protocol)` 同样先检查�
 
 单元测试覆盖来源、集合、摘要、混用拒绝、CLI 调度、worker 使用与 trace 标记；
 Harbor 兼容测试以替身环境验证上传、控制器透传与结果拒绝，不代表真实容器或
-真实模型质量验收。既有 development 行为保持默认，旧五组调度仍只接开发集。
+真实模型质量验收。既有 development 行为保持默认，旧五组 v1 计划仍只接开发集。
 
-回滚时恢复代码版本即可；不重写历史报告、候选或协议。尚未实现五组 held-out
-调度、online-stream 经验更新与顺序账本、跨协议汇总防混用及真实迁移验收。
+## 五组实验
+
+在 five_arm_plan 原有 spec 中增加 `frozen_protocol` 对象，内容为上述协议。
+`task_ids` 是本轮要执行的 held-out 子集，`heldout_task_ids` 必须与协议中的
+完整评测集合一致。planner 输出 v2 和 `track=heldout_frozen`，不自动转换旧计划。
+执行配置继续指定同一 candidate 文件、摘要、repository，必须匹配协议。
+
+沿原 `five_arm_cli --execute` 运行即可：五组共享冻结模型/预算条件，重复尝试
+独立执行，只有 experience_only/full_praxile 获得候选；所有任务先预检候选
+来源，失败时不创建 study 目录。judge 使用原隔离入口，选择不依赖 judge 标签，
+报告、离线审计和公开摘要明确保留轨道，来自另一个 plan 的结果不能合并。
+该通道没有候选更新或在线记忆提交接口，也不授予 promotion。
+
+回滚时恢复代码版本即可；不重写历史报告、候选或协议。尚未实现 online-stream
+经验更新与顺序账本、通用跨协议汇总治理及真实迁移验收。

@@ -37,6 +37,16 @@ def audit_study(plan, tasks, *, directory, study_sha256, evaluator_root):
     if (not isinstance(candidates, dict) or set(candidates) != set(tasks)
             or any(not isinstance(value, dict) or not value for value in candidates.values())):
         raise ValueError("study candidate identities missing")
+    protocol = plan["spec"].get("frozen_protocol")
+    if protocol is not None:
+        digest = "sha256:" + _sha(canonical_json(protocol).encode())
+        if any(task.split != "heldout" for task in tasks.values()):
+            raise ValueError("held-out study contains a different task split")
+        for candidate in candidates.values():
+            if (candidate.get("track") != "heldout_frozen" or candidate.get("protocol_digest") != digest
+                    or candidate.get("source_file_sha256") != protocol["candidate_file_sha256"]
+                    or candidate.get("repository") != protocol["repository"]):
+                raise ValueError("cell candidate differs from frozen protocol")
     if (not isinstance(identity, dict) or "sha256:" + _sha(canonical_json(identity).encode())
             != plan["spec"]["identities"]["judge"]):
         raise ValueError("study lacks matching frozen judge identity")

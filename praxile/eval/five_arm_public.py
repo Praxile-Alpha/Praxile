@@ -36,13 +36,13 @@ def public_summary(plan, tasks, *, directory, study_sha256, evaluator_root, publ
             "descriptive_label_delta": quality["descriptive_delta"],
             "label_familywise_ci95": quality["familywise_ci95"],
             "token_complete_tasks": tokens["sample_count"], "token_delta": tokens["token_delta"]}
-    return {"schema_version": "praxile.public_five_arm_summary.v1", "track": "development",
+    return {"schema_version": "praxile.public_five_arm_summary.v1", "track": plan["track"],
         "source_study_sha256": study_sha256, "plan_digest": audit["plan_digest"],
         "task_count": audit["task_count"], "complete_label_tasks": audit["complete_task_count"],
         "cells": cells, "comparisons": comparisons,
         "known_tokens": audit["broker_usage"]["known_tokens"], "total_tokens": audit["broker_usage"]["total_tokens"],
         "cost_usd": None, "official_evaluation": False, "promotion_eligible": False,
-        "limitations": ["Development LLM requirement labels, not official benchmark scores or independently verified quality.",
+        "limitations": ["LLM requirement labels, not official benchmark scores or independently verified quality.",
             "Tasks are numbered in frozen order; task names, model names, paths, prompts and raw evidence are omitted.",
             "Unknown or unrecorded labels are not failures or zeros; quality and token cohorts can differ.",
             "Token costs include bound executor attempts and judge only; unknown totals are not zero cost.",
@@ -52,7 +52,7 @@ def public_summary(plan, tasks, *, directory, study_sha256, evaluator_root, publ
 def render_markdown(report):
     def value(item):
         return "unknown" if item is None else str(item)
-    lines = ["# Five-Arm Development Result", "", "Not an official benchmark score or promotion decision.", "",
+    lines = ["# Five-Arm " + ("Frozen Held-Out" if report["track"] == "heldout_frozen" else "Development") + " Result", "", "Not an official benchmark score or promotion decision.", "",
         f"Complete label tasks: {report['complete_label_tasks']}/{report['task_count']}",
         f"Study SHA-256: `{report['source_study_sha256']}`", "",
         "Broker tokens (input/output): known " + str(report["known_tokens"]["input"]) + "/" + str(report["known_tokens"]["output"])

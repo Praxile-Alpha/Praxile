@@ -1,4 +1,4 @@
-"""Development dispatch with frozen selection and optional independent review."""
+"""Explicit study-track dispatch with frozen selection and independent review."""
 import asyncio
 import hashlib
 import json
@@ -37,8 +37,10 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
     terminal_selection = deepcopy(terminal_selection)
     if terminal_selection is not None:
         validate_selection(terminal_selection, plan)
-    if task.task_id != cell["task_id"] or task.split != "development":
-        raise ValueError("cell requires the matching development task")
+    protocol = plan["spec"].get("frozen_protocol")
+    split = "heldout" if protocol is not None else "development"
+    if task.task_id != cell["task_id"] or task.split != split:
+        raise ValueError("cell requires the matching task and protocol split")
     budget = cell["shared_budget"]
     if (type(output_budget) is not int or not 1 <= output_budget <= min(100_000_000, budget["total_tokens"])
             or budget["model_calls"] > 10000 or budget["wall_seconds"] > 3540
@@ -50,10 +52,11 @@ async def execute_cell(plan, cell_id, task, *, directory, wheel, wheel_sha256,
         if development_candidate_file is None:
             raise ValueError("experience cell requires a frozen candidate")
         identity = owned_candidate_identity(task, development_candidate_file,
-            development_candidate_sha256, repository, development_only=True)
+            development_candidate_sha256, repository, development_only=protocol is None, frozen_protocol=protocol)
         candidate = {"development_candidate_file": development_candidate_file,
                      "development_candidate_sha256": development_candidate_sha256,
-                     "development_only": True, "repository": repository}
+                     "development_only": protocol is None, "repository": repository,
+                     **({"frozen_protocol": protocol} if protocol is not None else {})}
     root = Path(directory).absolute()
     # Exclusive creation survives crashes: never silently replay a partial cell.
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
@@ -154,20 +157,23 @@ def prepare_study(plan, tasks, *, directory, execution, input_source_roots=None,
     tasks = deepcopy(tasks)
     expected = set(plan["spec"]["task_ids"])
     if not isinstance(tasks, dict) or set(tasks) != expected:
-        raise ValueError("study requires exactly its declared development tasks")
+        raise ValueError("study requires exactly its declared tasks")
     roots = dict(input_source_roots or {})
     if set(roots) - expected:
         raise ValueError("input roots contain undeclared tasks")
     identities = {}
+    protocol = plan["spec"].get("frozen_protocol")
+    split = "heldout" if protocol is not None else "development"
     for task_id, task in tasks.items():
-        if (not isinstance(task, BenchmarkTask) or task.task_id != task_id or task.split != "development"
+        if (not isinstance(task, BenchmarkTask) or task.task_id != task_id or task.split != split
                 or task.environment.kind != "harbor"
                 or not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision)):
-            raise ValueError("invalid development task binding")
+            raise ValueError("invalid task binding for study protocol")
         if bool(task.inputs) != (roots.get(task_id) is not None):
             raise ValueError("public task inputs require a matching source root")
         identities[task_id] = owned_candidate_identity(task, options["development_candidate_file"],
-            options["development_candidate_sha256"], options["repository"], development_only=True)
+            options["development_candidate_sha256"], options["repository"], development_only=protocol is None,
+            frozen_protocol=protocol)
     budget = plan["spec"]["budget"]
     if (type(options["output_budget"]) is not int
             or not 1 <= options["output_budget"] <= min(100_000_000, budget["total_tokens"])
@@ -190,7 +196,7 @@ def prepare_study(plan, tasks, *, directory, execution, input_source_roots=None,
 
 
 async def execute_study(plan, tasks, *, directory, execution, input_source_roots=None, judge=None):
-    """Dispatch frozen development cells; executor and judge share each cell quota."""
+    """Dispatch frozen cells; executor and judge share each cell quota."""
     prepared = prepare_study(plan, tasks, directory=directory, execution=execution,
                              input_source_roots=input_source_roots, judge=judge)
     plan, tasks, root = prepared["plan"], prepared["tasks"], prepared["root"]

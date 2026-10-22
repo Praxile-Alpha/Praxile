@@ -30,7 +30,8 @@ def observe_worker(worker, scheduled, candidate_identity):
         if runtime_memory is not None and runtime_memory is not scheduled["task_local_enabled"]:
             raise ValueError("runtime task-local policy differs from scheduled arm")
     mode = worker.get("experience_mode")
-    expected_mode = "development_candidate" if scheduled["experience_enabled"] else "fresh_disabled"
+    track = candidate_identity.get("track", "development") if isinstance(candidate_identity, dict) else "development"
+    expected_mode = track + "_candidate" if scheduled["experience_enabled"] else "fresh_disabled"
     if mode is not None and mode != expected_mode:
         raise ValueError("worker experience mode differs from scheduled arm")
     activation, injected = None, None
@@ -40,6 +41,8 @@ def observe_worker(worker, scheduled, candidate_identity):
             raise ValueError("unexpected development context")
         if context.get("candidate_digest") != candidate_identity["candidate_digest"]:
             raise ValueError("worker candidate differs from scheduled candidate")
+        if track == "heldout_frozen" and context.get("track") != track:
+            raise ValueError("worker context differs from frozen protocol track")
         gate = context.get("activation", {})
         if not isinstance(gate, dict):
             raise ValueError("invalid activation observation")

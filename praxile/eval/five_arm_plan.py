@@ -22,7 +22,7 @@ def compile_plan(spec):
     """All identities are declared SHA-256 digests, not provenance attestations."""
     required = {"study_id", "task_ids", "heldout_task_ids", "repetitions", "repeat_attempts",
                 "identities", "budget", "arm_order"}
-    if not isinstance(spec, dict) or set(spec) != required:
+    if not isinstance(spec, dict) or set(spec) not in (required, required | {"frozen_protocol"}):
         raise EvalSchemaError("five-arm plan requires exactly the documented fields")
     spec = deepcopy(spec)
     if not isinstance(spec["study_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,60}", spec["study_id"]):
@@ -33,7 +33,13 @@ def compile_plan(spec):
                 or any(not isinstance(value, str) or not value.strip() or len(value) > 200 for value in values)
                 or len(set(values)) != len(values)):
             raise EvalSchemaError("task lists must contain unique nonempty IDs")
-    if set(spec["task_ids"]) & set(spec["heldout_task_ids"]):
+    frozen = "frozen_protocol" in spec
+    if frozen:
+        from .frozen_native_protocol import validate_protocol_shape
+        _, heldout = validate_protocol_shape(spec["frozen_protocol"])
+        if set(spec["heldout_task_ids"]) != heldout or not set(spec["task_ids"]) <= heldout:
+            raise EvalSchemaError("study tasks differ from frozen held-out protocol")
+    elif set(spec["task_ids"]) & set(spec["heldout_task_ids"]):
         raise EvalSchemaError("development and held-out task IDs overlap")
     for key, low, high in (("repetitions", 1, 100), ("repeat_attempts", 2, 100)):
         if type(spec[key]) is not int or not low <= spec[key] <= high:
@@ -60,8 +66,8 @@ def compile_plan(spec):
                       "task_local_enabled": name in {"task_local_only", "full_praxile"},
                       "max_attempts": spec["repeat_attempts"] if name == "budget_matched_repeat" else 1,
                       "shared_budget": deepcopy(budget), "persistent_updates_allowed": False}
-    return {"schema_version": SCHEMA, "spec": spec, "arms": arms,
-            "track": "development", "status": "plan_only", "promotion_eligible": False,
+    return {"schema_version": "praxile.five_arm_plan.v2" if frozen else SCHEMA, "spec": spec, "arms": arms,
+            "track": "heldout_frozen" if frozen else "development", "status": "plan_only", "promotion_eligible": False,
             "budget_scope": "per_arm_task_repetition_shared_across_attempts_and_all_roles",
             "task_order": list(spec["task_ids"]), "schedule_order": "repetition_task_arm",
             "budget_enforcement_verified": False, "provenance_verified": False,

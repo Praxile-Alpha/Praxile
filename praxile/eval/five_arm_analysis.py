@@ -73,6 +73,7 @@ def analyze_study(plan, records):
             "familywise_ci95": [max(-1, estimate - margin), min(1, estimate + margin)]
                 if complete_study else None}
     return {"schema_version": "praxile.five_arm_analysis.v1", "plan_digest": digest,
+        "track": plan["track"],
         "status": "complete_declared_results" if complete_study else "incomplete",
         "statistical_unit": "task", "scheduled_cells": len(schedule), "reported_cells": len(indexed),
         "complete_task_count": complete_tasks, "task_count": len(task_rows), "tasks": task_rows,

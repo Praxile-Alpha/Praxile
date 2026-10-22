@@ -18,20 +18,20 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def fixture(tmp_path):
+def fixture(tmp_path, heldout=False):
     source = b"retain source"
     evaluator = tmp_path / "private"
     evaluator.mkdir()
     requirements = json.dumps({"requirements": [{"id": "r", "requirement": "retain source", "source_quote": "source"}]}).encode()
     (evaluator / "requirements.json").write_bytes(requirements)
-    task = BenchmarkTask(task_id="task", benchmark="fixture", dataset_revision="1", split="development",
+    task = BenchmarkTask(task_id="task", benchmark="fixture", dataset_revision="1", split="heldout" if heldout else "development",
         instruction="checklist", environment=EnvironmentSpec("harbor", "fixture", "image@sha256:" + "a" * 64),
         evaluator=EvaluatorReference("praxile-content-review", "1", "requirements.json", "sha256:" + sha(requirements)),
         inputs=(InputArtifact("source.txt", "source.txt", "sha256:" + sha(source)),),
         outputs=(OutputContract("result.txt", "text/plain"),))
     candidate = ContextCandidate(candidate_id="dev", version="1", title="Fixture", candidate_type="context_policy",
         context_item={"content": "Inspect before finishing."}, confidence=0.0, evidence_refs=("event:fixture",),
-        expected_effect={"hypothesis": "fixture"}, applies_to={"repositories": ["docs"], "task_signals": ["checklist"],
+        expected_effect={"hypothesis": "fixture"}, source_task_ids=("dev-source",), applies_to={"repositories": ["docs"], "task_signals": ["checklist"],
         "does_not_apply_when": ["unrelated"]})
     path = tmp_path / "candidate.json"
     path.write_text(json.dumps(candidate.to_dict()))
@@ -49,15 +49,48 @@ def fixture(tmp_path):
     identities = {name: "sha256:" + "a" * 64 for name in IDENTITIES}
     identities["terminal_selection"] = "sha256:" + sha(canonical_json(policy).encode())
     identities["judge"] = "sha256:" + sha(canonical_json(judge_identity(judge, {"task": task})).encode())
-    plan = compile_plan({"study_id": "judged", "task_ids": ["task"], "heldout_task_ids": ["heldout"],
+    spec = {"study_id": "judged", "task_ids": ["task"], "heldout_task_ids": ["heldout"],
         "repetitions": 1, "repeat_attempts": 2, "identities": identities,
-        "budget": {"total_tokens": 1000, "model_calls": 4, "wall_seconds": 60}, "arm_order": list(ARMS)})
+        "budget": {"total_tokens": 1000, "model_calls": 4, "wall_seconds": 60}, "arm_order": list(ARMS)}
+    if heldout:
+        spec["heldout_task_ids"] = ["task"]
+        spec["frozen_protocol"] = {"schema_version": "praxile.frozen_native_protocol.v1",
+            "development_task_ids": ["dev-source"], "heldout_task_ids": ["task"],
+            "candidate_file_sha256": execution["development_candidate_sha256"], "repository": "docs"}
+    plan = compile_plan(spec)
     return task, plan, execution, judge, source
 
 
+@pytest.mark.parametrize("defect", ["split", "source", "candidate"])
+def test_heldout_study_preflight_rejects_before_allocation(tmp_path, defect):
+    from dataclasses import replace
+    task, plan, execution, judge, _ = fixture(tmp_path, heldout=True)
+    if defect == "split":
+        task = replace(task, split="development")
+    else:
+        path = execution["development_candidate_file"]
+        value = json.loads(path.read_text())
+        if defect == "source":
+            value["source_task_ids"] = ["task"]
+        else:
+            value["context_item"]["content"] = "Changed after freeze"
+        path.write_text(json.dumps(value))
+        execution["development_candidate_sha256"] = sha(path.read_bytes())
+        if defect == "source":
+            # Even with a freshly frozen digest, held-out sources remain forbidden.
+            plan["spec"]["frozen_protocol"]["candidate_file_sha256"] = execution["development_candidate_sha256"]
+            plan = compile_plan(plan["spec"])
+    root = tmp_path / "study"
+    with pytest.raises(ValueError):
+        module.prepare_study(plan, {"task": task}, directory=root, execution=execution,
+            input_source_roots={"task": tmp_path}, judge=judge)
+    assert not root.exists()
+
+
 @pytest.mark.parametrize("verdict", ["preserved", "uncertain", None])
-def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monkeypatch, verdict):
-    task, plan, execution, judge, source = fixture(tmp_path)
+@pytest.mark.parametrize("heldout", [False, True])
+def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monkeypatch, verdict, heldout):
+    task, plan, execution, judge, source = fixture(tmp_path, heldout)
     calls = []
     async def run(task, **options):
         calls.append("execute")
@@ -89,7 +122,8 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
             from praxile.eval.native_context import owned_candidate_identity
             report["development_context_identity"] = owned_candidate_identity(task,
                 options["development_candidate_file"], options["development_candidate_sha256"],
-                options["repository"], development_only=True)
+                options["repository"], development_only=options["development_only"],
+                frozen_protocol=options.get("frozen_protocol"))
         path = root / "execution.json"
         path.write_text(json.dumps(report))
         return path
@@ -124,6 +158,7 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
     assert analysis["complete_task_count"] == (1 if verdict == "preserved" else 0)
     assert analysis["reported_cells"] == 5
     assert analysis["metric"] == "llm_declared_requirement_preservation"
+    assert analysis["track"] == ("heldout_frozen" if heldout else "development")
     assert analysis["promotion_eligible"] is False
     assert analysis["recorded_executor_conditions_checked"] is True
     assert analysis["recorded_mechanism_configuration_checked"] is True
@@ -145,6 +180,8 @@ def test_five_cells_review_only_selected_outputs_using_same_quota(tmp_path, monk
         "--task", str(task_file), "--evaluator-root", str(judge["evaluator_root"])]) == (0 if verdict == "preserved" else 1)
     from praxile.eval.five_arm_public import public_summary, render_markdown, main as public_main
     published = public_summary(plan, {"task": task}, **audit_args, public=True)
+    assert published["track"] == analysis["track"]
+    assert ("Frozen Held-Out" if heldout else "Development") in render_markdown(published)
     assert len(published["cells"]) == 5
     assert published["complete_label_tasks"] == (1 if verdict == "preserved" else 0)
     assert "retain source" not in str(published)

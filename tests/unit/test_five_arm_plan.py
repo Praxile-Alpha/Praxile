@@ -27,6 +27,37 @@ def test_optional_request_bytes_are_frozen_and_shared_by_every_arm():
         compile_plan(spec)
 
 
+@pytest.mark.parametrize("defect", [None, "overlap", "outside", "reserved_set", "null", "extra"])
+def test_heldout_protocol_requires_an_explicit_v2_plan(defect):
+    spec = specification()
+    spec["task_ids"] = ["heldout"]
+    spec["frozen_protocol"] = {"schema_version": "praxile.frozen_native_protocol.v1",
+        "development_task_ids": ["dev"], "heldout_task_ids": ["heldout"],
+        "candidate_file_sha256": "a" * 64, "repository": "docs"}
+    if defect == "overlap":
+        spec["frozen_protocol"]["development_task_ids"].append("heldout")
+    elif defect == "outside":
+        spec["task_ids"] = ["other"]
+    elif defect == "reserved_set":
+        spec["heldout_task_ids"] = ["other"]
+    elif defect == "null":
+        spec["frozen_protocol"] = None
+    elif defect == "extra":
+        spec["frozen_protocol"]["online_updates"] = True
+    if defect:
+        with pytest.raises(ValueError):
+            compile_plan(spec)
+    else:
+        plan = compile_plan(spec)
+        assert plan["schema_version"] == "praxile.five_arm_plan.v2"
+        assert plan["track"] == "heldout_frozen"
+        assert len(list(iter_schedule(plan))) == 15
+        changed = deepcopy(plan)
+        changed["track"] = "development"
+        with pytest.raises(ValueError):
+            list(iter_schedule(changed))
+
+
 def test_five_arms_have_distinct_mechanisms_but_shared_budget_and_no_updates():
     spec = specification()
     plan = compile_plan(spec)

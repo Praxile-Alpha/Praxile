@@ -1,4 +1,4 @@
-"""Bind a selected cell artifact to a separate development judge."""
+"""Bind a selected cell artifact to a separate judge without feedback to execution."""
 from pathlib import Path
 import re
 
@@ -22,8 +22,9 @@ def prepare_selected_cell_review(plan, cell_id, task, *, cell_directory, cell_sh
                                  evaluator_root, source_path, output_path,
                                  source_format="text", output_format="text"):
     expected = next((row for row in iter_schedule(plan) if row["cell_id"] == cell_id), None)
-    if expected is None or task.task_id != expected["task_id"] or task.split != "development":
-        raise ValueError("selected review requires matching development cell")
+    split = "heldout" if plan["track"] == "heldout_frozen" else "development"
+    if expected is None or task.task_id != expected["task_id"] or task.split != split:
+        raise ValueError("selected review requires matching cell and protocol split")
     root = Path(cell_directory)
     evaluator_directory = Path(evaluator_root).resolve()
     evaluator_file = (evaluator_directory / task.evaluator.private_ref).resolve()
