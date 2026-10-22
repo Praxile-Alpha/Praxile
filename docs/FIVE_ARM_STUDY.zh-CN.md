@@ -159,3 +159,20 @@ BEGIN IMMEDIATE 串行扣减，FULL 同步提交预留后才返回准入；每�
 不防止恶意时钟调整、管理员复制旧数据库或绕过 broker，也不认证金额或输入
 token。owned-native 仍拒绝 shared budget 与 resume 组合：额度持久化不等于
 任务未知操作可安全重放，恢复执行协议尚未接入。
+
+CLI 可显式创建和检查配额：
+
+```bash
+python -m praxile.eval.persistent_chat_budget create \
+  --database /path/to/quota.sqlite --max-calls 40 \
+  --output-budget 240000 --ttl-seconds 1800
+python -m praxile.eval.persistent_chat_budget show --database /path/to/quota.sqlite
+```
+
+在已有 `python -m praxile.eval.owned_native_cli` 命令中追加
+`--credential-file /path/to/private-key --shared-budget-db /path/to/quota.sqlite`。
+默认仅输出计划和额度状态，不预留、不延期、不运行 Docker；加 `--execute`
+才转发该数据库对象给执行器。缺失/损坏/耗尽/过期的库或无凭据、同时 resume
+均在执行前拒绝；不会自动创建新配额。预检与实际请求间额度可能被其他进程
+消耗，真正准入仍由 SQLite 预留事务决定。一次尝试失败后新尝试可使用新
+run-id 并复用配额，但是否重试任务应由控制面审查，不能作为自动重放许可。

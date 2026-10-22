@@ -1075,6 +1075,9 @@ deepseek-flash 复评，两侧各十六项完整通过引用/覆盖校验，均�
   同步提交后放行 provider，失败不退款，丢失/损坏/守恒失败不重建。15 项共享
   与持久化预算测试通过，含两个真实子进程竞争最后额度。未防管理员数据库
   回滚或任意时钟调整，未覆盖输入 token/金额，任务 resume 与五组执行仍未完成。
+  配额 CLI 增补：可显式 create/show SQLite 配额，owned_native_cli 接受已有
+  --shared-budget-db；计划模式只读，--execute 才运行。缺失、损坏、耗尽、过期、
+  无凭据或混用 resume 均拒绝，不自动补建额度。五组调度/全 token 控制仍未完成。
 - [ ] 同时报告官方分数、交付率、回归率、完整 token/费用/延迟、经验库体积与审批负担。成本包括 proposer、probe、composer、反思和 judge。
   Eval 上游完整性增补：规范化 MODEL_CALL 缺 TokenUsage 时保留已知小计，但
   tokens_total=null，并传播 tokens_complete/覆盖计数到聚合与 A/B；不再把

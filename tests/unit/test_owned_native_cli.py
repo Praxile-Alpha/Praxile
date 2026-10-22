@@ -137,6 +137,52 @@ def test_persistent_workspace_is_explicit(tmp_path, monkeypatch):
     assert calls[0]["persist_workspace"] is True
 
 
+def test_shared_quota_plan_is_read_only_and_execute_forwards_same_database(tmp_path, monkeypatch, capsys):
+    from praxile.eval import owned_native_run
+    from praxile.eval.persistent_chat_budget import PersistentChatBudget
+    path = tmp_path / "budget.sqlite"
+    budget = PersistentChatBudget.create(path, max_calls=2, output_budget=100, ttl_seconds=60)
+    args = [*setup_args(tmp_path), "--credential-file", str(tmp_path / "key"), "--shared-budget-db", str(path)]
+    before = budget.status()
+    assert main(args) == 0
+    plan = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert plan["shared_chat_budget"] == before
+    assert budget.status() == before
+    assert not (tmp_path / "runs").exists()
+    async def run(task, **kwargs):
+        kwargs["shared_chat_budget"].reserve("executor", 20)
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps({"cleanup_verified": True, "required_outputs_collected": True}))
+        return report
+    monkeypatch.setattr(owned_native_run, "run_owned_native", run)
+    assert main([*args, "--execute"]) == 0
+    assert budget.status()["remaining_calls"] == 1
+    assert budget.status()["remaining_output"] == 80
+
+
+@pytest.mark.parametrize("defect", ["missing", "corrupt", "no_credential", "resume", "exhausted"])
+def test_unavailable_shared_quota_fails_before_execution(tmp_path, monkeypatch, defect):
+    from praxile.eval import owned_native_run
+    from praxile.eval.persistent_chat_budget import PersistentChatBudget
+    path = tmp_path / "budget.sqlite"
+    if defect == "corrupt":
+        path.write_text("not a database")
+    elif defect != "missing":
+        budget = PersistentChatBudget.create(path, max_calls=1, output_budget=10, ttl_seconds=60)
+        if defect == "exhausted":
+            budget.reserve("executor", 10)
+    args = [*setup_args(tmp_path), "--shared-budget-db", str(path), "--execute"]
+    if defect != "no_credential":
+        args += ["--credential-file", str(tmp_path / "key")]
+    if defect == "resume":
+        args += ["--resume", "--run-id", "fixture"]
+    def forbidden(*args, **kwargs):
+        raise AssertionError("must not execute")
+    monkeypatch.setattr(owned_native_run, "run_owned_native", forbidden)
+    assert main(args) == 2
+    assert not (tmp_path / "runs").exists()
+
+
 @pytest.mark.parametrize("value", ["true", 1, None])
 def test_persistent_workspace_requires_boolean_before_optional_dependencies(tmp_path, value):
     from praxile.eval.harbor_lease import HarborDockerLease

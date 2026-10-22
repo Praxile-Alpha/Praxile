@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sqlite3
 import time
+import argparse
 
 from .credential_broker import BrokerDenied, SharedChatBudget
 
@@ -113,3 +114,30 @@ class PersistentChatBudget(SharedChatBudget):
                 "clock_rollback_detected": now < state["last_reserved_at"], "roles": state["roles"],
                 "scope": "local_controller_request_admission_and_output_reservations",
                 "total_token_bound_verified": False, "cost_bound_verified": False}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    create = commands.add_parser("create", help="Create a new quota database; never overwrite")
+    create.add_argument("--database", type=Path, required=True)
+    create.add_argument("--max-calls", type=int, required=True)
+    create.add_argument("--output-budget", type=int, required=True)
+    create.add_argument("--ttl-seconds", type=int, required=True)
+    show = commands.add_parser("show", help="Read quota state without reserving or extending it")
+    show.add_argument("--database", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "create":
+            budget = PersistentChatBudget.create(args.database, max_calls=args.max_calls,
+                output_budget=args.output_budget, ttl_seconds=args.ttl_seconds)
+        else:
+            budget = PersistentChatBudget(args.database)
+        print(json.dumps(budget.status(), indent=2))
+    except (ValueError, OSError, sqlite3.Error) as error:
+        parser.exit(2, f"Quota operation rejected: {type(error).__name__}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

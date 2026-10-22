@@ -50,6 +50,20 @@ def test_missing_database_is_not_recreated(tmp_path):
     assert not (tmp_path / "quota.sqlite").exists()
 
 
+def test_quota_cli_create_show_and_duplicate_refusal(tmp_path, capsys):
+    from praxile.eval.persistent_chat_budget import main
+    path = tmp_path / "quota.sqlite"
+    args = ["create", "--database", str(path), "--max-calls", "2", "--output-budget", "20", "--ttl-seconds", "60"]
+    assert main(args) == 0
+    before = json.loads(capsys.readouterr().out)
+    assert main(["show", "--database", str(path)]) == 0
+    assert json.loads(capsys.readouterr().out) == before
+    with pytest.raises(SystemExit) as error:
+        main(args)
+    assert error.value.code == 2
+    assert PersistentChatBudget(path).status() == before
+
+
 def test_invalid_balance_fails_closed(tmp_path):
     budget = create(tmp_path)
     with closing(sqlite3.connect(tmp_path / "quota.sqlite")) as connection:

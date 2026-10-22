@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import sqlite3
 from urllib.parse import urlsplit
 
 from .contracts import BenchmarkTask
@@ -37,6 +38,8 @@ def main(argv=None):
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--input-source-root", type=Path)
     parser.add_argument("--credential-file", type=Path)
+    parser.add_argument("--shared-budget-db", type=Path,
+                        help="Reuse an existing persistent broker quota; requires credential file; no resume")
     parser.add_argument("--dependency-wheel", nargs=2, action="append", metavar=("PATH", "SHA256"),
                         help="Repeat for each fixed offline dependency wheel")
     parser.add_argument("--require-capability", action="append", default=[],
@@ -54,6 +57,16 @@ def main(argv=None):
             validate_run_id(args.run_id)
         if args.resume and not args.run_id:
             raise ValueError("resume requires run ID")
+        shared_budget = None
+        if args.shared_budget_db is not None:
+            if args.credential_file is None or args.resume:
+                raise ValueError("shared budget requires credential file and forbids execution resume")
+            from .persistent_chat_budget import PersistentChatBudget
+            shared_budget = PersistentChatBudget(args.shared_budget_db)
+            quota = shared_budget.status()
+            if (quota["expired"] or quota["clock_rollback_detected"]
+                    or quota["remaining_calls"] < 1 or quota["remaining_output"] < 1):
+                raise ValueError("shared budget is unavailable")
         task = load_task(args.task)
         if task.environment.kind != "harbor" or not re.fullmatch(
                 r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", task.environment.revision):
@@ -82,6 +95,8 @@ def main(argv=None):
                 "persist_workspace": args.persist_workspace,
                 "official_evaluation": "not_run"}
         plan["worker_requirements"] = identity(dependencies, capabilities)
+        if shared_budget is not None:
+            plan["shared_chat_budget"] = quota
         print(json.dumps(plan, ensure_ascii=False))
         if not args.execute:
             print("Plan only: no Docker/model calls; source inputs and infrastructure are not yet verified.")
@@ -92,7 +107,8 @@ def main(argv=None):
             model=args.model, base_url=args.base_url, input_source_root=args.input_source_root,
             credential_file=args.credential_file, max_steps=args.max_steps, timeout_seconds=args.timeout,
             run_id=args.run_id, resume=args.resume, persist_workspace=args.persist_workspace,
-            dependency_wheels=dependencies, required_capabilities=capabilities))
+            dependency_wheels=dependencies, required_capabilities=capabilities,
+            shared_chat_budget=shared_budget))
         report = json.loads(report_path.read_text())
         print("Execution report: " + str(report_path))
         print("Official evaluation not run; inspect trajectory and outputs before assessing task success.")
@@ -100,7 +116,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print("Interrupted; inspect the execution report before starting another run.", file=sys.stderr)
         return 130
-    except (ValueError, OSError, RuntimeError, ImportError) as error:
+    except (ValueError, OSError, RuntimeError, ImportError, sqlite3.Error) as error:
         # Error details may contain private paths, task material or endpoint secrets.
         print("Native execution rejected or failed: " + type(error).__name__, file=sys.stderr)
         return 2
